@@ -94,20 +94,25 @@ onUnmounted(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  padding: 24px 32px 24px;
+  padding: 24px 32px 0;
 }
 .shell__content-inner {
   flex: 1;
   min-width: 0;
 }
 .shell__foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   margin-top: 32px;
-  padding-top: 16px;
+  padding: 16px 0 24px;
   border-top: 1px solid var(--border);
+  background: var(--bg);
+  box-shadow: 0 -10px 18px -16px rgba(15, 17, 21, 0.55);
   font-size: 12px;
   color: var(--text-tertiary);
 }
@@ -180,7 +185,15 @@ onUnmounted(() => {
     display: none;
   }
   .shell__content {
-    padding: 16px 14px 24px;
+    padding: 16px 14px 0;
+  }
+  .shell__foot {
+    gap: 4px;
+    padding: 12px 0 16px;
+    font-size: 11.5px;
+  }
+  .shell__foot a {
+    padding: 4px 0;
   }
 }
 </style>

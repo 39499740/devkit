@@ -144,6 +144,7 @@ function tone(t: string) {
           <span class="grow"></span>
           <span class="kbd__note">同时给出 Windows / Linux 与 macOS 写法；macOS 快捷键不是唯一操作方式</span>
         </div>
+        <div class="kbd__scroll">
         <table class="kbd__table">
           <thead>
             <tr>
@@ -160,6 +161,7 @@ function tone(t: string) {
             </tr>
           </tbody>
         </table>
+        </div>
         <p class="kbd__foot">
           复制、下载、清空输入、显示 / 隐藏密钥、只看输入 / 只看结果目前通过界面按钮完成，未绑定键盘快捷键；Ctrl / ⌘ + Enter 也只在部分工具中可用。
         </p>
@@ -349,6 +351,9 @@ function tone(t: string) {
   color: var(--text-tertiary);
   text-align: right;
 }
+.kbd__scroll {
+  overflow-x: auto;
+}
 .kbd__table {
   width: 100%;
   border-collapse: separate;
@@ -488,6 +493,9 @@ function tone(t: string) {
 @media (max-width: 620px) {
   .quick {
     grid-template-columns: 1fr;
+  }
+  .kbd__table {
+    min-width: 560px;
   }
   .faq__name,
   .faq__desc {
