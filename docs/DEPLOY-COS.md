@@ -83,20 +83,44 @@ npm run generate          # 产物目录：devkit/.output/public
 
 ### 方式 B：命令行 coscli（适合以后每次发版）
 
+**安装**（本机 brew 装不了：`/opt/homebrew/Cellar is not writable`，且沙箱不允许写 `/opt/homebrew`，所以直接用官方二进制）：
+
 ```bash
-# 安装（macOS）
-brew install tencentcloud/tools/coscli
-# 初始化：会依次问 secretId / secretKey / bucket（bucket 填 devkit-1250000000）
-coscli config init
+cd <仓库根>
+mkdir -p .tools && cd .tools
+curl -sSL -o coscli https://github.com/tencentyun/coscli/releases/download/v1.0.9/coscli-v1.0.9-darwin-arm64
+chmod +x coscli && ./coscli --version        # coscli version v1.0.9
 ```
 
-然后在本仓库根目录执行一键脚本（脚本会先 build 再同步，并设置缓存头）：
+> `.tools/` 已在 `.gitignore` 中，不会进版本库。本机已按上面做法装好（sha256 = `cf99d454…c263`，与官方 `sha256sum.log` 一致）。
+> Intel Mac 把文件名换成 `coscli-v1.0.9-darwin-amd64`。
+
+**配置密钥**（只需做一次，密钥只写进本机配置文件，不要提交到仓库）：
+
+```bash
+# 默认写到 ~/.cos.yaml，交互式依次填 secretId / secretKey / bucket
+.tools/coscli config init
+```
+
+想放到仓库内（沙箱/多环境场景）就用 `COS_CONFIG` 指定路径，例如 `.tools/cos.yaml`（同样已被 gitignore）：
+
+```bash
+.tools/coscli -c .tools/cos.yaml config init
+```
+
+**发布**（脚本会先 build 再同步，并设置缓存头）：
 
 ```bash
 COS_BUCKET=devkit-1250000000 scripts/deploy-cos.sh
+# 已经构建过、只想同步：SKIP_BUILD=1 COS_BUCKET=... scripts/deploy-cos.sh
 ```
 
-脚本行为：`_nuxt/` 同步为 `max-age=31536000, immutable`；其余文件（html、sw.js、manifest、robots、sitemap）`max-age=300`；两次同步都带 `--delete`，会自动删除远端旧文件，避免残留。
+脚本行为：
+
+- 自动查找 coscli：`$COSCLI` → 仓库内 `.tools/coscli` → PATH；配置：`$COS_CONFIG` → `~/.cos.yaml`；缺失时打印可照抄的下一步命令并以退出码 1 结束。
+- `_nuxt/`（文件名带 hash）→ `Cache-Control: public, max-age=31536000, immutable`；其余入口文件（html、sw.js、manifest、robots、sitemap）→ `max-age=300`。
+- 两次 `sync` 都带 `-r --delete --force`：递归、删除远端多余文件（避免旧版本残留）、不交互确认。
+- 注意 coscli 用 `--meta "Cache-Control:…"` 设置缓存头，**没有** `--cache-control` 这个参数（早先脚本里的写法是错的，已修正）。
 
 ### 方式 C：控制台网页上传
 
@@ -173,10 +197,11 @@ curl -I https://www.t502.fun/_nuxt/<任意 hash>.js # 200, immutable
 ## 7. 以后怎么发版
 
 ```bash
-COS_BUCKET=devkit-1250000000 scripts/deploy-cos.sh
+COS_BUCKET=devkit-1250000000 scripts/deploy-cos.sh          # 构建 + 同步
+SKIP_BUILD=1 COS_BUCKET=devkit-1250000000 scripts/deploy-cos.sh   # 只同步已有产物
 ```
 
-脚本会重新 `npm run generate` 并同步（含 `--delete`）。因为 `sw.js` 是 300 秒短缓存、`_nuxt/` 文件名带 hash 长缓存，发版后用户最多 5 分钟就会拿到新版本。
+脚本会重新 `npm run generate` 并同步（含 `-r --delete --force`）。因为 `sw.js` 是 300 秒短缓存、`_nuxt/` 文件名带 hash 长缓存，发版后用户最多 5 分钟就会拿到新版本。
 
 如果中间挂了 CDN，还需要**刷新 CDN 缓存**（CDN 控制台 → 缓存刷新 → 提交 `/` 与 `/index.html`，或全量刷新）。
 

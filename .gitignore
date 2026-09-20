@@ -40,3 +40,5 @@ coverage/
 devkit/dist
 __pycache__/
 *.pyc
+.tools/
+coscli_output/
