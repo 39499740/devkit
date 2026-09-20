@@ -16,8 +16,8 @@
 | 必须配置 | 值 | 不配的后果 |
 |---|---|---|
 | 静态网站 · 索引文档 | `index.html` | 访问桶域名根路径 404 |
-| 静态网站 · 错误文档 | `index.html` | 直接访问未知路径 / 客户端跳转刷新时 404 |
-| 静态网站 · 错误文档响应码 | **200** | 深链虽然能渲染，但浏览器/爬虫收到 404 |
+| 静态网站 · 错误文档 | `404.html`（**不要填 index.html**） | 未知路径会显示首页内容而不是应用的 404 页 |
+| 静态网站 · 错误文档响应码 | `404`（默认，推荐）或 `200` | 只影响未知路径的状态码；真实路由都是实体文件，不受影响 |
 | 自定义源站域名 | `www.t502.fun` | 只能用 `xxx.cos.ap-shanghai.myqcloud.com` 这种默认域名，且不能用 HTTPS 自定义域名 |
 
 ### Q2：备案会失效吗？
@@ -144,16 +144,29 @@ COS_BUCKET=devkit-1250000000 scripts/deploy-cos.sh
 
 ## 4. 开启静态网站（关键步骤）
 
-控制台：**存储桶 → 基础配置 → 静态网站 → 编辑**
+控制台：**存储桶 → 基础配置 → 静态网站 → 编辑**；等价地，也可以不登录控制台，直接跑仓库里的脚本（见下）。
 
 | 配置项 | 填 | 说明 |
 |---|---|---|
 | 静态网站状态 | 开启 | |
-| 索引文档 | `index.html` | 访问目录时返回它 |
-| 错误文档 | `index.html` | 未知路径回退到应用入口（应用里会渲染 404 页） |
-| **错误文档响应码** | **200** | 官方推荐的 Vue History 路由方案；不设会返回 404 |
+| 索引文档 | `index.html` | 访问根路径或目录时返回它 |
+| 错误文档 | **`404.html`** | 未知路径回退到「SPA 外壳」，由前端渲染应用自己的 404 页 |
+| 错误文档响应码 | `404`（默认）或 `200` | 实测默认即 404；未知路径本就该 404，语义更对。想与腾讯云对纯 SPA 的建议一致就选 200 |
 
-开启后会得到静态网站域名：`devkit-1250000000.cos-website.ap-shanghai.myqcloud.com`（绑定域名时要用）。
+> ⚠️ **错误文档不要填 `index.html`**：`index.html` 是预渲染好的首页，用它兜底时访问 `/不存在的路径` 会原样显示首页（实测 `h1 = 全部工具`）；填 `404.html`（Nuxt 生成的纯 SPA 外壳，体积 ~9.5 KB）才会渲染出「工具不存在或链接已失效」。
+
+**用脚本配置（等价于上面三项，无需控制台）**：
+
+```bash
+python3 scripts/cos-set-website.py                 # 索引 index.html + 错误文档 404.html
+python3 scripts/cos-set-website.py --error 200.html
+```
+
+脚本按 COS 签名算法 v5 调 `PUT Bucket website`，密钥从 `.tools/cos.yaml`（或 `~/.cos.yaml`）读取、不会打印，执行后还会 GET 回读一次确认。
+
+配置完成会得到静态网站域名：`devkit-1250000000.cos-website.ap-shanghai.myqcloud.com`（本机实际桶：`devkit-1252844153`，地域 `ap-beijing`）。
+
+> ⚠️ **默认域名不能当站点用**：腾讯云自 2024-01 起对 COS 默认域名（`*.cos.<region>.myqcloud.com` 与 `*.cos-website.<region>.myqcloud.com`）访问 HTML 等文件强制下载 —— 实测响应头带 `Content-Disposition: attachment` 与 `x-cos-force-download: true`，浏览器会直接下载页面而不是渲染（Playwright 实测报 `Download is starting`）。**必须绑定自定义域名**（第 5 节）才能正常浏览；HTTPS 自定义域名同样是 Service Worker / PWA 的前置条件（非安全源不注册 SW）。
 
 ---
 
@@ -183,13 +196,14 @@ COS_BUCKET=devkit-1250000000 scripts/deploy-cos.sh
 ## 6. 上线前验证清单
 
 ```bash
-curl -I https://www.t502.fun/                     # 200, content-type: text/html
-curl -I https://www.t502.fun/tools/base64         # 200（目录索引或错误文档回退）
-curl -I https://www.t502.fun/settings             # 200
-curl -I https://www.t502.fun/nope                 # 200（回退到应用内 404 页，而不是 COS 404）
-curl -I https://www.t502.fun/sw.js                # 200, application/javascript, 无长缓存
+curl -I https://www.t502.fun/                     # 200, text/html
+curl -I https://www.t502.fun/tools/base64         # 302 → /tools/base64/（COS 目录重定向，浏览器自动跟随）
+curl -I https://www.t502.fun/tools/base64/        # 200, text/html
+curl -I https://www.t502.fun/nope                 # 404 + 404.html 外壳，前端渲染应用内 404 页
+curl -I https://www.t502.fun/sw.js                # 200, application/javascript, max-age=300
 curl -I https://www.t502.fun/sitemap.xml          # 200, application/xml
-curl -I https://www.t502.fun/_nuxt/<任意 hash>.js # 200, immutable
+curl -I https://www.t502.fun/_nuxt/<hash>.js      # 200, immutable
+curl -I -H "Accept: text/html" https://www.t502.fun/   # 响应头里不应再出现 Content-Disposition: attachment
 ```
 
 浏览器里再过一遍：
