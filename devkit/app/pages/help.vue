@@ -190,7 +190,7 @@ function tone(t: string) {
             <h2 class="card__title">反馈入口的位置</h2>
           </div>
           <p class="card__body">
-            顶部导航右侧有「源码」外链入口（当前指向 github.com）。本站没有内置反馈表单或工单系统，不会显示提交成功，也不会产生真实工单。
+            顶部导航右侧有「源码」外链入口（指向 github.com/39499740/devkit）。本站没有内置反馈表单或工单系统，不会显示提交成功，也不会产生真实工单。
           </p>
         </article>
         <article class="card card--soft">

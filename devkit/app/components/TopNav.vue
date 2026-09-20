@@ -44,10 +44,10 @@ function setTheme(mode: 'light' | 'dark') {
 
       <a
         class="topnav__src"
-        href="https://github.com"
+        href="https://github.com/39499740/devkit"
         target="_blank"
         rel="noopener noreferrer"
-        title="查看源码"
+        title="查看源码（GitHub: 39499740/devkit）"
       >
         <DkIcon name="github" :size="14" />
         <span class="topnav__src-text">源码</span>

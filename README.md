@@ -4,6 +4,8 @@
 
 技术栈：**Nuxt 4**（内置 Vite + Vue 3.5）+ TypeScript，可静态部署到任意托管。
 
+仓库：<https://github.com/39499740/devkit> ｜ License: MIT
+
 ## 功能
 
 **41 个工具，8 个分类：**
