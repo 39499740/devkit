@@ -33,6 +33,15 @@ onUnmounted(() => {
       </aside>
       <main class="shell__content">
         <slot />
+        <footer class="shell__foot">
+          <span>© {{ new Date().getFullYear() }} {{ SITE_NAME }}</span>
+          <span class="shell__foot-sep">·</span>
+          <a :href="ICP_URL" target="_blank" rel="noopener noreferrer">{{ ICP_LICENSE }}</a>
+          <span class="shell__foot-sep">·</span>
+          <a :href="REPO_URL" target="_blank" rel="noopener noreferrer">开源仓库</a>
+          <span class="shell__foot-sep">·</span>
+          <NuxtLink to="/privacy">隐私说明</NuxtLink>
+        </footer>
       </main>
     </div>
 
@@ -82,6 +91,28 @@ onUnmounted(() => {
   flex: 1;
   min-width: 0;
   padding: 24px 32px 48px;
+}
+.shell__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.shell__foot a {
+  color: var(--text-tertiary);
+  text-decoration: none;
+  transition: color 0.12s;
+}
+.shell__foot a:hover {
+  color: var(--accent);
+}
+.shell__foot-sep {
+  color: var(--border-strong);
 }
 .drawer__mask {
   position: fixed;

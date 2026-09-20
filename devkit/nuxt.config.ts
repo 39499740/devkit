@@ -1,3 +1,8 @@
+const SITE_URL = 'https://www.t502.fun'
+const SITE_NAME = 'DevKit'
+const SITE_DESC =
+  'DevKit 是面向 Java、Web、Vue 开发者的浏览器本地工具箱：JSON、编码、摘要加密、国密、时间、Java、前端与文件处理全部在本地完成，可静态部署。'
+
 const prefsBootScript = `(function(){var e=document.documentElement;var m=false;try{m=!!(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)}catch(_){}var p=null;try{var r=localStorage.getItem('devkit.prefs.v1');if(r)p=JSON.parse(r)}catch(_){}try{if(!p||typeof p!=='object')p=null;var t=p&&p.theme;e.classList.toggle('dark',t==='dark'||(t!=='light'&&m));var s=p&&p.codeFontSize;if(typeof s==='number'&&isFinite(s)&&s>0)e.style.setProperty('--code-font-size',s+'px');var rm=!!(p&&p.reduceMotion);e.classList.toggle('reduce-motion',rm);if(rm){if(document.body)document.body.classList.add('reduce-motion');else document.addEventListener('DOMContentLoaded',function(){if(document.body)document.body.classList.add('reduce-motion')})}}catch(_){}})();`
 
 // 监听地址：默认绑定所有网卡（0.0.0.0），局域网内其它设备可直接访问。
@@ -26,6 +31,14 @@ export default defineNuxtConfig({
     '~/assets/css/main.css'
   ],
   ssr: true,
+  runtimeConfig: {
+    public: { siteUrl: SITE_URL }
+  },
+  nitro: {
+    prerender: {
+      routes: ['/sitemap.xml']
+    }
+  },
   modules: ['@vite-pwa/nuxt'],
   vite: {
     plugins: [
@@ -48,16 +61,20 @@ export default defineNuxtConfig({
       meta: [
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-        {
-          name: 'description',
-          content:
-            'DevKit 是面向 Java、Web、Vue 开发者的浏览器本地工具箱：JSON、编码、摘要加密、国密、时间、Java、前端与文件处理全部在本地完成，可静态部署。'
-        },
-        { name: 'theme-color', content: '#F4F5F7' }
+        { name: 'description', content: SITE_DESC },
+        { name: 'theme-color', content: '#F4F5F7' },
+        { property: 'og:type', content: 'website' },
+        { property: 'og:site_name', content: SITE_NAME },
+        { property: 'og:title', content: 'DevKit · 开发者本地工具箱' },
+        { property: 'og:description', content: SITE_DESC },
+        { property: 'og:url', content: SITE_URL },
+        { property: 'og:image', content: `${SITE_URL}/pwa-512.png` },
+        { name: 'twitter:card', content: 'summary' }
       ],
       link: [
         { rel: 'icon', type: 'image/png', href: '/pwa-192.png' },
-        { rel: 'apple-touch-icon', href: '/pwa-192.png' }
+        { rel: 'apple-touch-icon', href: '/pwa-192.png' },
+        { rel: 'canonical', href: SITE_URL }
       ],
       script: [
         {
