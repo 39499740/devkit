@@ -26,5 +26,6 @@ const view = computed(() => {
 <template>
   <ToolPageLayout v-if="tool && view" :tool="tool">
     <component :is="view" :tool="tool" />
+    <ToolGuide :tool="tool" />
   </ToolPageLayout>
 </template>
