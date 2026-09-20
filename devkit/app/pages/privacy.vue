@@ -2,8 +2,8 @@
 import { toolCount } from '~/data/tools'
 
 useSeo({
-  title: '本地处理与隐私 · DevKit',
-  description: 'DevKit 如何处理你的输入、偏好与文件：计算全部在浏览器本地完成，并说明访问统计的采集范围与关闭方式。'
+  title: '在线工具的隐私说明 · DevKit',
+  description: `在线的 ${toolCount} 个工具如何处理你的输入、偏好与文件：计算全部在浏览器本地完成，并说明访问统计的采集范围与关闭方式。`
 })
 
 interface Principle {

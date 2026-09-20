@@ -10,8 +10,10 @@ if (!tool.value) {
 }
 
 useSeo({
-  title: computed(() => `${tool.value!.name} · DevKit`),
-  description: computed(() => `${tool.value!.desc} 全部在浏览器本地处理，不上传服务器；支持离线使用，免费无广告。`)
+  title: computed(() => `在线${tool.value!.name} - 免登录 · DevKit`),
+  description: computed(
+    () => `${tool.value!.desc} 免注册免登录，在线即用；计算全部在浏览器本地完成，输入与结果不上传服务器，可离线使用。`
+  )
 })
 
 const views = import.meta.glob<{ default: Component }>('../../components/tools/*.vue')

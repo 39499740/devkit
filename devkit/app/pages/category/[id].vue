@@ -19,8 +19,10 @@ if (!valid.value) {
 const cat = computed(() => getCategory(key.value))
 
 useSeo({
-  title: computed(() => `${cat.value.name} · DevKit`),
-  description: computed(() => `${cat.value.desc} 共 ${toolsOfCategory(cat.value.key).length} 个工具，全部在浏览器本地运行，输入不上传。`)
+  title: computed(() => `在线${cat.value.name}工具 - DevKit`),
+  description: computed(
+    () => `${cat.value.desc} 共 ${toolsOfCategory(cat.value.key).length} 个在线工具，免注册免登录，全部在浏览器本地运行，输入不上传。`
+  )
 })
 
 const catIcons: Record<string, string> = {

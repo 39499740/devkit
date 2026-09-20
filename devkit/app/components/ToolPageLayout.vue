@@ -40,7 +40,7 @@ function toggleFav() {
       <div class="tool-page__actions">
         <NuxtLink to="/privacy" class="tool-page__local" title="了解本地处理与隐私">
           <DkIcon name="shield-check" :size="13" />
-          本地处理 · 输入不出浏览器
+          在线可用 · 输入不出浏览器
         </NuxtLink>
         <DkButton size="sm" :variant="isFav ? 'primary' : 'secondary'" @click="toggleFav">
           <DkIcon :name="isFav ? 'star-filled' : 'star'" :size="13" />

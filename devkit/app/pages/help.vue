@@ -1,7 +1,7 @@
 <script setup lang="ts">
 useSeo({
-  title: '帮助与快捷键 · DevKit',
-  description: 'DevKit 的使用方式、快捷键与常见问题：全部工具在浏览器本地运行，输入不会上传。'
+  title: '在线工具使用帮助与快捷键 · DevKit',
+  description: 'DevKit 在线工具的使用方式、快捷键与常见问题：全部工具在浏览器本地运行，输入不会上传，可离线使用。'
 })
 
 const palette = usePalette()

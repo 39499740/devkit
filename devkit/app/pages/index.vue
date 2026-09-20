@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { categories, toolsOfCategory, getToolById, toolCount, searchTools } from '~/data/tools'
-import { SITE_DESC } from '~/utils/site'
 
 useSeo({
-  title: 'DevKit · 开发者本地工具箱',
-  description: SITE_DESC
+  title: '在线开发者工具箱 - JSON、编码、加密、时间戳 | DevKit',
+  description: `${toolCount} 个在线开发者工具：JSON、YAML、Base64、URL 编码、摘要加密、国密、时间戳、UUID、Java 与前端处理。免注册免登录，全部在浏览器本地运行，输入不上传服务器，可离线使用。`
 })
 
 const router = useRouter()
