@@ -35,3 +35,6 @@ yarn-error.log*
 # 测试与覆盖率
 coverage/
 *.tsbuildinfo
+
+# Nuxt generate 产生的 dist 软链接
+devkit/dist

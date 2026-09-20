@@ -6,6 +6,8 @@
 
 仓库：<https://github.com/39499740/devkit> ｜ License: MIT
 
+部署：`cd devkit && npm run generate`，产物 `devkit/.output/public` 可直接托管到对象存储 / 静态托管；腾讯云 COS 的完整步骤（含备案注意事项）见 [docs/DEPLOY-COS.md](./docs/DEPLOY-COS.md)，一键脚本见 [scripts/deploy-cos.sh](./scripts/deploy-cos.sh)。
+
 ## 功能
 
 **41 个工具，8 个分类：**
