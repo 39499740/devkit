@@ -1,0 +1,1434 @@
+dsh: reasoning:
+Let me read the task document and the pen.py tool. Let me plan.
+
+Let me first look at the docs directory and the main task book.
+dsh: reasoning:
+Let me read the task book. It's 610 lines, 45KB. Let me read it fully but it may be long. Let me read in chunks.
+dsh: reasoning:
+Now I have the full task book. Let me now inspect the design.pen frames and understand its structure. Let me run pen.py frames and stats.
+
+Also let me read the tools.ts, README, FOUNDATION, and the historical docs.
+
+Let me be efficient and run several things in parallel. Note the design.pen is 23MB, so loading it each time takes memory. Let me create working scripts that load once.
+
+Let me start by dumping frames.
+dsh: reasoning:
+The frames output was truncated? It shows head -100 but it seems the list ended at zgIzV/D10enz. Actually the output shows 70ish frames. Let me count. Let me get the full frames list saved to a file and analyze.
+
+Note: the output ended at `D10enz` (T22 owner.java record). That's 100 lines? Actually the output is exactly the frames output—maybe frames list is around 87. Let me re-run and count, saving to file.
+
+Let me plan my approach. I'll write a Python script that:
+1. Loads design.pen once.
+2. Enumerates all top-level frames and their children recursively with names.
+3. Builds a mapping of T/S/G/R/C board names.
+
+Let me first get all frame names and all node names matching the naming conventions.
+dsh: reasoning:
+So the batch roots are containers (not top-level boards themselves). I need to enumerate the children of each batch container.
+
+Let me write a comprehensive script that builds a listing of all boards (frames) inside batch containers, with name, id, dimensions, text content length, and whether they have real content.
+
+Let me dump the children of each batch container. I'll write a Python script that:
+- For each batch root (cF2g8, k0mUFc, I5ukDe, i8zQUL, y4FGt, pvxMC, lhx49, mwcT7), list direct children (the boards) with id, name, w, h, and # of text nodes / total descendants.
+
+Then build the coverage matrix.
+
+Let me do that.
+dsh: reasoning:
+The text count shows t=0 for all frames. That's suspicious. Let me look at the structure: maybe text nodes are inside and the iter_nodes counts them, but `type` might be "text" - but t=0 suggests text nodes have type something else. Wait, `d=427` descendants but t=0 text. Let me check what types exist.
+
+Actually, the pen.py `text()` function uses `x.get("type") == "text"`. Let me check the actual node types in a board.
+
+Let me inspect one board.
+dsh: reasoning:
+The dump only shows type `ref` for components, and text nodes are probably nested inside `ref`. But `iter_nodes` for a `ref` node — does the ref node have children? In pen, `ref` references a component. Component instances likely have overridden children embedded in the ref node's children. Let me look at raw node.
+
+Actually the board U7JXtZ has d=427 descendants but text() returned []. So text type is different. Let me inspect types distribution within a board.
+dsh: reasoning:
+So there ARE 202 text nodes but they don't have a `text` field. Let me look at a text node's raw JSON.
+dsh: reasoning:
+The text field is `content`, not `text`. The pen.py text() function is buggy for this format (uses `text`). I need to use `content`. Also the tool's `dump` prints 'text' key only. I'll write my own analysis scripts using `content`.
+
+Let me now build a comprehensive analysis. I need to:
+1. For each board in each batch, get name, id, w/h, dimensions, text content (via `content`), and check for empty/placeholder.
+2. Check required boards per task book.
+
+Let me write a script that builds a full data structure and saves it to a JSON for further analysis. Also check problems (clipping) — the MCP `Get` with problems. Let me check if /tmp/penmcp.py exists.
+
+Let me check probe/mcp availability and also read historical docs. Let me do things in parallel.
+
+First, let me build the board inventory. Let me write a script `/tmp/analyze_pen.py`.
+
+Actually I should not write into audit/ except report? The brief says report to audit/reports. But I can use /tmp for scratch. Let me use /tmp.
+
+Let me create a script that dumps a board inventory to /tmp/boards.json including all top-level frames and nested boards.
+
+Let me identify boards: everything inside batch containers whose name matches `^(T\d\d|S\d\d|G\d\d|R\d\d) ?/` or `^C\d\d `. Also standalone frames.
+
+Let me write the inventory.
+dsh: reasoning:
+The find function is O(n^2) so it's slow. Let me rewrite to build an id map once.
+
+Also the JSON dump of all texts can be huge. Let me make it efficient.
+dsh: reasoning:
+39477 frames/nodes — every node. That's fine but the boards.json may be large. Let me instead build a curated list of "boards" — the top-level frame children of batch containers and top-level frames. Let me now analyze.
+
+Let me write a script that filters /tmp/boards.json to the actual boards (those matching naming patterns).
+
+Actually, let me approach this more directly with a focused script that produces the coverage analysis. Let me read the historical docs first (they're small), then do the detailed pen analysis.
+
+Let me read all historical docs.
+dsh: reasoning:
+Now let me read the other historical docs: 设计复查报告-第二轮, 第三轮, 设计审查报告. Also README.md and FOUNDATION.md.
+dsh: reasoning:
+Now let me read devkit README and FOUNDATION. Then do the pen analysis in detail.
+dsh: reasoning:
+Now I have a lot of context. Let me now do the design.pen analysis systematically.
+
+I need:
+1. All boards matching `T\d\d / ...`, `S\d\d / ...`, `G\d\d / ...`, `R\d\d / ...`, `C\d\d ...`.
+2. Check existence per requirement, per tool.
+3. Check emptiness/placeholder.
+4. Compare code tools.ts.
+
+Let me write a focused script producing the coverage data. I'll use /tmp/boards.json.
+
+Let me first get a clean list of "boards" — I'll define boards as nodes whose name matches `^(S|T|G|R)\d{2} /` OR `^C\d{2} ` etc. and that are direct children of a batch container or top-level. Actually the design notes named `设计注释 · ...` are noise. Also `ref` nodes inside pages have names like "顶部导航".
+
+Let me filter top-level frame children + batch children.
+
+Let me extract all nodes whose name matches the S/T/G/R/C naming pattern and are frames with width 1440 (or specific).
+
+Let me write the script.
+dsh: reasoning:
+Note: "T ids: 41" — all T01-T41 exist. But wait, this counts any node whose name starts with T##, including design notes? The notes are named "设计注释 · T08 ..." which starts with 设计. So they're not matched. Good. But there may be nested nodes with T## names (like T22 Owner boards at top-level zgIzV which start with "T22 / ..."). Those counted too. Let me list all T boards grouped.
+
+Also the C count is 16 (C01-C15 plus maybe something). Let me examine.
+
+Let me produce the full list of boards grouped by prefix with id, name, w, h, textnodes, path. And check placeholders.
+
+Let me also scan the entire pen file for `placeholder` and "Generating".
+dsh: reasoning:
+The sort by name failed because S boards are like "S01 / ..." but g['S'] keys are 'S01','S02'... not 'S'. The regex group(1) is the full e.g. 'S01'. So g keys are 'S01' etc. Let me fix.
+
+Actually I grouped by the full match group. Let me redo by first char.
+dsh: reasoning:
+Good. Note: R01 requires 6 boards: 首页, JSON格式化成功, SM4加密成功, JSON转Java, 多文件摘要, 图片压缩. Present: JSON格式化 (CXVuY), JSON转Java (awaDi), SM4加密 (PhM4A), 图片压缩 (krcPg), 多文件摘要 (gcKQm), 首页 (tUNVK). All 6 present. But historical doc says tUNVK and A51Nl正文 still use old 24-tool homepage. Need to verify.
+
+R02 requires: 首页, 搜索弹层, JSON格式化, SM4加解密, 图片压缩, 导航抽屉展开. Present: BCDR3 首页, NHpsS 搜索弹层, OsDZg JSON格式化, ee1Ih SM4加解密, l2SKJo 图片压缩, FguCb 导航抽屉展开. Plus N316Hq IV错误. All present.
+
+R03: 首页 A51Nl, JSON格式化 dF6bi, SM4 t605LZ. All present.
+
+R04: 键盘聚焦与错误 C8oVvR, 提示与焦点回归 ubJHY. present.
+
+Now S01-S10: S01 2 boards (全部工具 LiwdR + 首次访问 J8Yrb) plus summary b6Yg7; S02 2 (h1lFMx 摘要与加密, CiCUB Java开发); S03 2 (nYPOp 国密结果, MuIZ9 无结果); S04 2; S05 2; S06 2; S07 1; S08 1; S09 1; S10 2. Plus summary `S0X ...` frames (the fill_container w ones) — these are probably index/summary rows.
+
+G01-G08: G01 3, G02 6, G03 4, G04 2, G05 3, G06 3, G07 2, G08 2. All match task book states.
+
+C01-C15: variant boards present for all. Plus summary KSoD8.
+
+Now the critical part: T boards. Let me list all T boards grouped by tool, and compare against required variants from task book. Also check for placeholders, empty, etc.
+
+Let me extract T boards.
+dsh: reasoning:
+Excellent. Now I have complete board data. Let me build the coverage matrix.
+
+Key observations:
+- Every T01–T41 has a main board plus the specified variants. Let me verify each tool's required variants against the task book:
+
+T01: variants required: 空输入；语法错误定位；树形视图；结果待更新. Present: 空输入 WyXAO ✓, 语法错误 XOIEm ✓, 树形视图 DUZp7 ✓, 结果待更新 QZSHR ✓. Main 成功 U7JXtZ ✓. → count 5 (+ index). Complete.
+
+T02: 无差异 ✓ C8MDfa, 一侧JSON无效 ✓ nd6EF. Main ✓. Complete.
+
+T03: YAML转JSON ✓ j2a2mK, 不兼容结构错误 ✓ SmYV1. Complete.
+
+T04: CSV含引号换行 ✓ Nftqt, 嵌套JSON映射配置 ✓ l30Im, 列数不一致 ✓ PpaOQ. Complete.
+
+T05: 非法字符错误 ✓ mFO8z, 非UTF-8二进制结果 ✓ FLpGx (named 二进制结果). Complete.
+
+T06: 无效百分号编码 ✓ jcCqx, 完整URI与组件结果对比 ✓ d3Naz (模式对比). Complete.
+
+T07: 不完整Unicode转义 ✓ QpMpE, 无效UTF-8字节 ✓ Kd6TE. Complete.
+
+T08: 保留空格对比 ✓ raWEO, 空输入 ✓ k8Pxf. Complete.
+
+T09: 多行批量结果 ✓ Z7B9gg, 包含无法按规则分词的字符 ✓ oE70A. Complete.
+
+T10: 完全相同 ✓ s2Bol, 仅空白和换行不同 ✓ MqTDP. Complete.
+
+T11: 表达式语法错误 ✓ qpT68, 无匹配 ✓ shGd9, 执行超时 ✓ Qbcc3. Complete.
+
+T12: 文件计算 ✓ AZOJu, 摘要对照不一致 ✓ GvtFC. Complete.
+
+T13: 校验不一致 ✓ ivm5f, Hex密钥格式错误 ✓ lVMI0. Complete.
+
+T14: 解密成功 ✓ I92uFI, 认证失败 ✓ fYm70, 密钥长度错误 ✓ hNcSS. Complete.
+
+T15: 解密工作区 ✓ nWK56, 签名成功 ✓ Q9BlV, 验签不通过 ✓ g8o9dO, 公钥格式错误 ✓ XXObg. Main 加解密 ✓. Complete.
+
+T16: 文件输入 ✓ j4jp6, Hex输入不合法 ✓ d95Zo7. Complete.
+
+T17: 解密成功 ✓ d8Uvqe, 密钥长度错误 ✓ XPSvz, 解密密文长度错误 ✓ j17w1, 结果待更新 ✓ zM6Tx, ECB+NoPadding参数状态 ✓ DEUUC. Complete.
+
+T18: 毫秒与秒对照 ✓ hUIGC, 日期无效 ✓ zbk9m, 夏令时不存在或歧义时间提示 ✓ O4HY0. Complete.
+
+T19: 批量生成 ✓ r6P1F, UUID解析 ✓ nzE4G, 非法UUID ✓ e1nfd. Complete.
+
+T20: Quartz方言 ✓ wkqXY, 语法不支持 ✓ Xuzy5, 无后续执行时间 ✓ yKSz6. Complete.
+
+T21: 结束早于开始 ✓ Hf0j2, 跨时区时间差 ✓ oqCBG. Complete.
+
+T22: record输出 ✓ tjYyC, 含null和混合数组的类型确认 ✓ yXoD1 (类型确认), 非法类名 ✓ R8FXjp. Plus Owner.java POJO/record boards. Complete.
+
+T23: 反向还原 ✓ xZ8CS, 非法转义 ✓ tPBda. Complete.
+
+T24: 父子键冲突 ✓ IyUnI, YAML回转Properties ✓ hCbM5. Complete.
+
+T25: 普通日志混入 ✓ hQHEM, 无法识别堆栈 ✓ YUnUe. Complete.
+
+T26: 需要手动映射 ✓ H4Oxfk, 缺少version ✓ jEz9K, 不支持的表达式 ✓ AMdd4. Complete.
+
+T27: 无法推断的空数组 ✓ L4CzT, 联合类型输出 ✓ HacG2. Complete.
+
+T28: props和emits配置 ✓ bfarF, 组件名不合法 ✓ KEd1s. Complete.
+
+T29: 批量值 ✓ ceWdh, 基准字号非法 ✓ U3ers. Complete.
+
+T30: 带透明度 ✓ MB99A, 低对比结果 ✓ Tv8mb, 无效颜色 ✓ XRVJD. Complete.
+
+T31: 不安全内容被阻止 ✓ ZUMYv, 优化可能改变视觉的提示 ✓ al4QE. Complete.
+
+T32: CSS模式 ✓ kf47C, JS模式 ✓ t7KlH5, 语法错误 ✓ tenYQ. Complete.
+
+T33: 仅解码未验签 ✓ Ikqy7, 签名不通过 ✓ WQTLy, 过期但签名有效 ✓ eq3hl, 格式错误 ✓ ThLDw. Complete.
+
+T34: 重复参数 ✓ q2Piem, 无效URL ✓ G7Y0I. Complete.
+
+T35: fetch转curl ✓ E6e87, 不支持的shell表达式 ✓ sZOGq, multipart文件引用 ✓ Pu4BY. Plus curl转fetch. Complete.
+
+T36: 状态详情 ✓ i6SIKG, 无搜索结果 ✓ sSB8C. Complete.
+
+T37: 部分失败 ✓ gKDNQ, 取消任务 ✓ b6Hjk, 校验不匹配 ✓ mYlnW. Complete.
+
+T38: 结果反而更大 ✓ LaXL4, 透明图转JPEG ✓ E41nL, 格式不支持 ✓ ePiYS. Complete.
+
+T39: 图片识别成功 ✓ By8II, 未识别到二维码 ✓ NEbCs, 内容超出容量 ✓ S8CRwC. Complete.
+
+T40: 编码不确定 ✓ XKmXx, 目标编码无法表示字符 ✓ hyJHl. Complete.
+
+T41: 无效Base64 ✓ sH0Uy, 类型不匹配 ✓ ikF0h, 解码后二进制文件 ✓ Uh3jn. Complete.
+
+So all 41 tools have main + all specified variants. Note: the "必画变体" are all present. So the design delivery completeness is very high.
+
+Now I need to verify:
+- Placeholder / Generating residue scanning across all nodes.
+- Empty frames (nodes with no children).
+- Overflow/clipping (problems) via MCP — may be hard. Let me check if penmcp works and whether problems is available.
+- Text content sanity: e.g., old boards NeiAV, etc. still exist at top-level? The top-frame list of 70 does not include NeiAV, LFf23, Sybi1, z3POh, OQgo3, CBk47, TcM4w, Yhjep, jVpwG, lHeYl, giLJj, b2EZx, yrEm6. Let me check if those 13 IDs still exist anywhere.
+
+Let me scan for those IDs.
+
+Also check T12/T37 and T05/T41 overlap handling — they are separate boards which is fine per the task book (both required).
+
+Check R01/R03 old homepage: tUNVK and A51Nl — do they contain 41 tools / 8 categories or 24 tools / 6 categories?
+
+Let me check the texts of tUNVK, A51Nl, and LiwdR.
+
+Also check whether "模拟数据生成" (old entry) appears.
+
+Let me also check placeholders.
+
+Let me run these scans.
+dsh: reasoning:
+There are 3 "placeholder" occurrences, 0 "Generating". 1263 "占位" occurrences — but that could be part of text like "占位说明" (placeholder description) which the task book asks for ("大文件限制使用明确可配置占位说明"). Let me examine the placeholder field occurrences and the 占位 text occurrences.
+
+Let me find the 3 placeholder occurrences context.
+dsh: reasoning:
+Notable finding: In T35 boards (curl转fetch, fetch转curl, 不支持的shell表达式, multipart文件引用), there is text "保留占位" in nodes named "选项 · 凭证处理", "分段控件", "保留占位". This looks like a leftover placeholder UI element ("保留占位" = "keep placeholder"). Let me investigate T35 boards more deeply — is this an actual placeholder artifact visible in the design? Let me dump one T35 board.
+
+Also the grep for "placeholder" with 80 chars context gave no output, but count was 3. Maybe case-insensitive matched but the pattern with .{80} requires 80 chars before. Let me search directly.
+
+Let me investigate.
+dsh: reasoning:
+These 3 placeholder occurrences are legitimate code editor placeholder text (e.g., in code examples showing "placeholder" token, and an actual input placeholder "请输入内容"). Not residue markers.
+
+Now the "保留占位" in T35 boards — let me investigate by dumping the T35 board. This could be a genuine leftover placeholder UI. Let me look at the specific nodes. Let me dump ndB0M (curl转fetch) and find nodes named "保留占位" and "选项 · 凭证处理".
+dsh: reasoning:
+So there's a frame named "保留占位" containing text "保留占位" — in the T35 curl转fetch board. Let me check its parent chain to see if it's part of the visible page UI or just a design annotation. Let me find the parent path and siblings. Let me use pen.py dump or path_of.
+
+Let me find the ancestors of i5Rs4N.
+dsh: reasoning:
+So the T35 board has a segmented control with two options: "保留占位" and "移除". This is likely intentional — the 凭证处理 option of "保留占位" vs "移除". Wait, "保留占位" means "keep placeholder". So it's a legitimate option label: "凭证处理: 保留占位 / 移除". Hmm, actually the text is a real option label meaning "keep as placeholder". That's not a residue placeholder. So it's fine. Although the naming "保留占位" could be misread; it's a legitimate UI option.
+
+Actually wait — "保留占位" here likely means "keep the credential as a placeholder (redacted)". So it's a real option. Not a placeholder artifact. Good.
+
+Now let me check empty frames anywhere — nodes with no children that are supposed to be pages. Let me scan for frames with 0 children and names starting with S/T/G/R/C. Actually the summary frames (fill_container) have 8 nodes each, so not empty. Let me check for any frame with 0 children among all batch page boards.
+
+Let me scan all frames (type frame) with no children. Also check for boards that are "contentless" (textnodes == 0).
+
+Also need to check overflow/clipping. The task asks to use MCP Get(id, n=>c.problems). Let me test if penmcp works.
+
+Let me check /tmp/penmcp.py.
+dsh: reasoning:
+Let me test the MCP read-only query for problems. This requires Pen app to be running. Let me try. The brief says MCP is optional. Let me attempt `Get(id, n=>c.problems && Print(...))`.
+
+Actually, I'm not sure about the exact Pen JS API. The task prompt gives: `Get(id, n=>c.problems && Print(...))`. Hmm, that's odd syntax. Let me try a query to check. But MCP might be slow/unavailable. Let me test with a short timeout.
+
+Meanwhile, I can do clipping detection heuristically from the JSON: check nodes with `clip: true` and children extending beyond bounds. But `problems` is more authoritative.
+
+Let me first check if Pen is running.
+dsh: reasoning:
+No empty frames and no contentless boards. Good.
+
+Pen is running. Let me try MCP for clip problems. Let me test a small query. The exact API: In Pen MCP docs, `Get(id, {depth})` returns node. The task mentions `Get(id, n=>c.problems && Print(...))`. Let me try to query a board and print problems.
+
+Let me try: `Print(JSON.stringify(Get('U7JXtZ',{depth:0})))` maybe. Let me test.
+dsh: reasoning:
+The MCP call timed out (harness 60s cap). Pen MCP may be busy (other audit subagents running in parallel — I saw dsh agent #2 running). Given the brief says MCP is optional and read-only, and the timeout, I'll rely on structural JSON analysis for clipping/overflow instead. I'll note MCP was unavailable.
+
+Let me do a heuristic clipping/overflow check on the design.pen directly: For each board, compute the bounding box of descendants vs board bounds, accounting for layout. That's complex. A simpler proxy: find nodes with `clip: true` whose children's explicit width exceeds parent width, or text nodes where `textGrowth` is not auto and text is truncated. Actually a common problem is text nodes inside fixed-width frames with `textGrowth: fixed-width` and long content.
+
+Let me check the raw structure for relevant keys: "clip", "problems". Let me scan the pen for "clip" usage.
+
+Actually, let me look at whether the pen JSON has any "problems" field already (Pen may persist layout problems). grep.
+dsh: reasoning:
+No persisted `problems`. `clip` is used 980 times. Let me write a heuristic overflow detector: for text nodes, if textGrowth is "fixed-width" (or "fixed-width-height") and the text length * approx char width > width, flag potential truncation. But this is error-prone and the task says "可用 ... 检测". Since MCP is unavailable, I'll do a bounded structural check and report as "存疑/无法验证".
+
+Actually, let me try MCP once more but with a more careful approach — maybe the execute tool requires a different function name, or Pen MCP is busy. Let me check `python3 /tmp/penmcp.py state` quickly with a background job so I don't block. Actually the timeout killed at 60s. Let me run in background with job and continue. But it may hang too. Let me instead try to check whether the earlier subagent's MCP is holding a lock. I'll run `state` in background.
+
+Actually, let me not spend too much time. The key deliverable is the coverage matrix and numbers. Let me focus.
+
+Let me now:
+1. Check the 13 old boards existence.
+2. Check R01/R03 homepage content (41 tools/8 categories vs old 24/6).
+3. Check the T12/T37, T05/T41 overlap status.
+4. Check for duplicate boards (same purpose).
+5. Code comparison: tools.ts names vs task book names, categories, aliases.
+6. Compare design board names vs code names.
+7. Doc contradictions.
+
+Let me check old board IDs first.
+dsh: reasoning:
+All 13 legacy boards are gone. So the historical issue "13 张旧稿是否仍以正式稿形式存在" — resolved (removed).
+
+Now check the R01/R03 old homepage issue. Let me examine tUNVK and A51Nl text. Compare to LiwdR (S01). Check tool counts and category counts and "模拟数据生成".
+dsh: reasoning:
+Confirmed: The historical issue is NOT fixed. R01 tUNVK and R03 A51Nl still show the old 24-tool / 5-category homepage with "模拟数据生成" (an old entry). This is a real, current defect. The `docs/DevKit-Pen重复设计检查.md` recommendation #1 was not implemented.
+
+Now check R01 CXVuY JSON格式化 and R03 dF6bi, and R01 PhM4A and R03 t605LZ against T01/T17 — the doc said they inherit old Sybi1/TcM4w. Let me compare texts.
+
+Let me compare CXVuY vs U7JXtZ, dF6bi vs U7JXtZ, PhM4A vs Ja13I, t605LZ vs Ja13I.
+dsh: reasoning:
+The R01/R03 JSON and SM4 boards still use old data. For example R01 CXVuY has old JSON sample (林逸舟, uid 1024, etc.) vs T01's current sample. Let me verify what T01 success board uses and what the current tools use. Let me print full texts of T01 and CXVuY to compare.
+
+Actually, let me examine T01's JSON sample vs CXVuY's. The key claim: adapt boards still based on old main boards, not synced. Let me get the input/output snippets.
+
+Let me look at T01 U7JXtZ texts vs CXVuY.
+dsh: reasoning:
+T01 uses 张三, id 1234567890123456789. CXVuY uses 林逸舟, uid 1024 etc. Let me confirm CXVuY full texts, and also SM4 data.
+
+Let me get CXVuY texts.
+dsh: reasoning:
+Confirmed: R01 CXVuY uses old sample data (林逸舟, id 1024, 11 lines / 253 chars input, 20-line output, 303 chars) vs T01's current sample (张三, 1234567890123456789, 19 lines / 323 chars). Also R01 description differs from T01's ("格式化、压缩并校验 JSON 数据，支持缩进选择与树形视图浏览。" vs "格式化、压缩与校验 JSON；保留大整数原始数字文本"). So the adapt boards are stale/un-synced. Same for SM4.
+
+Now check R02 mobile JSON and SM4 vs T01/T17 too. And check R01 首页 tUNVK vs S01 LiwdR (24 tools, 5 cats, 模拟数据生成). Confirmed.
+
+Let me now do the code comparison. tools.ts names vs task book names.
+
+Task book appendix names:
+T01 JSON 格式化
+T02 JSON 差异比较
+T03 JSON / YAML 转换
+T04 CSV / JSON 转换
+T05 Base64 编解码
+T06 URL 编解码
+T07 Unicode / 字节编码转换
+T08 文本去重与整理
+T09 命名风格转换
+T10 文本差异比较
+T11 正则表达式测试（JavaScript）
+T12 MD5 / SHA 摘要
+T13 HMAC 计算与校验
+T14 AES 加解密
+T15 SM2 加解密与签名
+T16 SM3 摘要
+T17 SM4 加解密
+T18 时间戳转换
+T19 UUID 生成与解析
+T20 Cron 解析与执行预览
+T21 日期时间差计算
+T22 JSON 转 Java 类
+T23 Java 字符串转义
+T24 Properties / YAML 转换
+T25 Java 异常堆栈整理
+T26 Maven / Gradle 依赖声明转换
+T27 JSON 转 TypeScript 类型
+T28 Vue 单文件组件模板生成
+T29 CSS 单位换算
+T30 颜色转换与对比度
+T31 SVG 预览与优化
+T32 HTML / CSS / JS 格式化
+T33 JWT 解析与验签
+T34 URL 参数编辑
+T35 curl / fetch / Axios 转换
+T36 HTTP 状态码速查
+T37 文件摘要与批量校验
+T38 图片压缩与格式转换
+T39 二维码生成与识别
+T40 文本文件编码与换行转换
+T41 文件 / Base64 转换
+
+Code names:
+T01 JSON 格式化 ✓
+T02 JSON 差异比较 ✓
+T03 JSON / YAML 转换 ✓
+T04 CSV / JSON 转换 ✓
+T05 Base64 编解码 ✓
+T06 URL 编解码 ✓
+T07 Unicode / 字节编码转换 ✓
+T08 文本去重与整理 ✓
+T09 命名风格转换 ✓
+T10 文本差异比较 ✓
+T11 正则表达式测试 (no （JavaScript）) — code name '正则表达式测试' vs task '正则表达式测试（JavaScript）'. Minor difference.
+T12 MD5 / SHA 摘要 ✓
+T13 HMAC 计算与校验 ✓
+T14 AES 加解密 ✓
+T15 SM2 加解密与签名 ✓
+T16 SM3 摘要 ✓
+T17 SM4 加解密 ✓
+T18 时间戳转换 ✓
+T19 UUID 生成与解析 ✓
+T20 Cron 解析与执行预览 ✓
+T21 日期时间差计算 ✓
+T22 JSON 转 Java 类 ✓
+T23 Java 字符串转义 ✓
+T24 Properties / YAML 转换 ✓
+T25 Java 异常堆栈整理 ✓
+T26 Maven / Gradle 依赖转换 vs task 'Maven / Gradle 依赖声明转换' — code drops 声明. Minor.
+T27 JSON 转 TypeScript 类型 ✓ (task same)
+T28 Vue 单文件组件模板 vs task 'Vue 单文件组件模板生成' — code drops 生成.
+T29 CSS 单位换算 ✓
+T30 颜色转换与对比度 ✓
+T31 SVG 预览与优化 ✓
+T32 HTML / CSS / JS 格式化 ✓
+T33 JWT 解析与验签 ✓
+T34 URL 参数编辑 ✓
+T35 curl / fetch / Axios 转换 ✓
+T36 HTTP 状态码速查 ✓
+T37 文件摘要与批量校验 ✓
+T38 图片压缩与格式转换 ✓
+T39 二维码生成与识别 ✓
+T40 文本文件编码转换 vs task '文本文件编码与换行转换' — code drops 与换行.
+T41 文件 / Base64 转换 ✓
+
+Categories: Task book categories: 数据格式(T01-04), 编码与文本(T05-11), 摘要与加密(T12-17), 时间与标识(T18-21), Java 开发(T22-26), Web / Vue(T27-32), 接口辅助(T33-36), 文件与图片(T37-41). Code: format=T01-04, text=T05-11, crypto=T12-17, time=T18-21, java=T22-26, web=T27-32, api=T33-36, file=T37-41. Check code cats: t27 cat 'web' ✓, t28 web ✓, t29 web ✓, t30 web ✓, t31 web ✓, t32 web ✓, t33 api ✓, t34 api ✓, t35 api ✓, t36 api ✓, t37 file ✓... yes. All match.
+
+Wait — I should verify each tool's cat in code exactly. Let me programmatically compare against task's categories.
+
+Aliases: task book section 00 says global search supports 中文、英文、缩写和别名. Specific requirement: "国密" should find SM2/SM3/SM4. Code aliases: t15 sm2 has '国密', t16 sm3 has '国密', t17 sm4 has '国密'. Good.
+
+But check task book example: S03 用"国密"展示 SM2/SM3/SM4 结果. Search for 国密 matches t15,t16,t17 aliases. But does it also match category desc? searchTools only matches name/alias/tags. t15/t16/t17 have tag '国密' too. Good.
+
+Let me verify by running the searchTools logic in node? Or just replicate. Let me check that "国密" returns exactly SM2/SM3/SM4.
+
+Also check alias coverage for design-required search terms: e.g. "gm", "sm2", etc. Fine.
+
+Let me run a node script to import tools.ts and test searches. Since it's TS, I can use a small TS transpile or just parse with regex. Let me use `npx tsx` if available, or just parse the file. Simpler: use node with a quick regex extraction. Actually the devkit has .nuxt; maybe I can use `node --experimental-strip-types`? Node version? Let me check. Simpler: write a JS copy of the search logic and the data extracted via a rough parse. But better to actually import.
+
+Let me check node version and whether tsx is available.
+
+Actually, I can compile tools.ts with esbuild (vite dep). Let me try `npx esbuild`. Or use `node --experimental-strip-types` (Node 22+). Let me check.
+
+Let me also verify the tool page components exist: devkit/app/components/tools/t01..t41. And pages.
+
+Let me do code inventory.
+dsh: reasoning:
+All 41 tool components, 9 pages (error.vue? README mentions error.vue; find shows no error.vue). Let me check for error page. Actually Nuxt uses `error.vue` at root of app/. Let me check.
+
+Let me look at app root.
+
+Now, code coverage: all 41 tool components exist. Pages: index, category/[id], favorites, recent, settings, privacy, help, offline, tools/[slug]. Task book S09 404 — is there an error.vue? Not in pages. Let me check app/error.vue.
+
+Let me also verify aliases and names programmatically. Let me strip types with node --experimental-strip-types. The file has `export interface` with comments — Node 24 supports type stripping natively. Let me try importing as .ts via a small mjs that uses dynamic import. Actually node 24 strips types by default for .ts files (--experimental-strip-types is default in 22.18+/23+). Let me test.
+dsh: reasoning:
+Good. `国密` returns t15,t16,t17 (SM2/SM3/SM4) exactly. Aliases work.
+
+Wait for "java" => t23,t25,t22,t32,t11. t11 regex has alias 'regex','regexp' etc but not 'java'. Hmm why t11? Because t11's alias includes... no. Actually searchTools matches tags too: t11 tags ['JavaScript 引擎'] → 'javascript'.includes('java') true → s=20. And t32 alias includes 'javascript'. That's fine (lower score).
+
+Now let me programmatically compare code names/cats to task book. Let me extract the task book appendix table and compare.
+
+Let me write a script parsing the task doc appendix and tools.ts.
+
+Also compare design board main names vs code names (design uses "JSON格式化" without space, "Unicode字节转换", etc.). The task asks to check design names vs code `name` wording differences like "JSON格式化" vs "JSON 格式化", T27 "JSON转TS类型" vs "JSON 转 TypeScript 类型". These are design-internal abbreviations, not necessarily errors. I should note them.
+
+Let me extract task doc appendix and compare.
+dsh: reasoning:
+My regex captured columns wrong. The appendix format is `| T01 | 数据格式 | JSON 格式化 |` — so group(2) is category, group(3) is tool name. And code regex captured `id, slug, name, cat`. I mismatched: I put task[0]=cat as name. Let me fix. Task name is r[2], category r[1].
+
+Let me redo.
+dsh: reasoning:
+Still mismatched because the appendix has only 3 columns: 编号 | 分类 | 工具. Wait, the read output showed `| T01 | 数据格式 | JSON 格式化 |`. So group(2)=数据格式 (category), group(3)=JSON 格式化 (name). But my output shows 任务书名称=数据格式, so the regex captured group(2) into task name. Let me look: `task={r[0]:(r[1].strip(),r[2].strip())}` then `tn,tc=task[...]` → tn=r[1]=数据格式, tc=r[2]=JSON 格式化. So I have them swapped: tn is category, tc is name. Let me fix: task name = r[2], task cat = r[1].
+dsh: reasoning:
+Good: 37/41 exact name matches; 4 drop words: T11 (drops JavaScript parenthetical), T26 (drops 声明), T28 (drops 生成), T40 (drops 与换行). Categories all match.
+
+Now let me compare design board main names to code names / task names. Let me extract the main board (the one with 成功/加解密 etc.) names. Actually I already have design names like "JSON格式化", "JSON转TS类型". The task asks specifically to check design name wording vs code name, e.g., T27 "JSON转TS类型" vs "JSON 转 TypeScript 类型". Let me build a table of design main board prefix → code name.
+
+Design main board display title comes from the board's text content (页面标题). Let me extract the title text from each main board and compare to code name. The board name uses abbreviations (e.g., "JSON转TS类型"), but the page title inside might use full name. Let me extract the title (a text node named 页面标题) from each main board.
+
+Let me write a script: for each tool, main board (the 成功/加解密/etc.), find text node named "页面标题" or the first text, and compare to code name.
+
+Let me do it.
+dsh: reasoning:
+Design page titles match code names (except code T11/T26/T28/T40 drop words; design title uses full task book wording). So design titles are actually closer to the task book than code names. Notable: design T11 title = '正则表达式测试（JavaScript）' matches task; code = '正则表达式测试'. T26 design title = 'Maven / Gradle 依赖声明转换' matches task; code drops 声明. T28 design = 'Vue 单文件组件模板生成' matches; code drops 生成. T40 design title None — let me check. T37-T41 titles are None because the "页面标题" node name may differ. Let me check their titles differently.
+
+Let me dump text of T37 PKrN2, T38, T39, T40, T41.
+dsh: reasoning:
+Design T40 title = '文本文件编码与换行转换' (matches task book, code drops 与换行). T37, T38, T39, T41 titles match task book exactly.
+
+So design implementation matches the task book better than code names do. Code names differ in T11, T26, T28, T40 — a minor consistency issue (design ↔ code mismatch).
+
+Now let me verify the "完成的定义" requirement: "41个工具各有独立主画板，所有逐项指定变体已绘制，10个系统入口/支持页及其指定变体已绘制，8组共享交互、响应式代表页和组件齐全".
+
+Let me count exactly:
+- 41 tool main boards ✓ (all present)
+- all specified variants: computed above, all present.
+- 10 system pages S01-S10: S01 has 2 (S01 + 首次访问), S02 has 2, S03 has 2, S04 has 2, S05 has 2, S06 has 2, S07 1, S08 1, S09 1, S10 2. Total = 17 S boards. All required. ✓
+- 8 shared interactions G01-G08: G01 3, G02 6, G03 4, G04 2, G05 3, G06 3, G07 2, G08 2 = 25 G boards. ✓
+- responsive R01-R04: R01 6, R02 6(+1 IV error), R03 3, R04 2 = 17(+1). ✓
+- components C01-C15 variant boards: 15 present. ✓
+- 设计交付索引 c4K4r present ✓
+
+Now let me count total. The task book says "10个系统入口/支持页及其指定变体" and "8组共享交互". Good.
+
+Now let me check for missing variant counts. Let me carefully cross-check each tool's required variants count vs actual. I'll build a mapping. Let me count tool boards (excluding index summary frames):
+T01 5, T02 3, T03 3, T04 4, T05 3, T06 3, T07 3, T08 3, T09 3, T10 3, T11 4, T12 3, T13 3, T14 4, T15 5, T16 3, T17 6, T18 4, T19 4, T20 4, T21 3, T22 6 (4 variants + 2 Owner boards), T23 3, T24 3, T25 3, T26 4, T27 3, T28 3, T29 3, T30 4, T31 3, T32 4, T33 5, T34 3, T35 4, T36 3, T37 4, T38 4, T39 4, T40 3, T41 4.
+
+Task book required main + variants:
+T01: main+4 variants = 5. design has 5 ✓
+T02: main+2 = 3 ✓
+T03: 3 ✓
+T04: main+3=4 ✓
+T05: 3 ✓
+T06: 3 ✓
+T07: 3 ✓
+T08: 3 ✓
+T09: 3 ✓
+T10: 3 ✓
+T11: main+3=4 ✓
+T12: 3 ✓
+T13: 3 ✓
+T14: main+3=4 ✓
+T15: main+4=5 ✓ (main 加解密 + 解密工作区,签名成功,验签不通过,公钥格式错误)
+T16: 3 ✓
+T17: main+5=6 ✓ (解密成功,密钥长度错误,解密密文长度错误,结果待更新,ECB+NoPadding)
+T18: main+3=4 ✓
+T19: main+3=4 ✓
+T20: main+3=4 ✓
+T21: main+2=3 ✓
+T22: main+3=4, design 6 (extra Owner POJO/record boards) ✓
+T23: 3 ✓
+T24: 3 ✓
+T25: 3 ✓
+T26: main+3=4 ✓
+T27: 3 ✓
+T28: 3 ✓
+T29: 3 ✓
+T30: main+3=4 ✓
+T31: 3 ✓
+T32: main+3=4 ✓
+T33: main+4=5 ✓
+T34: 3 ✓
+T35: main+3=4 ✓
+T36: main+2=3 ✓
+T37: main+3=4 ✓
+T38: main+3=4 ✓
+T39: main+3=4 ✓
+T40: 3 ✓
+T41: 4 ✓
+
+Sum of tool page boards = 5+3+3+4+3+3+3+3+3+3+4+3+3+4+5+3+6+4+4+4+3+6+3+3+3+4+3+3+3+4+3+4+5+3+4+3+4+4+4+3+4
+Let me compute: 
+T01 5
+T02 3 (8)
+T03 3 (11)
+T04 4 (15)
+T05 3 (18)
+T06 3 (21)
+T07 3 (24)
+T08 3 (27)
+T09 3 (30)
+T10 3 (33)
+T11 4 (37)
+T12 3 (40)
+T13 3 (43)
+T14 4 (47)
+T15 5 (52)
+T16 3 (55)
+T17 6 (61)
+T18 4 (65)
+T19 4 (69)
+T20 4 (73)
+T21 3 (76)
+T22 6 (82)
+T23 3 (85)
+T24 3 (88)
+T25 3 (91)
+T26 4 (95)
+T27 3 (98)
+T28 3 (101)
+T29 3 (104)
+T30 4 (108)
+T31 3 (111)
+T32 4 (115)
+T33 5 (120)
+T34 3 (123)
+T35 4 (127)
+T36 3 (130)
+T37 4 (134)
+T38 4 (138)
+T39 4 (142)
+T40 3 (145)
+T41 4 (149)
+
+Total tool boards = 149. Required minimum = 41 main + (sum variants). Variants per tool:
+T01 4,T02 2,T03 2,T04 3,T05 2,T06 2,T07 2,T08 2,T09 2,T10 2,T11 3,T12 2,T13 2,T14 3,T15 4,T16 2,T17 5,T18 3,T19 3,T20 3,T21 2,T22 3,T23 2,T24 2,T25 2,T26 3,T27 2,T28 2,T29 2,T30 3,T31 2,T32 3,T33 4,T34 2,T35 3,T36 2,T37 3,T38 3,T39 3,T40 2,T41 3
+Sum variants = let's add: 4+2+2+3+2+2+2+2+2+2=23; +3+2+2+3+4+2+5+3+3+3=30 → 53; +2+3+2+2+2+3+2+2+2+3=23 → 76; +2+3+4+2+3+2+3+3+3+2=27 → 103; +3=106. So 106 variants. 41+106 = 147. Design has 149 = 147 + 2 extra (Owner POJO/record). 
+
+This matches the old 审查报告's "147个工具容器对应41个主页面加106个变体". So the coverage is now complete.
+
+Now the task wants "必画变体总数 vs 实际画板数". 106 required variants, 106 drawn (+2 bonus Owner boards) = 108 variant-type boards. Total tool boards 149.
+
+Now let me verify the "S01-S10" requirement: task book says 10 system pages. S01 has main + 首次访问 variant; S02 main + Java variant; S03 国密结果 + 无结果; S04 已收藏 + 空收藏; S05 记录列表 + 空历史; S06 设置项 + 清理确认; S07 1; S08 1; S09 1; S10 2. Total 17. All present.
+
+Now check design index c4K4r content and whether it claims completion accurately. Also OZuxZ batch index. Let me extract texts.
+dsh: reasoning:
+The index c4K4r correctly marks 内容=✓ for all, 视觉=△, 数据=– mostly with a few ✓, 交互=–. This is honest. But note it says "T01 ... (5)" etc. consistent with actual board counts. And it lists T38 (4) — design has 4. Good.
+
+However, note that the index claims "T22 JSON 转 Java 类 (4)" but there are actually 6 boards (4 + 2 Owner). This is a minor inconsistency. Actually the (4) probably counts the 4 required; extra Owner boards are extra. Fine, but could note.
+
+Also index claims "R02 390 移动端 (6)" — actual has 7 (6 + IV错误 N316Hq). Minor.
+
+Now, the task book 07 requires "最后回复以下内容: 1. 实际完成的页面和变体数量，分别统计..." — is there such a reply in the design document? The design index c4K4r states counts per line but does it give totals? The old report said "总结声称213张画板完成". Let me check if there's a summary board with totals. Search for "213" or "张画板" in pen.
+
+Let me grep for numbers. Also check the summary frames `S01 ...`, `T01 ... (5)` — these are index rows (fill_container, 8 nodes each). They are the "批次索引" maybe.
+
+Let me search text for "张画板" / "总计" / "共".
+
+Also the task 07 requires a "设计交付索引" board — present c4K4r. Good.
+
+Now let me check the metadata / text for placeholder/Generating residue: already 0.
+
+Now check for overflow/truncation. Since MCP timed out, let me try one more time in background while I do other work. Actually MCP might be single-client and other agents are using it. Let me start a background job and continue.
+
+Actually, I realize I should be careful about time. The task is big; let me focus on producing a thorough report. But clipping detection is explicitly requested. Let me attempt a heuristic: find text nodes with explicit width and textGrowth fixed where text likely overflows. Let me inspect the JSON schema for text nodes to understand `textGrowth`.
+
+Let me sample some text nodes with width & textGrowth.
+dsh: reasoning:
+Most text uses `fill_container` width (auto-grow height) which is fine. `fixed-width-height` with height 20 and single-line content is fine.
+
+For clipping detection, I'd need actual layout computation. The MCP `problems` would be authoritative. Let me try MCP again with a longer background job, but the harness cap is 60s for foreground. Let me run in background and poll later. Actually the earlier foreground timed out at 60s (harness cap). Let me run in background.
+
+Let me start a background job to query Pen MCP for problems on all 149 tool boards. But I don't know the exact JS API. Let me first find docs. Maybe the earlier subagents used it. Let me check audit/raw or logs for examples.
+
+Let me look at audit/ dir contents.
+dsh: reasoning:
+There are audit/tools/pen2.py and crawl.py created by other agents. And audit/raw/design_inventory.json (6.4MB) might be the full node inventory with text. Let me check pen2.py — it may have a `problems` command.
+
+Also, another agent may have already done clipping detection. Let me check pen2.py.
+dsh: reasoning:
+pen2.py doesn't do problems. Let me check the r5-c01-c08.md raw which may include clipping detection. Actually, let me just try MCP once in the background for problems. Let me check the pen MCP tool list to understand available tools. `python3 /tmp/penmcp.py tool tools/list`? The call is `tools/call`, not `tools/list`. Let me just send tools/list via a custom script? The penmcp main doesn't expose that. But MCP class can. Let me write a quick script.
+
+Actually, time budget. Let me instead use a heuristic layout analysis to find overflow. But the task explicitly allows pen.py dump for dimensions. Given all boards have explicit heights and Pen's auto-layout, and no placeholder/empty frames, plus the previous review rounds already found and fixed the clipping issues, I'll note that programmatic clip detection via MCP was unavailable (timeout) and mark it as a limited-verification item, while doing a text-overflow heuristic scan.
+
+Let me do a heuristic: for text nodes with `textGrowth == 'fixed-width-height'` and a fixed `height`, estimate if content wraps beyond height. Also for frames with `clip` true, check if any child's explicit x+width or y+height exceeds parent. But layout coordinates may be relative and auto-computed by Pen, x/y may be absent.
+
+Actually, let me try the MCP once in background with a generous time. Let me write a script that queries the app state first (fast?) — earlier `run` timed out. Let me check if other agents have Pen MCP locked. Let me run in background.
+
+Actually, let me try `python3 /tmp/penmcp.py state` in background with job and continue with other analysis. If it finishes, great.
+
+Let me also check the `audit/raw/design_inventory.json` — maybe another agent already extracted all text; that could be useful but I already have my data.
+
+Let me start the background MCP job.
+
+Now, another important aspect: "项目文档与实现一致性". Let me check:
+- README claims "41 个工具" ✓
+- README claims system pages: 首页、分类列表、全局搜索、收藏、最近使用、偏好设置、隐私说明、帮助、404、离线状态. Code pages: index, category/[id], favorites, recent, settings, privacy, help, offline, error.vue. ✓ 搜索 is CommandPalette component, not a page. Fine.
+- README design.pen mention: `../design.pen` — exists ✓.
+- FOUNDATION claims "dev server 已运行在 http://localhost:3100" — is it? Let me check ports 3000/3100.
+- FOUNDATION lists components: DkButton, DkInput, DkSelect, DkSegmented, DkCheckbox, DkField, DkCollapse, DkModal, DkEditor, DkStatusBar, DkIcon, DkIconButton, DkToastHost, FileDrop, SplitPanes, JsonTree, ToolPageLayout, ToolCard, TopNav, SideNav, CommandPalette. Actual components list includes all those plus DkSwitch, SendToMenu. FOUNDATION doesn't mention DkSwitch/SendToMenu — minor doc gap.
+- FOUNDATION says "app/utils/bytes.ts... hexToBytes(hex) -> {bytes, error?}" etc. Need to verify these functions exist. Let me check.
+- FOUNDATION mentions `pages/tools/[slug].vue` — present.
+- FOUNDATION says `DkModal` `:open.sync` — check the actual component whether it uses `open` prop or `v-model`. This could be a doc/impl mismatch. Let me check.
+- FOUNDATION says DkEditor props `lang`, `filename`, `stale`, `show-stats`. Verify.
+- FOUNDATION says DkStatusBar status: idle|ok|error|stale|running. Verify useToolRun.
+
+Let me check useToolRun.ts and key components.
+
+Also README says "8 个分类色" in design.pen variables. Let me check design variables count.
+
+Let me now run a batch of checks.
+dsh: reasoning:
+Important finding: `useToolRun` RunStatus type = 'idle' | 'ok' | 'error' | 'stale' — but FOUNDATION.md line 103 says `status: idle|ok|error|stale|running`. The 'running' status is NOT implemented. Also DkStatusBar may accept 'running'. Let me check DkStatusBar. This is a doc/impl mismatch (FOUNDATION.md overstates). Also the code doesn't implement 'running' anywhere perhaps.
+
+Let me check DkStatusBar.vue.
+
+Also check DkModal API, DkEditor props.
+
+Let me grep.
+dsh: reasoning:
+DkStatusBar supports 'running', but useToolRun.RunStatus does not include 'running'. So no tool can pass 'running' via useToolRun. Tools might pass it manually. Let me check if any tool uses `status="running"` or markRunning. Grep.
+
+This is a functional gap: G02/file progress "处理中" status may not be reachable through the standard composable. Let me grep tools for 'running'.
+dsh: reasoning:
+DkModal uses `open` prop, not `:open.sync`. FOUNDATION.md says `<DkModal（弹层，:open.sync + @close；danger 确认框）>`. The actual API is `:open` + `@close`. Minor doc inaccuracy (`.sync` is Vue 2 syntax; in Vue 3 it'd be `v-model:open`, but the component doesn't define `update:open`). Let me check callers to see how they use it. Grep DkModal usage.
+
+Also 40/41 tool components use useToolRun; which one doesn't? Let me check. Probably t36 (static lookup) or t28. Let me find.
+
+Let me check.
+dsh: reasoning:
+Confirmed: FOUNDATION.md documents `:open.sync` but actual usage is `:open` + `@close`. Doc inaccuracy.
+
+Also t36-http-status.vue doesn't use useToolRun (it's a static index, no compute). That's fine per "预览型工具可以直接 watch + execute" but it does mean no status bar stale handling. Probably fine.
+
+Now let me check the background MCP state job.
+dsh: reasoning:
+The MCP job is still running (probably hanging on init). Let me kill it; MCP is not usable (likely because other agents are holding it or it needs a specific handshake). Let me kill.
+
+Actually, the penmcp script spawns a new MCP server process each time; maybe it's just slow. But 53741 is still alive. Let me give it a bit more and meanwhile continue.
+
+Let me now check the design variables (color/font/spacing) existence for C15, and count.
+
+Let me read audit/raw/design_variables.json (already extracted).
+dsh: reasoning:
+Design variables: 43 vars, 41 have dark values. Code CSS: includes all design vars plus extras. Code adds `--accent-hover`, `--code-null`, `--editor-bg`, `--editor-line-highlight`, diff colors, layout metrics, shadows, code-font-size, reduce-motion. Code is a superset. Fine.
+
+The README says "代码中的 CSS 变量与 design.pen 中的设计变量一一对应" — mostly true (code has extras, and design has no `--accent-hover` etc.). Is that a contradiction? Minor: "一一对应" overstates (code has additional tokens not in design). Low severity.
+
+Now let me check design C15 variable board for light/dark semantic variables — present. Let me quickly extract text.
+
+Now, the "真实性 10 条" from section 00. I should check a sample against design boards: e.g. rule 7 "不能显示'上传中'，使用'读取中/处理中'". Let me grep page text for "上传中". Also rule 10 "不能承诺所有大文件流畅". The R01 FAQ says "常规配置与接口响应（数 MB 内）都很流畅" — the old board's FAQ says "支持多大的 JSON？常规配置与接口响应（数 MB 内）都很流畅。" That's a soft claim ("很流畅") which arguably violates rule 10? Actually rule 10 forbids "所有大文件流畅". "数 MB 内都很流畅" is bounded, so acceptable.
+
+Let me grep design text for forbidden phrases: "上传中", "所有大文件", "永不失败", "完全安全", "验证通过" (fake), "生成时间" (v4), etc.
+
+Let me search text nodes across all boards for these.
+
+Let me build a full-text index from /tmp/boards.json (limited to 250 texts per board, but total ~?). Actually better: re-extract all texts globally with board mapping. Let me do a global scan.
+dsh: reasoning:
+Findings:
+- "模拟数据生成" appears in 2 text nodes (U438d, pzqCt) — these are the old homepage boards tUNVK and A51Nl (the stale adapt boards). This is a real violation of "不设计...不要编造额外功能" (S01 requires tool names from section 03; 模拟数据生成 is not in the 41 tools). Confirms the R01/R03 homepage is stale.
+
+- "演示结果 · 待实现验证" (m4BUAz) — need to see context. Could be a design annotation or an actual page. Rule 2 says "不能运行验证时使用无结果状态或明确写'演示结果，待实现验证'". Let me locate m4BUAz's board. Its parent chain.
+
+- "生成时间" hits are all correct denials (v4 no time). Good.
+
+Let me find the board containing m4BUAz and i4zkr, U438d, pzqCt, S3E8eG.
+
+Let me write a function to map node id to top-level frame and ancestor path.
+dsh: reasoning:
+Key finding: T33 "签名不通过" board contains a visible label "演示结果 · 待实现验证" in the 验签面板 header. This directly violates Rule 2 (加密/签名结果要来自真实计算; 不能运行验证时使用无结果状态或明确写"演示结果，待实现验证"). And the third-round closure claimed JWT signature was independently recomputed. But this board still says "演示结果·待实现验证"! Wait — the 第二轮 said JWT已换成带iat/exp的新Token；HS256签名用公开演示密钥独立复算一致. And the index c4K4r marks T33 数据=✓. But this board shows "演示结果 · 待实现验证". Let me look at the full text of T33 签名不通过 (WQTLy) to determine whether it's a status label or residue. This could be a genuine contradiction: the index claims 数据已核验, but the board itself says 待实现验证.
+
+Let me extract WQTLy full text.
+dsh: reasoning:
+Confirmed: T33 "签名不通过" (WQTLy) contains visible label '演示结果 · 待实现验证' inside the 验签面板 header. Yet the same board also shows '签名比对 不匹配 · 0/32 字节相同' and '不通过', computed with a 32-byte key. So the label is a leftover/inconsistency: it says "demo result, pending implementation verification" while also claiming a local computed mismatch. This contradicts the delivery index which marks T33 数据=✓ ("HS256 签名已独立复算"). It's a real defect (medium/high), violating Rule 2's letter and the "已完成画板清除placeholder/Generating标记" batch check.
+
+Also note WQTLy uses a 155-char token and 32-byte key but doesn't show the key value — that's fine.
+
+Now, the eq3hl "过期但签名有效" board — key is `devkit-demo-hs256-secret` (24 bytes). This matches the second-round fix. Good. But is the signature actually valid? Second round said yes.
+
+Now let me check other "待实现验证"/"演示" residue across boards more broadly. I searched "演示结果" (1) and "待实现验证" (2). Also search "演示" generally.
+
+Let me search for '演示' '示例数据仅供' '未核验' '待核验' '未验证' in page texts.
+dsh: reasoning:
+More findings:
+- A2 batch: '演示数据：本页结果为界面示例，接入实现后必须用测试向量重新计算并核验。' and '演示数据 · 待开发验证' and '解密成功 · 演示数据' — these are inside the A2 batch, likely within T14 AES boards or T13? Let me locate. The task rule 2 forbids "演示结果，待实现验证". These labels could be in the page UI. Let me locate the exact boards.
+
+- A3: '演示数据 · 待开发验证', '已还原明文 · 演示数据', '签名已生成 · 演示数据' — T15/T16/T17 boards.
+
+- A5: '演示结果 · 待实现验证' (T33).
+
+These are significant: several cryptographic boards still carry "演示数据" labels directly in the page UI, contradicting Rule 2 and the closure report claiming real computation. However — wait. The project's design philosophy (per second-round report and index) is to distinguish "已核验" vs "视觉演示". The task book rule 2 says: "加密、摘要、校验和、签名等结果要来自真实计算。不能运行验证时使用无结果状态或明确写'演示结果，待实现验证'，不能伪造'验证通过'。" So having "演示数据" labels inside the page is a violation.
+
+But note: some of these might be design annotations (设计注释) outside the page. The scan printed only path[:2] which is just top-level frame + first child. Let me get the full path for these hits to determine whether they are inside actual page boards or design note boards.
+
+Let me locate them precisely.
+dsh: reasoning:
+These are inside real page boards (工作区 > ... > 输出状态栏 / 明文结果面板). So these are visible in-page labels:
+- T14 AES 解密成功: '演示数据：本页结果为界面示例，接入实现后必须用测试向量重新计算并核验。'; '演示数据 · 待开发验证'; '解密成功 · 演示数据'
+- T15 SM2 加解密: '演示数据 · 待开发验证'
+- T15 SM2 解密工作区: '已还原明文 · 演示数据'
+- T15 SM2 签名成功: '签名已生成 · 演示数据'
+- T17 SM4 ECB-NoPadding: '演示数据 · 待开发验证'
+- T33 JWT 签名不通过: '演示结果 · 待实现验证'
+
+This is a notable cluster. However, I should be careful: Is this a violation, or is it the design's honest way of marking unverified data? Task book rule 2 explicitly says it's not allowed to use "无结果状态 or 明确写'演示结果，待实现验证'" for crypto results. So yes, these are violations — but they're arguably "honest" per the 第二轮 which said the project distinguishes verified vs visual demo. The task book is the authority. I'll report as 中 severity with exact node IDs.
+
+But wait — there's nuance: the delivery index c4K4r marks T14 AES 数据=✓, T17 数据=✓, T33 数据=✓, while the boards themselves say "演示数据". That's an internal contradiction (index says data verified, board label says demo). This is the more important finding for "文档一致性". Actually the index's ✓ likely refers to the main board's data, not every variant. But T14's main board is x4GBW (成功) and its variant I92uFI (解密成功) has the demo label; index marks T14 as a whole 数据=✓. Contradiction.
+
+Hmm, actually let me verify: the second-round report said AES-192-GCM was independently recomputed and matched the board "完全一致". And the design says it's demo data. So either the board was updated to real data but the label remained (stale label), or the index overclaims. Either way, it's an inconsistency worth reporting.
+
+Let me also check T15 SM2: index marks T15 数据=– (not verified). So the "演示数据" label on T15 is consistent with index. Good. For T14/T17, index says ✓. So T14/T17 demo labels contradict index.
+
+Let me verify whether T14 I92uFI (解密成功) is the board with "演示数据" and whether it's one of the "已核验" ones. c4K4r marks T14 row: 内容✓ 视觉△ 数据✓ 交互–. So yes contradiction.
+
+Also T17 ECB-NoPadding has '演示数据 · 待开发验证'; index T17 数据=✓. The ✓ was for the main SM4 example, ECB variant may be unverified. Still, index is per-tool single value.
+
+OK. This is a solid "文档矛盾" finding.
+
+Now, also note the requirement in section 06: "已完成画板清除placeholder/Generating标记" — no placeholder flags, but "演示数据/待开发验证" labels remain on completed-looking boards. I'll report.
+
+Now let me check the design's "完成的定义" requirement #3: "真实计算核验过的示例，以及仅作视觉演示的例子" — the design index c4K4r does record 数据 ✓ for T12,T14,T16,T17,T22,T33,T39,T41. But the batch index OZuxZ marks T33,T35 数据已通过. Fine.
+
+Now let me examine whether the design has a "设计交付索引" that's at top-level (c4K4r) — yes.
+
+Now let's handle the code side: "41 条与设计稿 T01–T41 名称/分类是否一一对应" — done. Also alias coverage.
+
+Let me also check whether code tool page components render 41 routes. Let me probe the running site for all 41 slugs to check HTTP 200. That's a code-level check but relevant to "项目文档与实现一致性". The task is docs coverage; but let me at least verify the slugs resolve. Actually another subagent probably does functional. My scope #3 is "项目文档与实现一致性". I'll do a quick check of README claims: 41 tools, pages, etc. Let me probe a few.
+
+Actually, given time, let me do a quick bulk HTTP status check for all 41 tool slugs + 9 pages. This validates README claims. Let me do it.
+
+Let me get slugs from tools.ts and curl.
+dsh: reasoning:
+All 41 tool routes return 200; all 9 system pages return 200; 404 returns 404 (error.vue works). Good — README's claims are consistent.
+
+Now, let me check the alias coverage more: the task says "alias 是否覆盖设计稿要求的中英文/缩写/别名搜索（例如"国密"能搜到 SM2/SM3/SM4）". Done. Let me also verify some search terms from design S03: "国密" → SM2/SM3/SM4. Also design's example search placeholder mentions "国密 / sm4 / base64". Confirmed.
+
+Let me also verify T11's code name missing JavaScript might cause search: alias includes 'regex','regexp','正则'. A user searching "JavaScript" gets t11 via tags (JavaScript 引擎). Fine.
+
+Now let me check whether the design has any name/category mismatch with code. Design T27 title is full; code name is full too actually ("JSON 转 TypeScript 类型"). Wait earlier I compared code T27 = 'JSON 转 TypeScript 类型' which matched task. Good. The task prompt mentioned "T27'JSON转TS类型'vs'JSON 转 TypeScript 类型'" — that's the board *name* abbreviation vs code. It exists but it's just the board naming short label; the page title inside is full. I'll note it as low.
+
+Now, duplicate design check: the historical doc mentions total index c4K4r and batch index OZuxZ overlap. Both still exist. Also there are 41 index-row frames (`T01 JSON 格式化 (5)`, etc.) inside batch containers — are these extra "boards"? They're index rows, not pages. They have names like "T01 JSON 格式化 (5)" starting with T## — my count of 190 T-named nodes includes these 41 index rows + 149 boards = 190. Yes! 149 + 41 = 190. Good, consistent.
+
+Similarly S: 17 boards + 10 index rows = 27. G: 25 + 8 = 33. R: 17+1(N316Hq)+4 index rows = 22. C: 15 variant boards + 1 summary KSoD8 = 16. All consistent.
+
+So the "design board" counts are:
+- T page boards: 149 (41 main + 106 required variants + 2 extra Owner)
+- S page boards: 17
+- G state boards: 25
+- R adapt boards: 17 (R01 6 + R02 6 + R03 3 + R04 2) plus N316Hq mobile IV error = 18 page boards
+Wait, R count list: CXVuY,awaDi,PhM4A,krcPg,gcKQm,tUNVK (6) + OsDZg,ee1Ih,N316Hq,l2SKJo,FguCb,NHpsS,BCDR3 (7) + dF6bi,t605LZ,A51Nl (3) + ubJHY,C8oVvR (2) = 18. Plus 4 index rows = 22. Yes.
+
+Total design page/state boards = 149 + 17 + 25 + 18 + 15 = 224. Plus index rows 41+10+8+4+1=64. Hmm.
+
+The "完成的定义" says "41个工具各有独立主画板，所有逐项指定变体已绘制，10个系统入口/支持页及其指定变体已绘制，8组共享交互、响应式代表页和组件齐全". 224 boards satisfy this. The old report said 206 containers. Now with fixes it's ~224.
+
+Wait, let me double check: old report (设计审查报告) said "按名称匹配 S/T/G/R 编号，当前有206个页面/状态画板容器：T=147、S=17、G=25、R=17". That was before adding Owner boards (2), T35 fixes etc. Now: T=149 page boards (147+2 Owner). S=17. G=25. R=18 (17+1 mobile IV error). C=15. Total page/state = 224. Actually old R=17 probably included the old mobile board; now 18.
+
+Hmm, T=190 named nodes includes 41 index rows. So T page boards = 149. Good.
+
+Now let me confirm there are no duplicate tool boards (same variant drawn twice). Let me check for duplicate (tool, variant) pairs. From the listing, all distinct. Good.
+
+Now, another check: "R01/R03 适配稿是否仍沿用旧版 24 工具首页" — YES, tUNVK/A51Nl still use 24 tools/5 categories/模拟数据生成. Confirmed defect. Also R01 JSON/SM4 and R03 JSON/SM4 adapt boards use old sample data vs T01/T17. Confirmed.
+
+Let me also quickly verify R02 mobile boards JSON and SM4 vs T01/T17 to see if synced. Let me compare OsDZg vs T01, ee1Ih vs Ja13I.
+
+Let me do a quick text comparison.
+dsh: reasoning:
+The mobile SM4 board ee1Ih uses a different plaintext than T17? Let me check T17's plaintext. ee1Ih plaintext 'DevKit-SM4-Demo\n第二行明文' = 21 chars, 31 bytes. T17 main (Ja13I) uses what? Let me check. The old report said 31 bytes plaintext and 32 bytes ciphertext independently recomputed consistent. So it's fine.
+
+Mobile JSON OsDZg uses a different sample than T01 (only 6 lines, 128 bytes; id preserved big int). It says 'local processing · not saving input'. It's a mobile-specific compressed sample. Task book R02 just says draw the pages, not necessarily identical data. But the duplicate-check doc explicitly wanted R01/R03 synced to T01/T17 for data/说明/状态规则. R02 wasn't explicitly mentioned. Still, OsDZg is not consistent with T01's sample. It does preserve the big integer. Probably acceptable as a responsive representative. I'll note as low/存疑.
+
+Now, let me check the mobile `ee1Ih` still shows success only (the old bug said success+error mixed; N316Hq now separate). Confirmed fixed.
+
+Now, one more: check whether T35 fetch转curl output is a valid command and whether sZOGq uses double quotes. The 第三轮 says fixed. Let me just spot-check the text to confirm current state.
+
+Let me extract T35 texts briefly for shell expression board and fetch转curl.
+
+Actually that's more the functional scope of other agents. My scope is docs coverage. I'll skip deep crypto verification but note historical claims vs current.
+
+Let me now focus on remaining scope items:
+- Check design index vs actual board counts (does it list correct numbers?). It lists T01(5)...T41(4). Sum: let me verify index numbers match actual board counts. From the index text: T01(5),T02(3),T03(3),T04(4),T05(3),T06(3),T07(3),T08(3),T09(3),T10(3),T11(4),T12(3),T13(3),T14(4),T15(5),T16(3),T17(6),T18(4),T19(4),T20(4),T21(3),T22(4),T23(3),T24(3),T25(3),T26(4),T27(3),T28(3),T29(3),T30(4),T31(3),T32(4),T33(5),T34(3),T35(4),T36(3),T37(4),T38(4),T39(4),T40(3),T41(4). 
+Actual: matches all except T22 (actual 6, index 4) and R02 (actual 7, index 6). So index undercounts T22 by 2 (Owner boards) and R02 by 1 (IV error board). Minor.
+
+- Check "设计交付索引" is in Pen and is 1180x1801, top-level. Yes.
+
+Now also: the task book 07 requires final reply with 5 items. Is that in the design file? The index includes item 3-ish (data verification) but not a full "final reply". This is a process artifact, hard to verify. I'll note as 存疑.
+
+Now, let me examine the design's category count (8 categories) and sidebar width (220-236). Design component · 左侧导航 is 236 wide; topnav 60 high. Task says 侧栏 220–236, top 60. Code CSS: --topnav-h, --sidenav-w. Let me read those values.
+
+Let me check main.css values.
+dsh: reasoning:
+The sidebar component vxMha lists 41 tools with 8 categories. Note the sidebar uses the *code* names (e.g. "Maven / Gradle 依赖转换", "Vue 单文件组件模板", "正则表达式测试") — abbreviated, consistent with code, not task book. And the counts: 数据格式 4, 编码与文本 7, 摘要与加密 6, 时间与标识 4, Java 开发 5, Web/Vue 6, 接口辅助 4, 文件与图片 5 = 41. ✓ 8 categories ✓.
+
+Top nav 60, sidenav 236 — matches spec (220–236, 60). Good.
+
+Now check code sidenav width/topnav height — 236/60 in CSS ✓.
+
+Now let me check the code name discrepancy: the design sidebar uses code names (Maven/Gradle 依赖转换) rather than task names. So there's an internal design inconsistency: page title uses "Maven / Gradle 依赖声明转换" but sidebar uses "Maven / Gradle 依赖转换". Same for T11/T28/T40. Let me verify by checking sidebar text against code names.
+
+Sidebar text includes: '正则表达式测试' (code), 'Maven / Gradle 依赖转换' (code), 'Vue 单文件组件模板' (code), and later '文件 / Base64 转换'. Let me check T40 in sidebar: after '文件摘要与批量校验'... truncated. Let me get the rest.
+
+Anyway, this is a real design-internal naming inconsistency (page title vs sidebar) for T11/T26/T28/T40. And code matches the sidebar (short) not the page title (full task). I'll note.
+
+Let me get the remaining sidebar texts.
+dsh: reasoning:
+Sidebar uses '文本文件编码转换' (code name) vs page title '文本文件编码与换行转换'. Confirms internal inconsistency.
+
+Now let me finish the code ↔ design name mapping table for T11/T26/T28/T40:
+- T11: design page title '正则表达式测试（JavaScript）' / sidebar+code '正则表达式测试'
+- T26: design title 'Maven / Gradle 依赖声明转换' / sidebar+code 'Maven / Gradle 依赖转换'
+- T28: design title 'Vue 单文件组件模板生成' / sidebar+code 'Vue 单文件组件模板'
+- T40: design title '文本文件编码与换行转换' / sidebar+code '文本文件编码转换'
+
+Now, also design board *names* use abbreviations (JSON格式化, JSON转TS类型) but that's just board label. The task book's naming rule says format `T01 / JSON格式化 / 成功 / 1440`. Hmm, actually the board names largely follow `T01 / JSON格式化 / ...` which matches the required format. T27 board name 'JSON转TS类型' vs task's 'JSON 转 TypeScript 类型'. The rule example is 'T01 / JSON格式化 / 成功 / 1440' so abbreviations are acceptable per the rule. Fine.
+
+Now let me check the design board naming rule compliance: "名称格式：T01 / JSON格式化 / 成功 / 1440". All T boards follow `T## / ... / ... / 1440` except a few: T22 Owner boards are top-level `T22 / JSON转Java类 / Owner.java（POJO） / 1440` (not inside batch); that's fine. Also S/G/R use similar. Some board names lack `/ 1440`? Let me check. Also the index rows are named `T01 JSON 格式化 (5)` (no slashes) — those are index rows, not boards.
+
+Let me verify all 149 tool page boards end with `/ 1440` (or 1366/390 for R). From the listing, yes: T boards all end /1440. S boards end /1440. G boards /1440. R boards end /1366 or /390.
+
+Now let's do a final check on "溢出/截断/重叠". Let me attempt the Pen MCP one more time but check the background job status first.
+dsh: reasoning:
+Interesting! The MCP `get_app_state` returned error "you are probably referencing the wrong .pen file". That means the Pen app has a different .pen file open (the audit brief mentioned `/Users/hao/.pencil/documents/2eaf4d55-.../pencil-new.pen` in the old report). Wait, the old report's design file path was `/Users/hao/.pencil/documents/2eaf4d55-.../pencil-new.pen`. Our design.pen is at /Users/hao/WebstormProjects/web_tools/design.pen. But the penmcp passes filePath=PEN. The error suggests the app doesn't recognize it.
+
+Hmm, actually the task brief explicitly gives the batch root IDs and says A6 is pvxMC, and these match our design.pen. So design.pen is the right file. The MCP might need the file to be open in the app. Since it errored, I'll report MCP clipping detection as unavailable.
+
+Also there are leftover penmcp processes. Let me kill them to avoid interference (they're my own). Actually 57089/57092 belong to the state job still running? The output was written, so the job finished but process lingers. Let me kill.
+
+Let me try MCP one more time with the app state to see the active file — maybe it says. But the error already tells. Let me just kill and move on.
+
+Given MCP unavailable, let me do a heuristic overflow analysis. Let me implement a reasonable clipping detector:
+
+For each board, recursively compute layout sizes where possible:
+- Text nodes with fixed width and explicit content: estimate rendered lines = ceil(text_width / (width - padding)) vs height if fixed height.
+This is approximate.
+
+Alternative: Pen's JSON might contain resolved absolute coordinates (`x`,`y`,`width`,`height` numeric) for auto-layout children? Let me check a board's node fields: in the dump, only width/height for some. Let me inspect a deeply nested frame with numeric width/height and x/y.
+
+Actually, a simpler and more defensible approach: check for text nodes with `textGrowth == "fixed-width"` or `"fixed-width-height"` and a numeric/fixed width where the content's estimated single-line width exceeds the available width AND there's no `height` growth (fixed-width-height with fixed height). Flag as potential truncation. Also flag frames with `clip: true`.
+
+Let me check how many `clip: true` nodes exist and their context. But `clip` may just be default for frames with cornerRadius.
+
+Let me examine the JSON keys of a text node with width and height to build the estimator. Let me sample.
+
+Actually, given time constraints and that the primary deliverable is coverage, I'll do a lightweight check: for each board, find text nodes whose name suggests overflow and count text nodes with both fixed width (number) and fixed height (number) where estimated lines > height/lineHeight. Let me write it. But careful about false positives. I'll report as "heuristic, low confidence, MCP unavailable".
+
+Let me first sample text nodes with numeric width & height.
+dsh: reasoning:
+Text nodes never have numeric width+height; they use `fill_container` or fixed-width with `width: "fill_container"`. So there's no fixed pixel width to compare against. Clipping can't be detected statically without layout resolution. Pen computes layout at render time. So the only way is MCP/screenshot. MCP is unavailable. I'll report clipping as "not independently verified (MCP unavailable; no numeric layout in JSON)".
+
+Actually, wait: `textGrowth: fixed-width` with `width: "fill_container"` means the width comes from the parent layout, and text wraps. The height is auto (not set), so no clipping. `fixed-width-height` has height 20 and single-line content — fine. So structurally, there's low risk. I'll note that.
+
+Let me quickly count text nodes with textGrowth fixed-width-height and height small + multi-line content (content containing newline). That could indicate clipping.
+
+Let me do that check.
+dsh: reasoning:
+These are line-number gutters with height matching the number of lines (e.g., 20 → height 400 = 20 lines × 20px). So no clipping. Good — the heuristic shows these are consistent (height ≈ lines × 20). Let me verify: '1..20' height 400 → 20/line. '1..13' height 260 → 20. '1..6' height 120 → 20. Yes consistent. So no clipping there.
+
+Let me check any where height != lines*20. Let me run.
+dsh: reasoning:
+No gutter mismatches. Good.
+
+Now let me also check the "设计注释" boards are outside the page boards (the A2 issue from P2-04). The second round said fixed. Let me verify no page board has a direct child named 设计注释. Let me scan all page boards for descendant named 设计注释 or 注释.
+
+Actually the A2 batch container no longer has per-page note children? Looking at A2 listing: only one note 'iaQhy 设计注释 · T14-成功'. So A2 notes were moved to top-level 设计注释 boards (the huge list of top-level "设计注释 · ..." frames). But wait — those top-level 设计注释 frames exist for T08-T14 (A2), T01-T07? A1 has notes inside the batch container (pMo99 etc.). Let me check whether any page board contains a descendant with name containing 设计注释.
+
+Let me scan: for each of the 149 page boards, list direct children names; if any contains '设计注释' or '注释', flag.
+
+Earlier the design notes were separate frames like '设计注释 · T08 ...' with 2 children (注释列组?). Actually they're top-level frames. Fine.
+
+But note: A4's notes are named '设计注释 · T21 主画板' etc. (top-level). A2 has 'iaQhy 设计注释 · T14-成功' inside the batch container but separate from page boards. So no page board contains notes. Let me confirm programmatically.
+dsh: reasoning:
+209 page boards (149 T + 17 S + 25 G + 18 R = 209). Good.
+
+The R04 boards have nodes named "注释" inside them. Let me check what they are — likely accessibility annotations attached to UI components (e.g., "图标按钮有可访问名称注释"), which is actually required by R04: "图标按钮有可访问名称注释". So these are likely legitimate a11y callouts, not the design-notes-in-page problem. Let me inspect one.
+dsh: reasoning:
+These are R04 accessibility annotations, which the task book explicitly requires ("图标按钮有可访问名称注释...减少动画设置有明确行为注释"). They reference design variables (`$accent`) in the content text, which if rendered would look odd ("外圈 2px $accent"). But R04 is a design sample board, and these annotations are part of it. Borderline. I'll note as low: R04 annotation text contains raw variable tokens (`$accent`), which is design-internal notation appearing in page text.
+
+Actually, the task says "禁止将内部实现术语、节点 ID、测试日志写进面向用户的页面。可放在设计注释。" These `注释` nodes are inside the R04 page board (though presumably visually marked as annotations). R04 is a "可访问性检查样板" — it's a design document board, not a user page. So acceptable. Low priority.
+
+Now let me check the A2 notes: is the A2 in-page note issue fixed? The earlier P2-04 said 29 A2 boards had 设计注释 inside. Now no page board contains 设计注释. Confirmed fixed.
+
+Now let me review the code for G04 stale handling coverage: FOUNDATION requires all tools to follow. We saw t36 doesn't use useToolRun. Let me check which tools don't call run.markOk/markFail — but useToolRun maybe used. Only t36 lacks it. That's a functional gap for G04 on T36 (but T36 is a knowledge lookup; "预览型工具（输入即算、无需按钮）可以直接 watch + execute，status 保持 ok" — t36 might not need stale).
+
+Let me quickly verify t36 uses DkStatusBar or not. Not critical for my scope.
+
+Now, let me also check documentation consistency:
+- README says "系统页：首页、分类列表、全局搜索（⌘K 命令面板）、收藏、最近使用、偏好设置、隐私说明、帮助、404、离线状态" → all present as pages or components. ✓
+- README says "响应式（桌面/移动）" → code has responsive CSS presumably. Can't fully verify.
+- README says "设计稿 视觉基准来自 ../design.pen（明暗双主题变量、8 个分类色、编辑器/状态栏/导航组件），代码中的 CSS 变量与 design.pen 中的设计变量一一对应。" → design has 8 cat colors ✓; CSS has 8 cat colors ✓; but code has extra vars and design has no `--accent-hover` etc. Minor overstatement.
+- FOUNDATION claims DkModal `:open.sync` → actual `:open`+`@close`. Mismatch.
+- FOUNDATION claims `RunStatus` includes running → useToolRun type lacks 'running'; DkStatusBar has it. Mismatch.
+- FOUNDATION lists `bytesToText(bytes) -> {text, error?}` etc. Let me verify those exports exist.
+- FOUNDATION says `app/utils/json.ts` exports parseJson/stringifyJson/minifyJson/jsonErrorPosition. Verify.
+- FOUNDATION says dev server on 3100 → yes, running.
+
+Let me check utils exports.
+dsh: reasoning:
+FOUNDATION's documented APIs generally match. DkEditor props match. bytes.ts/json.ts match. Good.
+
+Note: FOUNDATION mentions `lineCount(s)` and `charCount(s)` — both exist. Good.
+
+Now, FOUNDATION mentions `sm-crypto`, `js-yaml`, `diff`, `qrcode`, `jsqr`, `spark-md5` as installed. Let me check package.json dependencies. If some are missing, that's a doc/impl contradiction.
+dsh: reasoning:
+All deps present. Good.
+
+Now, let me finalize the coverage matrix data. I need to build the big table: 编号 | 名称 | 设计稿状态(主画板/变体完成度) | 代码状态 | 结论.
+
+Let me generate this programmatically from my data so it's accurate. I'll create the report using Python to generate the tables, then write the markdown manually (or generate programmatically then edit).
+
+Let me define required variants per tool from the task book and check presence by matching board variant names.
+
+Let me write a script that produces the coverage rows with:
+- tool id
+- name (task book)
+- design main board id + variant board names
+- required variants list, matched/missing
+- code component file exists
+- code name/cat
+- conclusion
+
+I'll generate the markdown table text to a file, then assemble the report.
+
+Let me first codify the required variants.
+
+Required variants (from task book):
+T01: 空输入, 语法错误定位, 树形视图, 结果待更新
+T02: 无差异, 一侧JSON无效
+T03: YAML转JSON, 不兼容结构错误
+T04: CSV含引号换行, 嵌套JSON映射配置, 列数不一致
+T05: 非法字符错误, 非UTF-8二进制结果
+T06: 无效百分号编码, 完整URI与组件结果对比
+T07: 不完整Unicode转义, 无效UTF-8字节
+T08: 保留空格对比, 空输入
+T09: 多行批量结果, 无法分词的字符
+T10: 完全相同, 仅空白和换行不同
+T11: 表达式语法错误, 无匹配, 执行超时
+T12: 文件计算, 摘要对照不一致
+T13: 校验不一致, Hex密钥格式错误
+T14: 解密成功, 认证失败, 密钥长度错误
+T15: 解密工作区, 签名成功, 验签不通过, 公钥格式错误
+T16: 文件输入, Hex输入不合法
+T17: 解密成功, 密钥长度错误, 解密密文长度错误, 结果待更新, ECB+NoPadding
+T18: 毫秒与秒对照, 日期无效, 夏令时
+T19: 批量生成, UUID解析, 非法UUID
+T20: Quartz方言, 语法不支持, 无后续执行
+T21: 结束早于开始, 跨时区
+T22: record输出, 类型确认, 非法类名
+T23: 反向还原, 非法转义
+T24: 父子键冲突, YAML回转Properties
+T25: 普通日志混入, 无法识别堆栈
+T26: 需要手动映射, 缺少version, 不支持的表达式
+T27: 空数组推断, 联合类型输出
+T28: props和emits, 组件名不合法
+T29: 批量值, 基准字号非法
+T30: 带透明度, 低对比结果, 无效颜色
+T31: 不安全内容被阻止, 优化视觉提示
+T32: CSS模式, JS模式, 语法错误
+T33: 仅解码未验签, 签名不通过, 过期但签名有效, 格式错误
+T34: 重复参数, 无效URL
+T35: fetch转curl, 不支持的shell表达式, multipart文件引用
+T36: 状态详情, 无搜索结果
+T37: 部分失败, 取消任务, 校验不匹配
+T38: 结果反而更大, 透明图转JPEG, 格式不支持
+T39: 识别成功, 未识别到二维码, 内容超出容量
+T40: 编码不确定, 目标编码无法表示
+T41: 无效Base64, 类型不匹配, 解码后二进制文件
+
+I'll match by substring on the board name after the tool prefix. Let me just build a mapping from actual variant labels I observed:
+T01: 成功(main), 空输入, 语法错误, 树形视图, 结果待更新 → all 4
+T02: 成功, 无差异, 一侧无效 → matched
+T03: 成功, YAML转JSON, 不兼容结构
+T04: 成功, 引号与换行, 嵌套映射配置, 列数不一致
+T05: 成功, 非法字符, 二进制结果
+T06: 成功, 无效百分号, 模式对比
+T07: 成功, 不完整转义, 无效UTF-8
+T08: 成功, 保留空格对比, 空输入
+T09: 成功, 多行批量, 无法分词
+T10: 成功, 完全相同, 仅空白不同
+T11: 成功, 语法错误, 无匹配, 执行超时
+T12: 成功, 文件计算, 对照不一致
+T13: 成功, 校验不一致, 密钥格式错误
+T14: 成功, 解密成功, 认证失败, 密钥长度错误
+T15: 加解密(main), 解密工作区, 签名成功, 验签不通过, 公钥格式错误
+T16: 成功, 文件输入, Hex输入不合法
+T17: 加密成功(main), 解密成功, 密钥长度错误, 密文长度错误, 结果待更新, ECB-NoPadding
+T18: 成功, 秒与毫秒对照, 日期无效, 夏令时提示
+T19: 成功, 批量生成, UUID解析, 非法UUID
+T20: 五字段(main), Quartz方言, 语法不支持, 无后续执行
+T21: 成功, 结束早于开始, 跨时区
+T22: 成功, record输出, 类型确认, 非法类名, +Owner POJO, +Owner record
+T23: 转义(main), 反向还原, 非法转义
+T24: 成功, 父子键冲突, YAML回转Properties
+T25: 成功, 普通日志混入, 无法识别堆栈
+T26: Maven转Gradle(main), 需要手动映射, 缺少version, 不支持的表达式
+T27: 成功, 空数组推断, 联合类型输出
+T28: 成功, props与emits, 组件名不合法
+T29: 成功, 批量值, 基准字号非法
+T30: 成功, 带透明度, 低对比结果, 无效颜色
+T31: 成功, 不安全内容被阻止, 优化视觉提示
+T32: 成功, CSS模式, JS模式, 语法错误
+T33: 解码(main), 仅解码未验签, 签名不通过, 过期但签名有效, 格式错误
+T34: 成功, 重复参数, 无效URL
+T35: curl转fetch(main), fetch转curl, 不支持的shell表达式, multipart文件引用
+T36: 常用列表(main), 状态详情, 无搜索结果
+T37: 成功, 部分失败, 取消任务, 校验不匹配
+T38: 成功, 结果反而更大, 透明图转JPEG, 格式不支持
+T39: 生成(main), 识别成功, 未识别到二维码, 内容超出容量
+T40: 成功, 编码不确定, 目标编码无法表示
+T41: 文件转Base64(main), 无效Base64, 类型不匹配, 解码后二进制文件
+
+All present. Great.
+
+Now I want to determine for each tool whether the code component is non-trivial. All exist. Maybe check line counts to gauge whether any is a stub. Let me get line counts for all 41 tool components; flag very small ones.
+dsh: reasoning:
+All components are substantial (168–966 lines), no stubs. Good.
+
+Now let me check the design board for T11 title includes （JavaScript）while code name drops it — done.
+
+Let me now also verify the design has "设计交付索引" that per task book 07 distinguishes 已完成/待完善/数据未核验. c4K4r uses four dimensions ✓/△/–. Meets requirement.
+
+Now let me collect the specific "文档矛盾清单":
+1. `docs/DevKit-Pen重复设计检查.md` item on 13 old boards → RESOLVED (boards gone).
+2. Same doc's "适配稿继承旧版本" → NOT resolved: tUNVK (R01 首页) & A51Nl (R03 首页) still 24 tools/5 cats incl. 模拟数据生成; CXVuY/dF6bi (JSON) and PhM4A/t605LZ (SM4) still old sample data vs T01/T17.
+3. Same doc's "S01 LiwdR 41工具" → confirmed 41/8.
+4. `设计审查报告` P1-01 8 empty frames → RESOLVED (no empty frames; all 8 now have content: E6e87 295 nodes, sZOGq 245, Pu4BY 299, i6SIKG 134, sSB8C 99, gKDNQ 137, b6Hjk 143, mYlnW 147).
+5. P1-02 JWT exp → RESOLVED for eq3hl (has exp). But new issue: WQTLy has "演示结果·待实现验证" label.
+6. P1-03 AES length → RESOLVED (main board 36 bytes etc.) but I92uFI still labeled 演示数据, contradicting index 数据=✓.
+7. P1-04 文件Base64 → RESOLVED (J9ZAV shows 33字节→44字符, consistent).
+8. P1-05 移动端SM4 → RESOLVED (ee1Ih has result panel; N316Hq separate IV error).
+9. P2-01 C05-C15 缺交 → RESOLVED (15 variant boards exist).
+10. P2-02 总索引高估 → PARTIALLY resolved: now four-dimension; but still marks T14/T17/T33 数据=✓ while boards carry 演示数据 labels; R02 count says 6 but 7 boards; T22 says 4 but 6 boards.
+11. P2-03 二维码 → RESOLVED (VecLb 47字符, real PNG validation).
+12. P2-04 29张A2页内注释 → RESOLVED (no page board contains 设计注释; notes moved outside).
+13. P2-05 Cron解释 → per second round fixed; spot check? Let me verify N9xCsh hour field explanation.
+14. 续审 P1-06 Java冒号 → second round says fixed. Let me spot-check T22 for colons vs semicolons.
+15. 第二轮 fetch转curl → third round says fixed.
+16. 第三轮 T22 Owner → RESOLVED (zgIzV/D10zen exist, docs/design-validation/java exists).
+17. `DevKit-Pen审改闭环结果.md` claims "placeholder:true数量为0" → confirmed 0.
+18. 闭环结果 claims "8个空白状态页已补内容" → confirmed.
+19. 闭环结果 claims "A2内部注释已移出网页" → confirmed.
+
+Let me spot check T20 Cron hour explanation and T22 semicolons quickly.
+
+Also let me verify docs/design-validation files exist (WNWtF.png, java dirs).
+dsh: reasoning:
+All fixes confirmed:
+- T20 Cron hour explanation fixed.
+- T22 semicolons present, no colon-ending declarations.
+- design-validation artifacts exist (WNWtF.png, java pojo/record, verify_qr.py).
+- design-backups has before-dedup .pen.
+
+Now let me check the backup .pen — the duplicate check doc said "保留一次性备份". There's one backup. Good. But the 13 old boards: are they in the backup only? Yes.
+
+Let me now verify QR: qr-verification.txt content and whether VecLb is real. Quick.
+
+Also verify the Owner boards actual Java content matches docs/design-validation? That's another agent's scope perhaps. But since my scope includes "设计稿自身交付完整性", I'll note the artifacts exist.
+
+Let me quickly check qr-verification.txt.
+dsh: reasoning:
+Good, everything checks out.
+
+Now I have enough. Let me build the final report. I'll generate the big coverage table programmatically to avoid errors, then assemble the markdown.
+
+Let me write a Python script that outputs the coverage matrix rows. I'll construct the required-variant mapping and match.
+
+Let me define data:
+- For each tool: required variants (Chinese descriptions), actual board variant labels.
+
+I'll match by a list of (required_label, actual_board_name_substring). Let me just create a manual mapping from the actual board list I've verified and mark all present. Since I verified all present, the table can be generated with "✓".
+
+But to be rigorous and produce "缺失编号清单", let me programmatically match using keyword sets.
+
+Let me define for each tool the required variants as keywords and search the board names for that tool.
+
+T01: ['空输入','语法错误','树形视图','结果待更新']
+T02: ['无差异','一侧无效']
+T03: ['YAML转JSON','不兼容结构']
+T04: ['引号与换行','嵌套映射','列数不一致']
+T05: ['非法字符','二进制结果']
+T06: ['无效百分号','模式对比']
+T07: ['不完整转义','无效UTF-8']
+T08: ['保留空格','空输入']
+T09: ['多行批量','无法分词']
+T10: ['完全相同','仅空白']
+T11: ['语法错误','无匹配','执行超时']
+T12: ['文件计算','对照不一致']
+T13: ['校验不一致','密钥格式错误']
+T14: ['解密成功','认证失败','密钥长度错误']
+T15: ['解密工作区','签名成功','验签不通过','公钥格式错误']
+T16: ['文件输入','Hex输入不合法']
+T17: ['解密成功','密钥长度错误','密文长度错误','结果待更新','ECB']
+T18: ['秒与毫秒对照','日期无效','夏令时']
+T19: ['批量生成','UUID解析','非法UUID']
+T20: ['Quartz','语法不支持','无后续执行']
+T21: ['结束早于开始','跨时区']
+T22: ['record输出','类型确认','非法类名']
+T23: ['反向还原','非法转义']
+T24: ['父子键冲突','YAML回转']
+T25: ['普通日志混入','无法识别堆栈']
+T26: ['需要手动映射','缺少version','不支持的表达式']
+T27: ['空数组推断','联合类型输出']
+T28: ['props与emits','组件名不合法']
+T29: ['批量值','基准字号非法']
+T30: ['带透明度','低对比结果','无效颜色']
+T31: ['不安全内容被阻止','优化视觉提示']
+T32: ['CSS模式','JS模式','语法错误']
+T33: ['仅解码未验签','签名不通过','过期但签名有效','格式错误']
+T34: ['重复参数','无效URL']
+T35: ['fetch转curl','不支持的shell表达式','multipart文件引用']
+T36: ['状态详情','无搜索结果']
+T37: ['部分失败','取消任务','校验不匹配']
+T38: ['结果反而更大','透明图转JPEG','格式不支持']
+T39: ['识别成功','未识别到二维码','内容超出容量']
+T40: ['编码不确定','目标编码无法表示']
+T41: ['无效Base64','类型不匹配','解码后二进制文件']
+
+Let me run the matcher and also produce main board id.
+
+Then generate markdown.
+
+Let me write and run.
+dsh: reasoning:
+All required variants present, 0 missing.
+
+Now let me generate the full coverage table markdown. I'll produce it via script and write to a temp file, then assemble the report.
+
+Let me also gather a few final numbers:
+- 41 tools main boards: 41/41 ✓
+- required variants total: 106; drawn: 106 ✓ (+2 extra T22 Owner boards = 108 variant boards)
+- tool page boards total: 149
+- S01–S10: 10 pages, 17 boards (all specified variants present)
+- G01–G08: 8 groups, 25 boards
+- R01–R04: 4 groups, 18 boards
+- C01–C15: 15 components/variant boards
+- grand total page/state boards: 209
+- index rows: 64 (41 T + 10 S + 8 G + 4 R + 1 C summary)
+- top-level frames: 70
+
+Let me double check the R count 18 including N316Hq. R01 6, R02 7, R03 3, R04 2 = 18.
+
+Now let me write the report. It should be thorough. Let me generate the matrix table text with the script.
+
+Let me create the table rows including per-tool info.
+
+I'll produce for each tool:
+| 编号 | 名称 | 主画板 | 必画变体(实/应) | 设计稿其它问题 | 代码组件 | 代码名称/分类 | 结论 |
+
+Since the table will be long, I'll split into sections but keep a single big table. The instruction says "产出一张完整清单表：编号 | 名称 | 设计稿状态(主画板/变体完成度) | 代码状态 | 结论". I'll follow that exact columns, plus add a variant detail column? The spec says the table should have those 4 columns. Let me include exactly those plus maybe a "变体明细/证据" column for usefulness.
+
+Let me generate the markdown table.
+
+Let me write a script that reads coverlines.json and the actual board names / component files and outputs rows.
+
+I also need S/G/R/C tables.
+
+Let me produce all tables to /tmp/tables.md then paste into the report.
+
+Let me write the generator.
+dsh: reasoning:
+The task dict value is a tuple (name, cat) and I did `tn=tc=task[tid]` — bug. Also the name comparison uses tuple. Let me fix: `tn, tc = task[tid]`. Also extra should exclude matched variants (it currently lists all because kw!=variant name). Let me fix extra to only list names not matched by any required kw.
+
+Let me fix and regenerate.
+dsh: reasoning:
+Now let me generate S/G/R/C tables.
+
+S table: list each S page, boards, code page.
+G table.
+R table.
+C table.
+
+Let me build those manually from the data I have. Let me generate programmatically.
+
+Also I need the code page mapping for S:
+S01 首页 → app/pages/index.vue
+S02 分类列表 → app/pages/category/[id].vue
+S03 全局搜索 → app/components/CommandPalette.vue (+ usePalette)
+S04 我的收藏 → app/pages/favorites.vue
+S05 最近使用 → app/pages/recent.vue
+S06 偏好设置 → app/pages/settings.vue
+S07 隐私 → app/pages/privacy.vue
+S08 帮助 → app/pages/help.vue
+S09 404 → app/error.vue
+S10 离线 → app/pages/offline.vue
+
+G01-G08 → composables/components: SendToMenu/useTransfer; FileDrop/G02; useClipboard/DkToastHost; useToolRun; ToolPageLayout? G05 examples; G06 errors; G07 DkEditor/SplitPanes; G08 t31-svg.
+
+R01-R04 → pages responsive CSS.
+
+C01-C15 → components.
+
+Let me produce these tables.
+
+Now let me also assemble the "文档矛盾清单" and "历史报告结论复核". I have all the data.
+
+Let me write the report now. It's going to be long. Let me build the whole thing with a heredoc, inserting the generated table via cat.
+
+Let me create the report directory (exists) and write to audit/reports/r7-docs-coverage.md.
+
+I'll compose the markdown. Let me be careful and evidence-based.
+
+Let me first produce the S/G/R/C tables to files.
+dsh: reasoning:
+Now I have all tables. Let me write the final report.
+
+Let me also compute a few summary numbers to state:
+- 顶层画板 70 (matches brief).
+- 总节点 39477.
+- 命名页面/状态画板 209: T 149, S 17, G 25, R 18.
+- 变体板 C 15.
+- 索引/汇总行 64.
+- 设计注释区 顶层独立注释画板: let me count. Top-level frames named 设计注释 · = from the list: A97xE, M4FyVk, zGcFz, M13X1, HhjAO, h3VFcA, IQ2kZ, NqtUp, rWMTd, RUhdJ, DwFPM, ZM9vl, LLr0d, I6jWW, V6sl3, hz26m, iAZhZ, H80v3, likfk, Z5CLuU, ww9ev, HGxvk, hCPxH, Q8jF6K, J25YSU, JYZZq, NAk2N, QtU6q = 28 top-level. Plus in-batch notes in A1 (many) and A3/A4/A5. Let me count all nodes named 设计注释 · across the file.
+
+Actually not essential. But let me count for completeness.
+
+Let me count design notes total.
+
+Also, the "设计交付索引" c4K4r and batch index OZuxZ both exist — duplicate index issue still present (not resolved). Note it.
+
+Let me count design notes and run a final check on the duplicate index issue and on the total board count claim.
+
+Let me also compute the "213张画板" claim: old report mentioned summary claimed 213. Now index doesn't state a total. So no overclaim number; the four-dimension index is honest. But R02/T22 counts are off by N316Hq & Owner boards.
+
+Let me now write the report.
+
+I'll structure:
+## 结论摘要
+## 一、设计稿交付完成度统计数字
+## 二、覆盖矩阵
+### 2.1 T01–T41（大表）
+### 2.2 S01–S10
+### 2.3 G01–G08
+### 2.4 R01–R04
+### 2.5 C01–C15
+## 三、缺失/未完成编号清单
+## 四、项目文档与实现一致性（矛盾清单）
+## 五、历史报告结论复核（哪些已不成立/仍成立）
+## 六、无法验证/存疑项
+## 七、修复优先级建议
+DONE: ...
+
+Let me write it. Given the length, I'll write the file with a script that concatenates header + tables + body.
+
+Let me first get design note count and a couple of numbers.
+dsh: reasoning:
+Index rows: 49 (my regex excluded ones with "/" in name; earlier I counted 64 including the "(5)" rows which have no " / " though... let me reconcile). Actually the index rows are named like `T01 JSON 格式化 (5)` — no " / ". And `S01 首页 / 全部工具 + 首次访问` has " / " so was excluded. So total index/summary rows differ. Not important. I'll just say ~
+
+Let me count all "summary/index" frames: those with w=fill_container and name not starting with 设计注释 and matching prefix. Earlier count: T 41, S 10, G 8, R 4, C 1 = 64. Let me just use 64.
+
+Actually let me verify: from the S/G/R/C lists, the `fill_container` frames:
+S: b6Yg7, sbuj9, hyvuj, xuoPB, O5lLZ0, E4Wak, XT5Ds, k0ZAqF, BgSJh, VaxG5 = 10
+G: cDXiT, fYTRV, cWNMW, i61rQ, QxZrs, lfn82, IdZAt, tXwDW = 8
+R: ufdva, QP6AD, JYkN9, cIptS = 4
+C: KSoD8 = 1
+T: 41
+Total = 64. Good.
+
+And 设计注释 top-level/in-batch = 165 frames? That seems high. My count includes nested frames named "设计注释" (like the wrapper inside notes). Hmm, 165. Let me not overstate; I'll say "顶层独立设计注释画板 28 张 + 批次内注释放置（A1/A2/A3/A4/A5 若干）" or just "设计注释画板共 165 个命名节点（含嵌套）". Better to count top-level ones: from the top frames list, design-note top-level frames: A97xE, M4FyVk, zGcFz, M13X1, HhjAO, h3VFcA, IQ2kZ, NqtUp, rWMTd, RUhdJ, DwFPM, ZM9vl, LLr0d, I6jWW, V6sl3, hz26m, iAZhZ, H80v3, likfk, Z5CLuU, ww9ev, HGxvk, hCPxH, Q8jF6K, J25YSU, JYZZq, NAk2N, QtU6q = 28. Let me confirm by counting top-level frames starting with 设计注释.
+
+Let me quickly get that number and the batch-note counts.
+
+Actually, let me just count top-level frames named 设计注释 and all frames (incl nested) named exactly 设计注释.
+dsh: reasoning:
+A1 has 30 note nodes (in-batch), A2 has 0 (note 'iaQhy' is a frame named 设计注释 · T14-成功, not type note). A3 31, A4 45, A5 30.
+
+Wait — earlier the duplicate check doc said the A2 notes were moved out. A2 has 0 note nodes, but has one frame named '设计注释 · T14-成功' (iaQhy). And the 28 top-level design-note frames include T08-T14 notes (IQ2kZ...QtU6q). Hmm, those are top-level. And the top-level ones for S04-S06 and T08-T14 (A97xE...QtU6q = 28). So A2's notes were moved to top-level. A1/A3/A4/A5 have in-batch note frames (type note) placed outside page boards.
+
+But wait — are the in-batch `note` nodes inside page boards? The earlier scan found no page board containing 设计注释 nodes and no page board with a direct child of type note. So the in-batch notes are siblings of page boards within the batch container. That satisfies "注释放在画板外". Good.
+
+Now let me write the report. I'll assemble via a Python script to inline the tables.
+
+I need to be careful with the report's claims and evidence. Let me finalize the list of findings with node IDs:
+
+### 高
+1. R01/R03 首页适配稿仍是旧版 24 工具/5 分类，含已废弃入口「模拟数据生成」，与 S01（41 工具/8 分类）矛盾。
+   - 证据：tUNVK (R01 首页, 1366), A51Nl (R03 首页, 1440) 文本含 '24'、'模拟数据生成'、'工具分类'，仅 5 个分类；节点 U438d / pzqCt 内容 '模拟数据生成'；LiwdR 为 '41 个开发工具 · 8 个分类'。
+   - 历史文档 `DevKit-Pen重复设计检查.md:31` 已提出，未修复。
+2. R01/R03 的 JSON 与 SM4 适配稿沿用旧样例数据，未同步 T01/T17 主稿。
+   - CXVuY / dF6bi: 输入 '林逸舟'/id 1024/253 字符/11 行，输出 303 字符/20 行；T01 U7JXtZ 为 '张三'/1234567890123456789/323 字符/19 行，且副标题为「格式化、压缩与校验 JSON；保留大整数原始数字文本」。Jaccard 相似度 0.45。
+   - PhM4A / t605LZ vs Ja13I: 共享 91 文本，但有旧说明/统计差异（jaccard 0.79）。
+3. 多个密码学画板在页面可见区域标注「演示数据 / 待开发验证 / 待实现验证」，与任务书 00 节真实性第 2 条及交付索引「数据 ✓」矛盾。
+   - T14 I92uFI（解密成功）: 节点 tZfp1/s5puD/vBZXT
+   - T15 y2Dwo（加解密）: OcxnL；nWK56（解密工作区）: OyRr9；Q9BlV（签名成功）: x6S88V
+   - T17 DEUUC（ECB-NoPadding）: YxKAM
+   - T33 WQTLy（签名不通过）: m4BUAz
+   - 索引 c4K4r 却对 T14/T17/T33 标注「数据 ✓」。
+
+### 中
+4. 代码 4 个工具名称与任务书/设计稿页面标题不一致（T11/T26/T28/T40），且设计稿侧栏组件 vxMha 使用短名、页面标题使用全名，设计内部亦不一致。
+5. 文档矛盾：FOUNDATION.md 与实现不符
+   - `RunStatus`（useToolRun.ts:1）无 'running'，但 FOUNDATION.md:103 写 status: idle|ok|error|stale|running；DkStatusBar 支持 running。
+   - DkModal 实际 API 是 `:open` + `@close`（DkModal.vue:3-9），FOUNDATION.md:120 写 `:open.sync`。
+   - FOUNDATION.md 组件清单未列 DkSwitch.vue、SendToMenu.vue（实际存在）。
+6. README.md:48 称「代码中的 CSS 变量与 design.pen 中的设计变量一一对应」，实际代码多出 --accent-hover/--code-null/--editor-*/--diff-*/--shadow-* 等，design 变量 43 个（41 个有暗色值），非严格一一对应。
+7. 交付索引计数与实际画板数不一致：c4K4r 标 T22 (4) 实际 6（含 zgIzV/D10enz 两张 Owner.java）；标 R02 (6) 实际 7（含 N316Hq IV 错误页）。索引未把这些新增页计入。
+8. 交付索引/批次索引重复维护：c4K4r 总索引与 OZuxZ 批次 A5 索引并存，两处状态可能漂移（`DevKit-Pen重复设计检查.md:41` 已建议合并，未处理）。
+
+### 低
+9. 设计板名与页面标题用词不统一（板名缩写如 'T27 / JSON转TS类型'，页面标题 'JSON 转 TypeScript 类型'）——符合任务书命名规则示例，属可接受，但与代码/侧栏用词并存易混淆。
+10. R04 样板内可见注释含原始变量记号（如 `$accent`，节点 ah9qE/rKkK2），属设计文档板可接受，但若导出易被误读。
+11. T35 板内 `保留占位` 是「凭证处理」分段控件的真实选项（i5Rs4N），不是残留占位符，建议改文案避免误判。
+12. T37-T41 主画板未使用统一 `页面标题` 命名（首文本即标题），不影响交付。
+
+### 已修复（历史问题）
+- 13 张旧稿已全部移除（NeiAV…yrEm6 均 GONE）。
+- 8 张空白变体已填充（E6e87/sZOGq/Pu4BY/i6SIKG/sSB8C/gKDNQ/b6Hjk/mYlnW 均有 99–299 节点）。
+- Java 冒号已改分号（kOwO2 无 `...:` 结尾声明）。
+- Cron 小时解释已修（N9xCsh: '每个小时（不限制小时）'）。
+- A2 页内设计注释已移出（无页面画板包含 设计注释/注释 子节点，除 R04 的 a11y 注释）。
+- C05–C15 已交付 11 个 reusable + 变体板。
+- placeholder:true = 0；无 'Generating'。
+- 二维码真实导出并解码一致（docs/design-validation/qr-verification.txt）。
+- 移动 SM4 成功/IV 错误已拆分为 ee1Ih / N316Hq。
+
+Now the "无法验证/存疑":
+- Pen MCP `Get(id, problems)` 不可用（返回 "wrong .pen file"），无法程序化检测 partially/fully clipped；design.pen JSON 无持久化 problems 字段，文本节点无固定像素宽高，无法静态推算溢出。只能确认结构性风险低（行号槽高度 = 行数×20，无失配；无空 frame；textGrowth 多为 fill_container 自适应高度）。建议用 Pen 截图或人工逐张复核。
+- 逐像素视觉验收未做（与索引「视觉 △」一致）。
+- 真实交互（剪贴板/下载/加密）未在设计中验证（索引「交互 –」）。
+- 任务书 07 要求的“最后回复五项统计”未见独立文本，仅在索引中部分体现。
+
+Let me also double-check the claim that code has --accent-hover not in design. Design variables list didn't include accent-hover. Yes.
+
+Let me verify the design variables count 43 and 41 dark. Yes.
+
+One more: README says "设计稿: 视觉基准来自 ../design.pen". The file exists. Good.
+
+Let me also verify the S01 homepage count claim "4+7+6+4+5+6+4+5=41". Yes from sidebar: 4,7,6,4,5,6,4,5 = 41.
+
+Now write the report. I'll build it with a Python script that writes the file, embedding the tables from /tmp.
+
+Let me be mindful: the report is written to audit/reports/r7-docs-coverage.md. Write permission is workspace-write, allowed.
+
+Let me compose.
+dsh: reasoning:
+The report is written. Let me verify the content, especially table rendering and that the DONE line is last. Let me read key parts.
+dsh: reasoning:
+The report is complete and the DONE line is the last line. Let me verify the full table (all 41 rows) and G/S/R/C tables rendered properly, and check line count. Let me view the middle sections.
+dsh: reasoning:
+The report file is complete (295 lines, 41 T rows + tables, DONE line last with trailing newline).
+
+Let me do one final sanity check on a couple of claims I made, to avoid errors:
+
+1. I claimed "T15 y2Dwo/OcxnL" is in 加解密 main board. Verified via full path earlier: "T15 / SM2加解密与签名 / 加解密 / 1440 > ... > OcxnL". ✓
+2. I claimed R02 mobile JSON "128 字节" — the board text says '6 行 · 128 字节（UTF-8）'. ✓
+3. "48" count claim about 64 index rows. Fine.
+
+One correction: In the summary I said "41×工具有 106 个..." — typo "41×工具有". Let me fix that to "41 个工具共". Minor but let me fix for professionalism.
+
+Also section 三.3.3 header says "索引与真实交付的计数缺口" — numbering is "3.3" under "三" which is odd but acceptable (3.3 means section 3 subsection 3). Fine.
+
+Let me fix the typo.
+dsh: reasoning:
+The report is complete. Let me give the final answer summarizing what I did.
+
+Actually, let me double check the last line is still DONE after the edit (the edit was at line 12, so yes). Let me confirm.
+已完成子代理 #7 的全部审核工作，报告写入 `/Users/hao/WebstormProjects/web_tools/audit/reports/r7-docs-coverage.md`（295 行）。
+
+## 核心结论
+
+**设计稿结构性交付完整度 100%**
+- 41/41 工具主画板齐全；**106 个“必画变体”要求全部绘制，缺失 0**（逐项核对，另加 2 张计划外 Owner.java 画板）。
+- S01–S10（17 张）、G01–G08（25 张）、R01–R04（18 张）、C01–C15（15 张）全部到位。
+- 命名页面/状态画板合计 **209 张**（T149/S17/G25/R18）。
+- 全量扫描：`placeholder:true` = 0、无 `Generating`、无空 frame、无 0 文本宽画板、行号槽高度与行数 0 处失配。
+- 代码 41 组件非空壳（168–966 行）、8 分类与任务书完全一致、41 工具路由 + 9 系统页全部 200。
+
+## 关键发现（带证据）
+1. **【高】R01/R03 首页适配稿仍是旧版 24 工具/5 分类**，含废弃入口“模拟数据生成”（`tUNVK`/`A51Nl`，节点 `U438d`/`pzqCt`），与 S01 的 41 工具/8 分类矛盾——`DevKit-Pen重复设计检查.md:31` 提出的修复**未执行**。
+2. **【高】R01/R03 的 JSON/SM4 适配稿未同步 T01/T17**（`CXVuY`/`dF6bi` 文本重合度仅 0.45）。
+3. **【高】6 张密码学画板页面内标“演示数据/待开发验证/待实现验证”**（T14 `I92uFI`、T15 `y2Dwo`/`nWK56`/`Q9BlV`、T17 `DEUUC`、T33 `WQTLy`），违反真实性第 2 条且与索引“数据 ✓”自相矛盾。
+4. **【中】代码 4 个工具名与任务书不一致**（T11/T26/T28/T40），且设计侧栏与页标题用词也不统一。
+5. **【中】FOUNDATION.md 与实现不符**：`running` 状态、`DkModal` 的 `:open.sync`、组件清单漏列。
+
+## 历史问题复核
+13 张旧稿已全部移除、8 个空白变体已填充、Java 冒号改分号、Cron 解释已修、A2 页内注释移出、C05–C15 已交付、二维码真实导出可解码、移动 SM4 已拆分——这些历史结论已不成立（即已修复）。仍成立的只有“适配稿继承旧版”一条。
+
+**无法验证项**：Pen MCP 的 `Get(id, problems)` 本机报“wrong .pen file”不可用，且 JSON 无持久化 problems 字段、文本无固定像素宽高，故溢出/截断只能给出结构性间接证据，需截图或人工逐张复核。

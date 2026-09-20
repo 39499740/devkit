@@ -1,0 +1,1796 @@
+{
+ "base": "http://localhost:3000",
+ "runs": [
+  {
+   "width": 2560,
+   "height": 1400,
+   "pages": {
+    "home": {
+     "viewport": 2560,
+     "doc": {
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 2324,
+      "h": 1360
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": {
+      "x": 558,
+      "y": 84,
+      "w": 1680,
+      "h": 1288
+     },
+     "homeGrid": {
+      "x": 558,
+      "y": 408,
+      "w": 1680,
+      "h": 70
+     },
+     "homeGridCols": 6,
+     "homeQuick": {
+      "x": 558,
+      "y": 242,
+      "w": 1680,
+      "h": 115
+     },
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "category": {
+     "viewport": 2560,
+     "doc": {
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 2324,
+      "h": 1340
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": {
+      "x": 558,
+      "y": 84,
+      "w": 1680,
+      "h": 278
+     },
+     "catGrid": {
+      "x": 558,
+      "y": 226,
+      "w": 1680,
+      "h": 136
+     },
+     "catGridCols": 6,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "favorites": {
+     "viewport": 2560,
+     "doc": {
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 2324,
+      "h": 1340
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": {
+      "x": 558,
+      "y": 84,
+      "w": 1680,
+      "h": 812
+     },
+     "favWorkspace": {
+      "x": 558,
+      "y": 150,
+      "w": 1680,
+      "h": 576
+     },
+     "favRow": {
+      "x": 559,
+      "y": 235,
+      "w": 1678,
+      "h": 58
+     },
+     "favColTool": {
+      "x": 571,
+      "y": 243,
+      "w": 1222,
+      "h": 41
+     },
+     "favColCat": {
+      "x": 1793,
+      "y": 254,
+      "w": 150,
+      "h": 20
+     },
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "recent": {
+     "viewport": 2560,
+     "doc": {
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 2324,
+      "h": 1340
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": {
+      "x": 558,
+      "y": 84,
+      "w": 1680,
+      "h": 846
+     },
+     "recentWorkspace": {
+      "x": 558,
+      "y": 150,
+      "w": 1680,
+      "h": 610
+     },
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "settings": {
+     "viewport": 2560,
+     "doc": {
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 2324,
+      "h": 1340
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": {
+      "x": 558,
+      "y": 84,
+      "w": 1680,
+      "h": 705
+     },
+     "panelBody": {
+      "x": 559,
+      "y": 199,
+      "w": 1678,
+      "h": 409
+     },
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "privacy": {
+     "viewport": 2560,
+     "doc": {
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 2324,
+      "h": 1340
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": {
+      "x": 798,
+      "y": 84,
+      "w": 1200,
+      "h": 944
+     },
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "help": {
+     "viewport": 2560,
+     "doc": {
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 2324,
+      "h": 1340
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": {
+      "x": 798,
+      "y": 84,
+      "w": 1200,
+      "h": 1086
+     },
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "offline": {
+     "viewport": 2560,
+     "doc": {
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 2324,
+      "h": 1340
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": {
+      "x": 798,
+      "y": 84,
+      "w": 1200,
+      "h": 421
+     },
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "tool": {
+     "viewport": 2560,
+     "doc": {
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 2324,
+      "h": 1340
+     },
+     "toolPage": {
+      "x": 268,
+      "y": 84,
+      "w": 2260,
+      "h": 944
+     },
+     "toolBody": {
+      "x": 268,
+      "y": 156,
+      "w": 2260,
+      "h": 872
+     },
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": [],
+     "splitPanes": 2260
+    }
+   },
+   "screenshots": [
+    "/Users/hao/WebstormProjects/web_tools/audit/evidence/l1/l1-2560-tool-json-format.png",
+    "/Users/hao/WebstormProjects/web_tools/audit/evidence/l1/l1-2560-home.png",
+    "/Users/hao/WebstormProjects/web_tools/audit/evidence/l1/l1-2560-favorites.png"
+   ]
+  },
+  {
+   "width": 1920,
+   "height": 1080,
+   "pages": {
+    "home": {
+     "viewport": 1920,
+     "doc": {
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 1684,
+      "h": 1360
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": {
+      "x": 268,
+      "y": 84,
+      "w": 1620,
+      "h": 1288
+     },
+     "homeGrid": {
+      "x": 268,
+      "y": 408,
+      "w": 1620,
+      "h": 70
+     },
+     "homeGridCols": 6,
+     "homeQuick": {
+      "x": 268,
+      "y": 242,
+      "w": 1620,
+      "h": 115
+     },
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "category": {
+     "viewport": 1920,
+     "doc": {
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 1684,
+      "h": 1020
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": {
+      "x": 268,
+      "y": 84,
+      "w": 1620,
+      "h": 278
+     },
+     "catGrid": {
+      "x": 268,
+      "y": 226,
+      "w": 1620,
+      "h": 136
+     },
+     "catGridCols": 6,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "favorites": {
+     "viewport": 1920,
+     "doc": {
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 1684,
+      "h": 1020
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": {
+      "x": 268,
+      "y": 84,
+      "w": 1620,
+      "h": 812
+     },
+     "favWorkspace": {
+      "x": 268,
+      "y": 150,
+      "w": 1620,
+      "h": 576
+     },
+     "favRow": {
+      "x": 269,
+      "y": 235,
+      "w": 1618,
+      "h": 58
+     },
+     "favColTool": {
+      "x": 281,
+      "y": 243,
+      "w": 1162,
+      "h": 41
+     },
+     "favColCat": {
+      "x": 1443,
+      "y": 254,
+      "w": 150,
+      "h": 20
+     },
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "recent": {
+     "viewport": 1920,
+     "doc": {
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 1684,
+      "h": 1020
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": {
+      "x": 268,
+      "y": 84,
+      "w": 1620,
+      "h": 846
+     },
+     "recentWorkspace": {
+      "x": 268,
+      "y": 150,
+      "w": 1620,
+      "h": 610
+     },
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "settings": {
+     "viewport": 1920,
+     "doc": {
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 1684,
+      "h": 1020
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": {
+      "x": 268,
+      "y": 84,
+      "w": 1620,
+      "h": 705
+     },
+     "panelBody": {
+      "x": 269,
+      "y": 199,
+      "w": 1618,
+      "h": 409
+     },
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "privacy": {
+     "viewport": 1920,
+     "doc": {
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 1684,
+      "h": 1020
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": {
+      "x": 478,
+      "y": 84,
+      "w": 1200,
+      "h": 944
+     },
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "help": {
+     "viewport": 1920,
+     "doc": {
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 1684,
+      "h": 1158
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": {
+      "x": 478,
+      "y": 84,
+      "w": 1200,
+      "h": 1086
+     },
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "offline": {
+     "viewport": 1920,
+     "doc": {
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 1684,
+      "h": 1020
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": {
+      "x": 478,
+      "y": 84,
+      "w": 1200,
+      "h": 421
+     },
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "tool": {
+     "viewport": 1920,
+     "doc": {
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 1684,
+      "h": 1020
+     },
+     "toolPage": {
+      "x": 268,
+      "y": 84,
+      "w": 1620,
+      "h": 752
+     },
+     "toolBody": {
+      "x": 268,
+      "y": 156,
+      "w": 1620,
+      "h": 680
+     },
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": [],
+     "splitPanes": 1620
+    }
+   },
+   "screenshots": [
+    "/Users/hao/WebstormProjects/web_tools/audit/evidence/l1/l1-1920-tool-json-format.png"
+   ]
+  },
+  {
+   "width": 1440,
+   "height": 900,
+   "pages": {
+    "home": {
+     "viewport": 1440,
+     "doc": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 1204,
+      "h": 1680
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": {
+      "x": 268,
+      "y": 84,
+      "w": 1140,
+      "h": 1608
+     },
+     "homeGrid": {
+      "x": 268,
+      "y": 408,
+      "w": 1140,
+      "h": 70
+     },
+     "homeGridCols": 4,
+     "homeQuick": {
+      "x": 268,
+      "y": 242,
+      "w": 1140,
+      "h": 115
+     },
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "category": {
+     "viewport": 1440,
+     "doc": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 1204,
+      "h": 840
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": {
+      "x": 268,
+      "y": 84,
+      "w": 1140,
+      "h": 278
+     },
+     "catGrid": {
+      "x": 268,
+      "y": 226,
+      "w": 1140,
+      "h": 136
+     },
+     "catGridCols": 4,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "favorites": {
+     "viewport": 1440,
+     "doc": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 1204,
+      "h": 884
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": {
+      "x": 268,
+      "y": 84,
+      "w": 1140,
+      "h": 812
+     },
+     "favWorkspace": {
+      "x": 268,
+      "y": 150,
+      "w": 1140,
+      "h": 576
+     },
+     "favRow": {
+      "x": 269,
+      "y": 235,
+      "w": 1138,
+      "h": 58
+     },
+     "favColTool": {
+      "x": 281,
+      "y": 243,
+      "w": 682,
+      "h": 41
+     },
+     "favColCat": {
+      "x": 963,
+      "y": 254,
+      "w": 150,
+      "h": 20
+     },
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "recent": {
+     "viewport": 1440,
+     "doc": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 1204,
+      "h": 918
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": {
+      "x": 268,
+      "y": 84,
+      "w": 1140,
+      "h": 846
+     },
+     "recentWorkspace": {
+      "x": 268,
+      "y": 150,
+      "w": 1140,
+      "h": 610
+     },
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "settings": {
+     "viewport": 1440,
+     "doc": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 1204,
+      "h": 840
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": {
+      "x": 268,
+      "y": 84,
+      "w": 1140,
+      "h": 722
+     },
+     "panelBody": {
+      "x": 269,
+      "y": 199,
+      "w": 1138,
+      "h": 427
+     },
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "privacy": {
+     "viewport": 1440,
+     "doc": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 1204,
+      "h": 1016
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": {
+      "x": 268,
+      "y": 84,
+      "w": 1140,
+      "h": 944
+     },
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "help": {
+     "viewport": 1440,
+     "doc": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 1204,
+      "h": 1158
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": {
+      "x": 268,
+      "y": 84,
+      "w": 1140,
+      "h": 1086
+     },
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "offline": {
+     "viewport": 1440,
+     "doc": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 1204,
+      "h": 840
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": {
+      "x": 268,
+      "y": 84,
+      "w": 1140,
+      "h": 421
+     },
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "tool": {
+     "viewport": 1440,
+     "doc": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 236,
+      "y": 60,
+      "w": 1204,
+      "h": 840
+     },
+     "toolPage": {
+      "x": 268,
+      "y": 84,
+      "w": 1140,
+      "h": 644
+     },
+     "toolBody": {
+      "x": 268,
+      "y": 156,
+      "w": 1140,
+      "h": 572
+     },
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": [],
+     "splitPanes": 1140
+    }
+   },
+   "screenshots": [
+    "/Users/hao/WebstormProjects/web_tools/audit/evidence/l1/l1-1440-tool-json-format.png",
+    "/Users/hao/WebstormProjects/web_tools/audit/evidence/l1/l1-1440-home.png"
+   ]
+  },
+  {
+   "width": 390,
+   "height": 844,
+   "pages": {
+    "home": {
+     "viewport": 390,
+     "doc": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 0,
+      "y": 60,
+      "w": 390,
+      "h": 4229
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": {
+      "x": 14,
+      "y": 76,
+      "w": 362,
+      "h": 4173
+     },
+     "homeGrid": {
+      "x": 14,
+      "y": 724,
+      "w": 362,
+      "h": 310
+     },
+     "homeGridCols": 1,
+     "homeQuick": {
+      "x": 14,
+      "y": 331,
+      "w": 362,
+      "h": 343
+     },
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "category": {
+     "viewport": 390,
+     "doc": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 0,
+      "y": 60,
+      "w": 390,
+      "h": 861
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": {
+      "x": 14,
+      "y": 76,
+      "w": 362,
+      "h": 805
+     },
+     "catGrid": {
+      "x": 14,
+      "y": 301,
+      "w": 362,
+      "h": 580
+     },
+     "catGridCols": 1,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "favorites": {
+     "viewport": 390,
+     "doc": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 0,
+      "y": 60,
+      "w": 390,
+      "h": 1172
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": {
+      "x": 14,
+      "y": 76,
+      "w": 362,
+      "h": 1116
+     },
+     "favWorkspace": {
+      "x": 14,
+      "y": 203,
+      "w": 362,
+      "h": 628
+     },
+     "favRow": {
+      "x": 15,
+      "y": 340,
+      "w": 360,
+      "h": 58
+     },
+     "favColTool": {
+      "x": 27,
+      "y": 348,
+      "w": 223,
+      "h": 41
+     },
+     "favColCat": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0
+     },
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "recent": {
+     "viewport": 390,
+     "doc": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 0,
+      "y": 60,
+      "w": 390,
+      "h": 1173
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": {
+      "x": 14,
+      "y": 76,
+      "w": 362,
+      "h": 1117
+     },
+     "recentWorkspace": {
+      "x": 14,
+      "y": 203,
+      "w": 362,
+      "h": 629
+     },
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "settings": {
+     "viewport": 390,
+     "doc": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 0,
+      "y": 60,
+      "w": 390,
+      "h": 1706
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": {
+      "x": 14,
+      "y": 76,
+      "w": 362,
+      "h": 1650
+     },
+     "panelBody": {
+      "x": 15,
+      "y": 210,
+      "w": 360,
+      "h": 1170
+     },
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "privacy": {
+     "viewport": 390,
+     "doc": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 0,
+      "y": 60,
+      "w": 390,
+      "h": 2065
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": {
+      "x": 14,
+      "y": 76,
+      "w": 362,
+      "h": 2009
+     },
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "help": {
+     "viewport": 390,
+     "doc": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 0,
+      "y": 60,
+      "w": 390,
+      "h": 2961
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": {
+      "x": 14,
+      "y": 76,
+      "w": 362,
+      "h": 2905
+     },
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "offline": {
+     "viewport": 390,
+     "doc": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 0,
+      "y": 60,
+      "w": 390,
+      "h": 784
+     },
+     "toolPage": null,
+     "toolBody": null,
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": {
+      "x": 14,
+      "y": 76,
+      "w": 362,
+      "h": 526
+     },
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": []
+    },
+    "tool": {
+     "viewport": 390,
+     "doc": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "overflow": false
+     },
+     "shellContent": {
+      "x": 0,
+      "y": 60,
+      "w": 390,
+      "h": 1213
+     },
+     "toolPage": {
+      "x": 14,
+      "y": 76,
+      "w": 362,
+      "h": 1157
+     },
+     "toolBody": {
+      "x": 14,
+      "y": 174,
+      "w": 362,
+      "h": 1059
+     },
+     "home": null,
+     "homeGrid": null,
+     "homeGridCols": null,
+     "homeQuick": null,
+     "catPage": null,
+     "catGrid": null,
+     "catGridCols": null,
+     "fav": null,
+     "favWorkspace": null,
+     "favRow": null,
+     "favColTool": null,
+     "favColCat": null,
+     "recent": null,
+     "recentWorkspace": null,
+     "settings": null,
+     "panelBody": null,
+     "privacy": null,
+     "help": null,
+     "offline": null,
+     "overflowingElements": [],
+     "overflowCount": 0,
+     "consoleErrors": [],
+     "splitPanes": 362
+    }
+   },
+   "screenshots": [
+    "/Users/hao/WebstormProjects/web_tools/audit/evidence/l1/l1-390-tool-json-format.png"
+   ]
+  }
+ ]
+}

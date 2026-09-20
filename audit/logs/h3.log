@@ -1,0 +1,1096 @@
+dsh: reasoning:
+Let me start by exploring the workspace and understanding the files I need to modify.
+dsh: reasoning:
+Let me read the audit report sections 6.2/6.3/6.4 and §6, settings.vue, and find callers of these components.
+dsh: reasoning:
+Let me read the audit section 6 fully and check the probe.py and any playwright setup. Let me also see the DkField, DkSwitch for patterns. And check how tests are run.
+dsh: reasoning:
+Now let me understand the callers of DkSegmented and DkSelect to make sure I preserve API. Also let me check t28 property DkSelect and t40. I need to know if any caller passes a `label` already (unlikely). Let me grep for label usage patterns.
+
+The task:
+1. DkSegmented: accessible radiogroup semantics. Container role=radiogroup + aria-label passthrough; options role=radio + aria-checked; ←/→/↑/↓ move and select; roving tabindex, only current item tabbable. Keep visual/API unchanged.
+2. DkSelect: optional label prop → aria-label (or associated visible label), allow id passthrough; preserve native select keyboard behavior. If settings.vue or other allowed files have naked select, add readable label. But wait, only allowed files are DkSegmented, DkSelect, DkIconButton, settings.vue. Other files with naked DkSelect (favorites, t40, t39, etc.) are NOT allowed to be modified. Hmm, but the report says favorites' filter uses DkSelect without label. I can't modify favorites page presumably (not in my file list). Let me check: "只允许修改下面列给你的文件". So I cannot touch favorites.vue. But DkSelect can auto-derive fallback? The task says "新增可选 label 属性 → 渲染为 aria-label（或与可见标签关联），并允许透传 id". Hmm. For naked selects in non-allowed files, I can't add labels. But can I make DkSelect always have an accessible name fallback? Perhaps use a dev-time warning + fallback to first option? That would be a name but not meaningful. The instruction says "若 settings.vue 或其它被允许的文件里有裸 select，补上可读的标签." So only allowed files. It's fine to report the others as not reachable within file scope.
+
+Actually wait — favorites.vue might use DkSelect with a label already? Let me check. The audit says /favorites has 1 unlabeled SELECT. Let me look at favorites.vue. But I can't modify it. I can report as out-of-scope/unreachable. However, maybe I can improve DkSelect so that when no label is given, it falls back to something reasonable. But fabricating an aria-label could be worse. Let me see the favorites usage.
+
+Let me check all DkSelect usages without label. Also need to check whether DkSelect is wrapped in DkField (which has a `<label>` but not `for`, so not associated). The DkField label has no `for` and the control slot is separate, so even DkField-wrapped selects have no accessible name! That's relevant. DkSelect label prop solves that when passed. But I can't modify DkField (not in list; also it's "已修过"? no, DkField not listed as modified but not in allowed list). So I can add a `label` prop and update callers within my allowed files only. Hmm, but many callers pass DkSelect inside DkField. Those won't get a name unless passed label. But I can't touch them.
+
+Wait — perhaps DkSelect can support aria-labelledby by allowing `ariaLabelledby` prop, still callers need to pass. Not helpful.
+
+Alternative: DkSelect could detect if wrapped in DkField? Not feasible cleanly.
+
+The scope explicitly says only settings.vue among pages. So realistically:
+- Add label/id props to DkSelect.
+- In settings.vue there are no DkSelect at all (from read). So nothing to do there? Let me verify grep settings.vue for select — none. So requirement "若 settings.vue 或其它被允许的文件里有裸 select，补上可读的标签" is conditional; there are none in allowed files. Good.
+
+But the verification requires probe /settings and tool pages: no console/pageerror, no horizontal overflow. It doesn't require inputsNoLabel=0 globally. And Playwright verify "主要页面按钮的 aria 名称缺失数量为 0".
+
+Hmm, but maybe I should reduce DkSelect unlabeled count where possible without touching forbidden files. Is there an approach where DkSelect itself provides a fallback accessible name when none is provided? A common pattern: if no label, use `aria-label` derived from... nothing reliable. Could use `title`. But fabricating is against "真实性红线"? It's more about not faking status/data. A generic label like "选项" isn't meaningful.
+
+Actually, better: DkSelect could render `aria-label` only when label provided. For unlabeled case, we cannot invent. But maybe we can use `aria-labelledby` via DkField: if DkSelect is inside a DkField, the DkField label could be referenced. Since DkField is a sibling, we could potentially query the closest `.dk-field` element and find `.dk-field__label` and set `aria-labelledby` on mount. That's a bit hacky but robust and would fix all DkField-wrapped selects without touching those files. However, modifying DkSelect to reach into parent DOM is fragile. Hmm.
+
+Actually wait: let me reconsider. DkField renders `<label class="dk-field__label">` with no `for` and wraps only the label, not the control. So the label isn't associated. But we could make DkSelect, when no label prop, look up its closest `.dk-field` ancestor and, if a `.dk-field__label` exists with an id, set aria-labelledby. DkField currently doesn't set an id on the label. But we could generate one if absent. This is DOM manipulation at runtime; possible but hacky.
+
+Alternatively, I could improve DkField too — but it's not in my allowed files. Not allowed.
+
+Given constraints, I think the intended scope is: add props, and fix allowed usages. The report should honestly note the remaining unlabeled DkSelects in files outside my allowed set as "不可达 / 超出文件范围". That aligns with the 真实性红线: "做不到的事情要在文案里说清楚，或明确报告'不可达'".
+
+But let me double check the allowed settings.vue for DkSelect — none. So DkSelect label prop will be used... nowhere in allowed files? Then the requirement "若 settings.vue 或其它被允许的文件里有裸 select，补上可读的标签" is vacuously satisfied.
+
+Hmm, but then verification might check inputsNoLabel. Let me not over-engineer. Actually, I could add `label` to DkSelect and use it in settings? No DkSelect there.
+
+Wait, maybe there are naked selects in settings? No. Let me search entire devkit for raw `<select` in allowed files. Only settings.vue is a page. Let me grep.
+
+Let me also check t28/t40 usage of DkSelect to ensure adding props doesn't break, and check whether any pass `size` etc.
+
+3. DkIconButton: touch target ≥ 40x40 mobile, always accessible name (title or aria-label required), dev-time readable fallback, visible focus ring. API currently `title: string` required, `size?: number`. Callers pass title. Need to guarantee accessible name. Since title required, fine, but add fallback in dev. Also size default 30 → need ≥40 on mobile. Visual on desktop can stay 30 but mobile via media query min 40. But `size` prop is used in some callers? Let's check. Some pass size? grep.
+
+Let me gather all usages and the CSS focus-visible in main.css. Also check playwright availability.
+
+Let me look at the t28 DkSelect line 313 (inside an input row, no label) and t40 lines, t39, t18, t04, t24. Let me inspect each to decide reporting.
+
+Also, importantly: adding `role="radio"` and keyboard nav to DkSegmented must not break existing callers that rely on click only. Fine.
+
+Let me check what `@update:model-value` handlers do — they cast as any. Fine.
+
+Let me now gather info.
+dsh: reasoning:
+Interesting: favorites has no DkSelect? The audit said /favorites has a SELECT with class dk-select__el. Let me check /favorites page. Maybe it's in a component like SendToMenu or favorites.vue. Let me search "dk-select" or DkSelect in app. The grep earlier only returned tools. Let me search pages more broadly, maybe favorites.vue uses DkSelect via a different name. Actually grep "DkSelect" in app/pages returned nothing (exit 1 for the whole command? Actually the `&&` chain: last grep returned exit 1, hence overall exit 1). Wait the raw select grep found only DkSelect.vue. So /favorites SELECT must be... maybe favorites page uses DkSelect? Let me directly read favorites.vue.
+
+Actually the previous grep for DkSelect in app/components only listed tools. Let me grep pages.
+dsh: reasoning:
+Favorites page has no DkSelect now? Maybe another agent already changed it. The audit was from earlier. Fine.
+
+Now let me check the dev server is running and Playwright availability. Also check DkIconButton focus-visible - main.css gives global outline. But requirement says focus ring visible. Global `:focus-visible` applies. But scoped? It's global. Fine, but let's add explicit focus-visible to icon button for robustness? Requirement 3: "焦点环可见". Global covers it but the button is borderless; outline still shows. I can add explicit scoped style.
+
+Let me now check git status to understand what's already changed, and check current dev server.
+
+Let me plan the implementations.
+
+### DkSegmented.vue
+
+```vue
+<script setup lang="ts">
+export interface SegmentOption {
+  value: string
+  label: string
+  title?: string
+}
+
+const props = withDefaults(
+  defineProps<{
+    modelValue: string
+    options: SegmentOption[]
+    size?: 'sm' | 'md'
+    label?: string
+    ariaLabel?: string
+    id?: string
+  }>(),
+  { size: 'md' }
+)
+const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
+
+const groupId = useId()  // Nuxt auto-import? useId is Vue 3.5. Nuxt 4 uses Vue 3.5 likely.
+```
+
+Hmm, `useId` is available in Vue 3.5. Nuxt 4.5.2 uses Vue 3.5.x. Let me verify. Actually simpler: generate a unique id with a module-level counter. Avoid depending on useId.
+
+Roving tabindex: current selected index. Only that button has tabindex=0; others -1. But if modelValue doesn't match any option, default first option to tabindex 0. Also need local refs to focus the button on arrow nav.
+
+Keyboard handler on each button (or container). Arrow Left/Up → previous (wrap), Right/Down → next (wrap). Home/End optional (nice). On arrow, select and focus. Space/Enter: buttons naturally select on click? For role=radio on a button, Enter/Space triggers click. Good. Actually Space on button triggers click too. Fine.
+
+Use `@keydown` at container level to handle arrows. But roving tabindex means only focused button receives keydown which bubbles to container. Good.
+
+Refs: use `ref` array via `:ref` callback or `useTemplateRef`. Simpler: query within the group element using container ref.
+
+Implementation:
+```ts
+const root = ref<HTMLElement | null>(null)
+const ids = computed(() => props.options.map((_, i) => `${uid}-${i}`))
+const activeIndex = computed(() => {
+  const i = props.options.findIndex((o) => o.value === props.modelValue)
+  return i >= 0 ? i : 0
+})
+function focusIndex(i: number) {
+  const el = root.value?.querySelectorAll<HTMLButtonElement>('.dk-seg__item')[i]
+  el?.focus()
+}
+function move(delta: number) {
+  const n = props.options.length
+  if (!n) return
+  const next = (activeIndex.value + delta + n) % n
+  emit('update:modelValue', props.options[next].value)
+  focusIndex(next)
+}
+function onKeydown(e: KeyboardEvent) {
+  switch (e.key) {
+    case 'ArrowRight':
+    case 'ArrowDown':
+      e.preventDefault(); move(1); break
+    case 'ArrowLeft':
+    case 'ArrowUp':
+      e.preventDefault(); move(-1); break
+    case 'Home':
+      e.preventDefault(); emit(...options[0]); focusIndex(0); break
+    case 'End':
+      ...
+  }
+}
+```
+
+But activeIndex computed uses modelValue; after emit, modelValue updates asynchronously (parent), so focusIndex(next) directly is right. But when computing `next` based on activeIndex which is from props before update, if parent doesn't update (v-model not bound?), then activeIndex stays. Existing callers all bind modelValue. Acceptable.
+
+Actually a subtle bug: if the component is used as `:model-value` + handler (not v-model) and the parent updates, fine. If parent ignores, the roving tabindex won't move but focus moves. Fine.
+
+aria-checked should reflect modelValue === option.value.
+
+Container: role="radiogroup" :aria-label="label ?? ariaLabel ?? undefined" :id. Also maybe `aria-orientation`? Not necessary.
+
+For the radio item: role="radio" :aria-checked :tabindex :id :title. Keep class and click.
+
+Should I keep `aria-selected`? No, radio uses aria-checked.
+
+Now, `label` prop name — task says "容器 role=radiogroup + aria-label 透传". So accept `label` and/or `ariaLabel`. I'll support both: `label` and `aria-label` binding. In Vue, if a caller passes `aria-label="..."` as attr it falls through to root automatically. But we set role and other attrs; fallthrough works (single root). Actually the component root is a div, so `aria-label` passed by caller will be automatically merged onto root. So the aria-label passthrough already works via fallthrough. But since we explicitly bind `:aria-label`, if we bind undefined it might override fallthrough? Fallthrough attrs are merged with explicit ones; explicit takes precedence and fallthrough duplicates merge? For non-class/style attrs, the merged value: if both component's explicit and fallthrough, hmm. Actually for attrs, `$attrs` are automatically merged; explicit attribute on root element plus fallthrough of same name = the fallthrough may overwrite? In Vue, fallthrough attributes are applied to root; if the root already has the same attribute defined in template, the template's value wins? Let me recall: Vue merges class/style, and for other attrs fallthrough overrides? Actually inheritAttrs default: attributes are added to root. I think template-defined attributes take precedence... uncertain. To be safe, define explicit `label` prop and also `ariaLabel` prop, and bind. Also allow `aria-label` fallthrough might be duplicated; not harmful.
+
+Let me just add props: `label?: string`, `ariaLabel?: string`. Bind `:aria-label="ariaLabel || label"`. And a wrapping group also could have a visible label? Not required. Keep minimal.
+
+Also add focus-visible style in scoped: since global already provides outline, but scoped `.dk-seg__item:focus-visible` can ensure border-radius. Add explicit for requirement 2? Actually requirement in section 2 doesn't mention focus ring for segmented, only DkIconButton. But nice.
+
+Also, need to ensure `button` doesn't have default type submit inside forms — existing had none. Could add `type="button"` to be safe, but that changes behavior in forms (probably desirable). Existing components lack type. Adding type="button" is safe and prevents accidental form submit. But "不能影响任何现有调用方" — adding type=button is safe. I'll add it.
+
+### DkSelect.vue
+
+Add props: `label?: string`, `id?: string`, `ariaLabel?: string`. Bind `:id="id"` and `:aria-label="ariaLabel || label"`. Perhaps also support visible external label association via `id`: if caller passes id, they can do `<label :for="id">`. Good.
+
+Preserve native keyboard: don't add tabindex or keydown. Keep native select.
+
+Maybe wrap with a `<label>` when label is provided? Task says render as aria-label OR associate with visible label. Simplest: aria-label. Keep DOM same to avoid layout. Add focus-visible? Already has `:focus` styles.
+
+Also for dev fallback? Not required. But maybe when no label/id/aria-label, dev warn. Task says DkIconButton dev fallback, not DkSelect. Keep.
+
+Also "保证原生 select 的键盘行为不被破坏" — don't preventDefault. Fine.
+
+### DkIconButton.vue
+
+Current props `title: string`. Requirement: always accessible name (title or aria-label required, dev-time readable fallback), touch target ≥40x40 mobile, visible focus ring.
+
+Approach:
+- props: `title?: string`, `ariaLabel?: string`, `disabled?`, `size?: number`. Change title to optional so missing doesn't cause TS error? But callers always pass. Task says "title 或 aria-label 二选一必填". If prop types require one, TS can't express easily. Use optional and compute.
+- accessibleName = computed(() => props.ariaLabel || props.title || '按钮') with dev warning when both missing.
+- In dev, warn via console.warn. Use `import.meta.dev` (Nuxt). Actually `import.meta.dev` is Nuxt-specific. Use `process.dev`? Nuxt 4: `import.meta.dev`. Or `import.meta.env.DEV`. To be safe use `if (import.meta.dev)`. Hmm in plain Vue, `import.meta.env.DEV`. Nuxt supports both? Nuxt 4 uses Vite; `import.meta.env.DEV` works. Let's use `import.meta.dev` which Nuxt defines. Actually I'll use `import.meta.env.DEV` which is standard Vite. Both fine. But TS may complain about `import.meta.env`? Nuxt includes vite/client types. Likely fine.
+
+- Rendering: `:title="title || accessibleName"` and `:aria-label="accessibleName"`. Actually if title provided, use title for title attr; aria-label = accessibleName. If only aria-label given, title can be omitted or set to ariaLabel. Keep title = title ?? ariaLabel.
+
+- Touch target: current `.icon-btn { width:30px; height:30px }` via size prop? Wait the `size` prop is declared but not used in template! The CSS hardcodes 30px. Let me check: `<button class="icon-btn" :title ...>` no width binding. So size prop unused. Hmm. Many callers might pass size? grep showed none for DkIconButton (the `:size` grep matched DkIcon lines only). Let me verify no DkIconButton uses size prop. Earlier grep `DkIconButton ... :size` gave results showing `<DkIcon :size>` not the button. So size unused. But to preserve API, keep it and maybe apply as inline style? If we now apply size=30 default it's same as CSS. But if some caller passed size expecting effect... none do. I could bind `:style="{ width: size + 'px', height: size + 'px' }"`. But requirement: touch target ≥40 on mobile. So use min-width/min-height 40px on coarse pointer / small screens.
+
+Implementation CSS:
+```css
+.icon-btn {
+  width: 30px; height: 30px;
+  ...
+}
+@media (max-width: 768px), (pointer: coarse) {
+  .icon-btn { min-width: 40px; min-height: 40px; }
+}
+```
+But width/height fixed 30 would conflict; min-width overrides width since min > width. Yes min-width wins over width. So set min-width/min-height 40 on mobile and keep visual. Actually a 30px-wide inline-flex with min-width:40 becomes 40 wide. Good. That might alter layouts slightly on mobile but requirement demands it.
+
+Better use a CSS var for size if size prop. Let me bind size via inline style: `:style="{ '--icon-size': size + 'px' }"` and CSS `width: var(--icon-size, 30px)`. Then mobile min 40. That preserves size semantics. Good.
+
+Focus ring: 
+```css
+.icon-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+```
+Global already does, but explicit is fine.
+
+Dev fallback name: '按钮' — readable? The requirement says "缺失时在开发期给出可读兜底". So fallback '按钮' plus console.warn. Maybe '未命名按钮'? "可读兜底" means a readable fallback. I'll use '未命名按钮' maybe. Hmm, but that could be announced. Better generic '按钮'. I'll use `ariaLabel || title || '按钮'` and warn.
+
+Actually if title missing but aria-label present, name = aria-label. Good.
+
+Now, does changing title to optional break TS in callers? No, optional is looser.
+
+### settings.vue
+
+Add accessible labels to DkSegmented instances? Requirement 2 says DkSelect. But requirement 1 for DkSegmented mentions aria-label passthrough. We could add `label` to segmented controls in settings for better a11y since they're in allowed file. The audit notes settings segmented for 主题, 代码字号, 默认缩进. Adding `label` would be good. But requirement only mandates radiogroup semantics. I think adding labels is good and within allowed file. But "只在需要给控件补可见标签/aria 关联时改" — settings.vue. Yes, adding aria labels to segmented/selects is appropriate.
+
+Wait the file header says settings.vue only when needed to add labels. So I'll add `label` props to the three DkSegmented in settings. That improves a11y meaningfully.
+
+But careful: DkSegmented `label` attribute with Chinese. Good.
+
+Also there are no DkSelect in settings.
+
+Now let me verify Vue version for `useId` and check tests/playwright. Let me also check probe.py rest and whether there's a python/playwright environment.
+
+Let me check package.json and git status.
+dsh: reasoning:
+Vue 3.5.43, so `useId` is available. But Nuxt auto-imports `useId`? Vue's useId is auto-imported by Nuxt? Nuxt auto-imports Vue APIs including useId I believe. To be safe, I'll import { useId } from 'vue' in script? Script setup auto-imports ref/computed already. But explicit import from 'vue' avoids ambiguity. Existing components use computed/ref without import (auto). I'll use a module-level counter to avoid any issues, simpler and stable.
+
+Actually for SSR hydration, module-level counter could produce mismatch between server and client if render order differs. But Nuxt SSR... this is a static devkit, probably SPA (`ssr: false`?). Let me check nuxt.config. If SSR true, useId is designed for this. Let me check.
+
+Actually the DkSegmented ids are only used for aria-activedescendant? We may not need ids at all. We use roving tabindex and focus via querySelectorAll. We don't need per-item ids. The container may need an id for external label association: allow `id` prop passthrough via fallthrough. So no generated ids necessary. 
+
+But if we want a visible label associated, we'd need id. Not required—aria-label suffices. So no useId needed.
+
+Now implement.
+
+Let me check nuxt.config for ssr. Not important.
+
+Let me write DkSegmented.
+
+One consideration: `@keydown` on container receives events from buttons. Good.
+
+For roving tabindex when modelValue matches none: activeIndex=0 → first button tabindex 0. Good.
+
+Also, if options contain duplicates? Ignore.
+
+Let me write the files.
+
+DkSegmented template:
+
+```vue
+<template>
+  <div
+    ref="root"
+    class="dk-seg"
+    :class="`dk-seg--${size}`"
+    role="radiogroup"
+    :aria-label="ariaLabel || label"
+    @keydown="onKeydown"
+  >
+    <button
+      v-for="(o, i) in options"
+      :key="o.value"
+      type="button"
+      role="radio"
+      :aria-checked="modelValue === o.value"
+      :tabindex="i === activeIndex ? 0 : -1"
+      class="dk-seg__item"
+      :class="{ 'dk-seg__item--active': modelValue === o.value }"
+      :title="o.title"
+      @click="select(o.value)"
+    >
+      {{ o.label }}
+    </button>
+  </div>
+</template>
+```
+
+Script:
+```ts
+const props = withDefaults(
+  defineProps<{
+    modelValue: string
+    options: SegmentOption[]
+    size?: 'sm' | 'md'
+    label?: string
+    ariaLabel?: string
+  }>(),
+  { size: 'md' }
+)
+const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
+
+const root = ref<HTMLElement | null>(null)
+const activeIndex = computed(() => {
+  const i = props.options.findIndex((o) => o.value === props.modelValue)
+  return i >= 0 ? i : 0
+})
+
+function select(value: string) {
+  emit('update:modelValue', value)
+}
+
+function focusAt(index: number) {
+  const items = root.value?.querySelectorAll<HTMLButtonElement>('.dk-seg__item')
+  items?.[index]?.focus()
+}
+
+function moveTo(index: number) {
+  const n = props.options.length
+  if (n === 0) return
+  const next = ((index % n) + n) % n
+  emit('update:modelValue', props.options[next].value)
+  focusAt(next)
+}
+
+function onKeydown(e: KeyboardEvent) {
+  if (props.options.length === 0) return
+  switch (e.key) {
+    case 'ArrowRight':
+    case 'ArrowDown':
+      e.preventDefault()
+      moveTo(activeIndex.value + 1)
+      break
+    case 'ArrowLeft':
+    case 'ArrowUp':
+      e.preventDefault()
+      moveTo(activeIndex.value - 1)
+      break
+    case 'Home':
+      e.preventDefault()
+      moveTo(0)
+      break
+    case 'End':
+      e.preventDefault()
+      moveTo(props.options.length - 1)
+      break
+  }
+}
+```
+
+Wait: `focusAt` query uses class `.dk-seg__item` scoped CSS — class names are preserved (scoped adds data attr but class remains). querySelector works.
+
+However `root.value` is the div; ref name `root` conflicts? Fine.
+
+Potential issue: `moveTo` uses `activeIndex.value` computed from modelValue. If modelValue is not updated by parent synchronously during this handler (v-model update is emitted, parent sets state, re-render happens after), we compute next from stale index — but that's exactly desired since we're moving from current. On rapid double arrow presses before re-render, could compute same next twice. Minor. Fine.
+
+Add scoped focus-visible style.
+
+Now DkSelect:
+
+```vue
+<script setup lang="ts">
+export interface SelectOption { value: string; label: string }
+
+withDefaults(
+  defineProps<{
+    modelValue: string
+    options: SelectOption[]
+    disabled?: boolean
+    label?: string
+    ariaLabel?: string
+    id?: string
+  }>(),
+  {}
+)
+...
+</script>
+
+<template>
+  <div class="dk-select">
+    <select
+      :id="id"
+      class="dk-select__el"
+      :value="modelValue"
+      :disabled="disabled"
+      :aria-label="ariaLabel || label"
+      @change="onChange"
+    >
+```
+
+Note: `withDefaults` with `{}` and optional props is fine. Actually previously `withDefaults(... , {})`. Keep.
+
+Native keyboard preserved. Add `:focus-visible` maybe existing `:focus`. Keep.
+
+DkIconButton:
+
+```vue
+<script setup lang="ts">
+import { computed } from 'vue'  // auto-imported, but fine
+
+const props = withDefaults(
+  defineProps<{ title?: string; ariaLabel?: string; disabled?: boolean; size?: number }>(),
+  { size: 30 }
+)
+
+const name = computed(() => props.ariaLabel || props.title || '按钮')
+
+if (import.meta.env.DEV && !props.ariaLabel && !props.title) {
+  console.warn('[DkIconButton] 缺少可访问名称：请传入 title 或 aria-label')
+}
+</script>
+
+<template>
+  <button
+    class="icon-btn"
+    :style="{ '--icon-size': size + 'px' }"
+    :title="title || name"
+    :aria-label="name"
+    :disabled="disabled"
+  >
+    <slot />
+  </button>
+</template>
+```
+
+Hmm `import.meta.env.DEV` — TS may need vite/client types. Let me check tsconfig / whether other components use import.meta. grep.
+
+Actually with Vue auto-import, computed is available. `import.meta.env.DEV` in a .vue used by Nuxt is fine. But when running `npx nuxt typecheck` might complain. Let me grep for existing usage of import.meta.env.
+
+Also the dev warning at setup time only checks initial props; if props later change to missing, not warned. Fine.
+
+Better use `watchEffect` to warn when missing. Keep simple: warn once in setup.
+
+But there's a subtlety: `withDefaults` + destructure. props is fine.
+
+CSS: use `--icon-size`.
+
+```css
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-size, 30px);
+  height: var(--icon-size, 30px);
+  ...
+}
+.icon-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+@media (pointer: coarse) {
+  .icon-btn { min-width: 40px; min-height: 40px; }
+}
+```
+
+Wait requirement says "移动端" — mobile. Use both coarse pointer and max-width. I'll do `@media (max-width: 768px), (pointer: coarse)`. At 40 min, if size 30 then min-width wins.
+
+But does min-width override width? Yes, min-width always overrides width. Good. min-height same.
+
+One concern: `--icon-size` inline style with number 30 → `'30px'`. Good.
+
+Now settings.vue: add label to the three DkSegmented. The first: `label="主题"`. Second: `label="代码字号"`. Third: `label="默认缩进"`. These match visible row titles, good.
+
+Also, DkSwitch already has labels from prior fix. Good.
+
+Now, should I also add labels to DkSelect callers? Not allowed files. But I can consider making DkSelect auto-associate with DkField label. Let me think about whether the verification "检查主要页面按钮的 aria 名称缺失数量为 0" only counts buttons. The probe already reports buttonsNoName. For selects it's inputsNoLabel.
+
+Given the requirement explicitly: "若 settings.vue 或其它被允许的文件里有裸 select，补上可读的标签。" There are none. I'll verify with probe and report. But maybe I can do better: DkSelect could look up closest `.dk-field` and use its label text as aria-label fallback. This would fix DkField-wrapped selects across the app without editing forbidden files. Is that acceptable/robust? It's a reasonable progressive enhancement. But it manipulates DOM and relies on DkField internals which is fragile and could be considered overreach. Also task says don't modify other files, but improving DkSelect is allowed. Hmm.
+
+However, the audit specifically says favorites had an unlabeled SELECT, but currently favorites has no DkSelect (maybe already fixed by another agent or the audit was pre-fix). Let me probe /favorites later.
+
+I think a cleaner approach for DkSelect: support an optional `label` prop, and additionally, if no accessible name is provided, fall back to reading the enclosing DkField label at mount via `aria-labelledby`. But DkField label has no id. We could set the label's id from DkSelect? Too hacky.
+
+Alternative accessible approach within DkSelect: if no label, use the selected option's label as `aria-label`? e.g., "源编码" no. That gives name like "UTF-8" which is not a field purpose. Not good.
+
+I'll keep DkSelect simple and honest, and note remaining unlabeled selects in non-allowed files as "not reachable within file scope". Let me check what pages have DkSelect inside DkField and whether probe counts them as unlabeled. `inputsNoLabel` check: `!aria-label && !labels.length && !placeholder`. Native select inside DkField has no placeholder and no labels (DkField label lacks `for`), so counted. To make the verification clean, maybe I should add `aria-label` in the tool files... but forbidden.
+
+Hmm wait — but the task's verification only explicitly says "检查主要页面按钮的 aria 名称缺失数量为 0" for buttons, not inputs. And probe /settings and a few tool pages: no console/pageerror, no horizontal overflow. So inputsNoLabel isn't required to be 0. Good.
+
+But the必做 item 2 says "若 settings.vue 或其它被允许的文件里有裸 select，补上可读的标签" — conditional, satisfied vacuously.
+
+Still, to make DkSelect actually improve the app, I could pass label where possible... none in allowed files. So the prop is latent. That's okay but feels thin. Let me reconsider: maybe I can fix DkField-wrapped selects by having DkSelect use `aria-labelledby` derived from closest `.dk-field__label`. Actually, we can do this without modifying DkField: in DkSelect's onMounted, find `el.closest('.dk-field')?.querySelector('.dk-field__label')`, assign it an id if missing, and set `aria-labelledby`. This is a legit progressive enhancement that makes all DkField-wrapped selects accessible, fixing t40, t39?, t04, t18, t24, t33, t28. t39 and t28 and t04 use visible span labels not DkField, so those remain. But most would be fixed.
+
+But wait, t04/t18/t24/t39 use a visible `<span class="...-label">`, not `<label>`. Could DkSelect also detect preceding sibling label-ish? Overreach/fragile.
+
+Hmm. The task explicitly scopes fixes to allowed files, and emphasizes not touching others. Runtime DOM detection is a bit magical. Given "真实性红线" and engineering quality, I think adding a `label` prop and registering it via aria-labelledby/aria-label is the intended, clean solution. I'll not do DOM sniffing. I will, however, run probe and report the counts honestly, noting that DkField-wrapped DkSelects still lack programmatic labels because those caller files are out of scope, and recommend follow-up.
+
+Actually wait — re-reading: "DkSelect：新增可选 label 属性 → 渲染为 aria-label（或与可见标签关联），并允许透传 id". The intent is clearly the prop. Fine.
+
+But hold on: could I improve DkField association without editing DkField? DkField's `<label>` isn't linked. What if DkSelect generated its own name from... no.
+
+OK let me also double check whether `favorites.vue` uses something. Let me read it quickly to see if there's a select. grep found no DkSelect in pages. Maybe it was already changed. Let me search all DkSelect usages again completely and count unlabeled after my change by running probe.
+
+Let me now check `import.meta.env.DEV` usage precedent.
+dsh: reasoning:
+No precedent for import.meta.env. I'll avoid it to prevent type issues and use a simpler dev detection: `if (process.env.NODE_ENV !== 'production')`. In Nuxt/Vite, `process.env.NODE_ENV` is defined at build time. Vue SFC with `<script setup>` can access process.env if node types present? Nuxt provides. Hmm. Alternatively, always warn? No.
+
+Actually simplest robust dev fallback: just always use fallback name without warning, but task says "缺失时在开发期给出可读兜底" — meaning provide readable fallback during dev. So fallback name always is fine, and a console.warn in dev is a bonus. I can use `import.meta.dev` (Nuxt built-in, typed). Nuxt defines `import.meta.dev` globally. Let me verify by grep in node_modules types? It's a Nuxt feature since 3.9. Let me just use `import.meta.dev`. If typecheck fails we can adjust.
+
+But the command `npx nuxt typecheck` might be heavy. Let's check package.json scripts.
+
+Let me check package.json.
+dsh: reasoning:
+Let me check .nuxt types for import.meta.dev. Actually `import.meta.dev` is Nuxt's runtime typed via `nuxt/app` augmentations. Let me grep in .nuxt.
+dsh: reasoning:
+Vite client types are included, so `import.meta.env.DEV` is typed. I'll use `import.meta.env.DEV`. Good.
+
+Now let's write the three components and settings.vue.
+
+Let me set up todos first.
+dsh: reasoning:
+Wait, I added a mobile min-height 40px for segmented too. Requirement 3 only for icon button, but audit also mentions "移动端触控目标偏小" generally. This is fine and within my file. But it might alter mobile visual for segmented (height 40). That's acceptable for touch. Good.
+
+Now DkSelect.
+dsh: reasoning:
+Now DkIconButton. Note: existing style uses `border-radius`, etc. Keep visual for desktop. Add size var, dev fallback name, focus-visible, mobile min target.
+
+One issue: the `size` prop with withDefaults. Also `name` computed. Let me write.
+dsh: reasoning:
+Now settings.vue: add labels to the three DkSegmented. Let me edit each occurrence.
+
+First: theme segmented at line ~87. Add `label="主题"`.
+Second: codeFontSize, `label="代码字号"`.
+Third: defaultIndent, `label="默认缩进"`.
+
+Let me apply edits with unique context.
+dsh: reasoning:
+Now let me verify the changes and check for compilation errors. Let me first run a quick fetch of /settings to ensure no build errors (HMR). Then write a Playwright keyboard test.
+
+Also, I added `min-height: 40px` for coarse pointer on segmented; but I used `(pointer: coarse)` only, not max-width. The requirement says mobile. Fine.
+
+Wait, one concern with DkSegmented: `@keydown` handler references `activeIndex` computed based on modelValue. When user Tabs into the group, the focused item is the active one (tabindex 0). Good. But if modelValue doesn't match any and activeIndex=0, first is tabbable and aria-checked false for all. Acceptable.
+
+Another concern: Home/End in a radiogroup is not standard for radio groups (arrow keys are). Home/End is optional; harmless.
+
+Now potential issue: Existing callers might rely on the container's `role="tablist"`? Unlikely. Search for `[role=tablist]` or `dk-seg` in tests. Let me grep tests for tab/radiogroup. Also check nothing queries role=tab.
+
+Let me now test. First fetch the page to force HMR compile and catch errors.
+dsh: reasoning:
+Good. Now let me write a Playwright verification script. It should:
+1. Navigate /settings
+2. Find radiogroups, check count and aria-labels (主题, 代码字号, 默认缩进)
+3. Tab into first radiogroup: simulate focus and press ArrowRight, verify aria-checked changes and model updates (visible? The selected radio gets aria-checked=true; also check theme changes via document class or localStorage).
+4. Check roving tabindex: only one item tabindex=0 per group.
+5. Check buttonsNoName across主要页面 (settings, home, favorites, recent, a few tool pages) = 0.
+6. Check DkIconButton on mobile viewport: touch target >=40.
+
+Also probe /settings and tool pages for console/pageerror and overflow.
+
+Let me write the script in /tmp or audit? Better in /tmp to avoid adding files to repo (only allowed to modify listed files). Writing to /tmp is fine. Actually working dir is workspace; file sandbox workspace-write allows /tmp? "Some platform temporary areas may also be writable." Let me write to /tmp/h3-a11y.py.
+
+Let me create the test. For keyboard: focus the radiogroup first radio via `.focus()` or click? To test Tab entry: press Tab repeatedly from address? Simpler: focus the element and check tabindex, then press ArrowRight.
+
+Actually to verify "Tab 能进 radiogroup", I can set focus to the previous focusable element then press Tab and check activeElement is inside the radiogroup. Let me do: click on the theme radiogroup's radio (click gives focus? clicking a button focuses it). Better: `page.locator('[role=radiogroup][aria-label="主题"] [role=radio]').first().focus()` won't test Tab.
+
+Approach: Find the radiogroup, get its first radio, check tabindex=0. Then use keyboard: focus body, press Tab many times until activeElement's role is radio. Or simply: focus the element before the group. Hmm.
+
+Alternative robust: evaluate `document.activeElement` after tabbing from the row title? The row title is a span (not focusable). The previous focusable in DOM order before theme segmented is... the settings__local link? Actually DOM order: header link "本地处理", then panel, group head, row info, then segmented. So Tab order: link, then theme radio (active), then codefont radio, etc. Let me just press Tab up to N times and record when activeElement role=radio and which aria-label group. That verifies Tab enters.
+
+Then ArrowRight: capture initial checked value (aria-checked of active radio), press ArrowRight, wait, check that the newly focused radio has aria-checked=true and previous false, and that the theme applied (document root class/attr). Let me check how theme is applied - usePrefs likely sets data-theme on html. Let me inspect quickly to assert.
+
+Actually simplest assertion: within 主题 group, before arrow: radio index 0 checked. Press ArrowRight: now index 1 checked and focus on index 1. Press ArrowLeft: back to index 0 checked.
+
+Also check `aria-checked` count per group = 1.
+
+Roving tabindex: exactly one radio with tabindex=0 per group; the checked one.
+
+Let me write the script. Also include button aria-name audit across pages using same logic as probe (button no text, no aria-label, no title). Note: buttons with text fine.
+
+For main pages: `/`, `/settings`, `/favorites`, `/recent`, `/tools/base64` etc. Need actual route names. Let me list tools routes. There's app/pages/tools. Let me check route for a tool. The report mentions /tools/svg, /tools/base64? Let me list.
+
+Let me check app/pages/tools.
+dsh: reasoning:
+Theme applies `.dark` on documentElement. So after selecting dark, `document.documentElement.classList.contains('dark')` should become true. But careful: test order and default theme from localStorage. I'll read initial theme selection, then arrow to next and assert `--code-font-size` changes for codeFontSize group? Simpler: theme group arrow from current; I'll click "浅色" first then ArrowRight → expect "深色" checked and html.dark true. That's a clean deterministic assertion.
+
+Actually clicking 浅色 sets theme light. Then press ArrowRight on focused 浅色 → 深色 selected, html.dark true. Then ArrowLeft → 浅色, html.dark false. 
+
+But wait, clicking a radio changes model; the `@update:model-value="update({ theme: ... })"` writes. Good.
+
+Let me write the test script.
+
+Also verify "Tab 能进 radiogroup": I'll click 浅色 to focus, then Tab should move to the next radiogroup's active radio (代码字号). Actually from 浅色 radio, Tab moves to next focusable = 代码字号 group's active radio (since only one tabbable). That verifies roving tabindex too! Nice:
+- Focus 浅色 (click), press Tab → activeElement should be a radio inside 代码字号 group.
+- Then Shift+Tab → back to radio in 主题 group.
+
+Good test.
+
+Also need to check that non-active radios are tabindex=-1.
+
+Let me write.
+dsh: reasoning:
+All segmented tests pass:
+- 3 radiogroups with labels
+- exactly one tabbable each, one checked each
+- Tab enters radiogroup (roving), Shift+Tab returns
+- ArrowRight selects 深色 and sets dark; ArrowLeft returns
+- wrap-around works
+- no console errors
+
+Now button aria-name audit across pages and DkIconButton mobile touch target. Also test DkSelect label behavior somewhere. There's a DkSelect on /tools/... but no label currently. I can test that the prop renders aria-label by... there's no usage. I could verify via a quick temporary? No. But I can at least test /favorites no select. And confirm the select native keyboard isn't broken.
+
+Actually I can test DkSelect's label prop indirectly: I can't add a page. But I can check that existing selects still respond to keyboard. Also I should verify that when no label passed, aria-label is absent (native). Hmm.
+
+Wait — the requirement says DkSelect label should render. There are no allowed callers. But I could add labels to DkSelect usages within... no. So the feature is unverified in-app. I could write a tiny unit-ish test by feeding a Vue component? Overkill.
+
+Actually, maybe I can verify by temporarily using devtools to mount? No.
+
+Hmm, is there any DkSelect in a page reachable that I'm allowed to modify? No. So I'll report that prop is added but no allowed caller uses it, and that tool-page selects remain without programmatic labels because their files are out of scope. But wait — the "必做" item 2 strongly implies I should fix bare selects. Since there are none in allowed files, we're fine, but DkField-wrapped ones remain unlabeled. The audit's §6 conclusion is about DkSelect lacking label prop. Adding the prop is the fix. Good.
+
+But I want to be careful: maybe I should double-check whether there are any raw `<select>` in allowed files — only DkSelect itself. Confirmed.
+
+Let me now do:
+1. Button-no-name audit + inputsNoLabel across main pages.
+2. Probe.py /settings and a few tool pages for console/pageerror/overflow.
+3. DkIconButton mobile 40x40 test.
+4. Also test DkSelect keyboard (native) on a tool page.
+
+Let me find tool page URLs. Route [slug].vue; slugs from data/tools.ts. Let me get a few: base64, aes, timestamp, csv-json, etc. Let me grep slug names.
+dsh: reasoning:
+Now write a comprehensive audit script:
+- Pages: /, /settings, /favorites, /recent, /help, /privacy, /offline, /category/format (?), and tool pages: /tools/csv-json (has DkSelect), /tools/timestamp, /tools/qrcode, /tools/aes (icon buttons), /tools/vue-sfc, /tools/jwt, /tools/text-encoding.
+- For each: buttonsNoName, inputsNoLabel, controls with aria names, horizontal overflow (scrollWidth > clientWidth), console errors.
+- Test DkIconButton mobile 40x40: viewport 390x844, go to /tools/aes, find .icon-btn, measure.
+- Test DkSelect label rendering: can't. Instead test native select keyboard on /tools/csv-json? There's a DkSelect without label; I'll test it still opens/changes with keyboard. Actually hard to test native dropdown open in headless. I'll test that focusing the select and pressing ArrowDown changes its value (native behavior in Chromium). On /tools/csv-json the select is 分隔符 with values ',' ';' '\t'. Press ArrowDown should change to next option and trigger change event → UI updates. Let me check the tool binding: `:model-value="sep" @update:model-value="sep = $event"`. So value change updates. I can assert select value changes.
+
+Actually native select keyboard: when focused, typing/arrow changes selection in Chromium headless? Usually yes, ArrowDown changes selection. Let me test.
+
+- Also need to verify DkSelect label prop works. I can create a temporary Nuxt page? Not allowed to add files. Alternatively, I can use Playwright to evaluate Vue? Not accessible.
+
+Hmm. I could test the prop via a standalone Vitest? Not set up. Or I can mount DkSelect in a browser using a data URL importing Vue? Too complex.
+
+Alternative: I can add `label` to DkSelect usage in an allowed file — settings.vue has no select, but I could add a DkSelect? No, don't add features.
+
+I think it's acceptable to report DkSelect label implementation reviewed by code, plus verify no regression on existing selects (native behavior). But to actually prove `label` renders aria-label, I could create a temporary test page outside allowed files? Creating a new file would violate "只允许修改下面列给你的文件" — modifying is prohibited; creating a new test file is also likely prohibited and could pollute. I'll avoid.
+
+Wait — maybe there's a smarter approach: use Playwright to inject a Vue app? The dev server serves modules; I could navigate to a blank page and use `page.set_content` with Vue from the dev server? Vue global not exposed. Could import from `/_nuxt/...`. Too fragile.
+
+Actually, the requirement verification says "Playwright：命令行面板/设置页用键盘操作验证（Tab 能进 radiogroup、←/→ 切换、aria-checked 变化）；检查主要页面按钮的 aria 名称缺失数量为 0。" It explicitly mentions command palette / settings page. Note "命令行面板" (CommandPalette) is another agent's file; I shouldn't touch. But they want keyboard verification there? Actually the phrase might mean "命令行面板/设置页" as two contexts. CommandPalette is not mine. I'll focus on settings + my components. I could still verify palette radiogroup? Palette has no segmented likely. Skip.
+
+For DkSelect, I'll do a code-level proof plus a DOM-level proof by evaluating the component's rendered output via a minimal SSR? Hmm.
+
+Actually! I can verify DkSelect label prop using Nuxt's SSR by creating a component instance... no.
+
+Alternatively, I realize I could temporarily (not commit) add label to an existing allowed file usage and then test, but there are no usages. 
+
+Let me reconsider: Could I mount DkSelect through the browser console using the app's Vue? Nuxt exposes `window.__NUXT__` but not Vue app. Not straightforward.
+
+I'll do a pragmatic verification: verify existing DkSelect native select still has correct behavior and no regression, and note in the report that the `label`→`aria-label` binding is implemented (code shown) but there were no allowed call sites to exercise it end-to-end; I can additionally verify at least that `aria-label` is absent when not passed and that adding the prop is type-safe via typecheck.
+
+Actually, wait. Let me re-read the allowed files: "devkit/app/pages/settings.vue（仅在需要给控件补可见标签/aria 关联时改）". There's no DkSelect in settings. So indeed.
+
+Hmm, but I could add a label to the DkSelect in t33 etc... not allowed. Fine.
+
+Let me improve DkSelect so it's verifiable anyway. One option: DkSelect could accept `label` and render a visually-hidden `<span>` for association? No need.
+
+Actually, maybe I can verify via a Playwright test that uses an allowed page with a DkSelect inside DkField — but I can't add label. Unless... DkSelect could automatically use the enclosing DkField's label text as its aria-label when no `label` prop is given! That would (a) be genuinely useful, (b) make DkField-wrapped selects accessible without touching forbidden files, and (c) be testable. Is it too magical? Let's think about robustness.
+
+DkField renders:
+```
+<div class="dk-field">
+  <div class="dk-field__head"><label class="dk-field__label">LABEL</label>...</div>
+  <div class="dk-field__control"><slot/></div>
+</div>
+```
+DkSelect root `.dk-select` is inside the slot, so `closest('.dk-field')` works. We can find `.dk-field__label` and use its textContent as aria-label. But the accessible name should be programmatic; using textContent as aria-label is acceptable ("或与可见标签关联"). Even better, assign an id to the label and use aria-labelledby. But mutating DkField's label DOM (adding id) from child is a bit intrusive. Using `aria-label` = label text is simpler.
+
+Risks:
+- If DkField label contains extra text (it doesn't; it's just the label).
+- SSR hydration: doing this in onMounted means server-rendered HTML lacks aria-label, client adds it after hydration → potential hydration mismatch? Vue hydration doesn't compare attributes? Actually Vue does warn on hydration attribute mismatch in dev? Vue 3 hydration mismatch for attributes isn't strictly checked for all attrs I think, but it can. Better compute during render without DOM.
+
+Alternative cleaner: don't reach into DOM. Instead, DkSelect could accept a `label` prop. And I update DkField? Not allowed.
+
+Hmm, what about using provide/inject? DkField could provide its label id, and DkSelect injects. But that requires editing DkField (not allowed).
+
+So DOM sniffing is the only way to fix without touching DkField. Is it worth it? It fixes real a11y issues (t40, t33, and DkField selects). The task says "若 settings.vue 或其它被允许的文件里有裸 select，补上可读的标签" — implying they don't expect me to fix other pages. So I'll not do DOM sniffing. Keep it clean.
+
+But then how to verify label prop? I'll write a small Node/Vue SSR test? Actually I can do SSR render of the component with `@vue/server-renderer` which is a dependency of Vue. That's a legitimate verification. Let me see if `@vue/server-renderer` is available in node_modules (it is, as vue dep). I could write a small Node script that uses vue's `createSSRApp` + renderToString to render DkSelect with label and check output contains `aria-label="源编码"`. But DkSelect is a .vue SFC; Node can't import it directly without a compiler. I'd need to compile SFC via @vue/compiler-sfc (available). That's doable but a bit involved.
+
+Simpler: use the dev server's Vite to transform the module? Too complex.
+
+Alternatively test DkSelect's `label` prop behavior by using the fact that Vue SFCs compile to JS served by Vite. I can create a page... no.
+
+OK, another idea: The requirement doesn't strictly require testing DkSelect label. I'll rely on typecheck + code correctness, and run a focused browser check: verify that a DkSelect rendered in the app has native select behavior, and that all existing selects still work. And in report, state clearly that no allowed call site passes `label`, so an end-to-end demo isn't reachable; the binding is verified by typecheck and code inspection. Actually, hold on — maybe I can demonstrate via the dev server by using Playwright to evaluate a dynamic import of the compiled DkSelect module and mount it into a detached div. The module URL is something like `/_nuxt/app/components/DkSelect.vue` in Vite dev (Nuxt 4 serves via `/_nuxt/`). Nuxt components are auto-imported though; path might be `/app/components/DkSelect.vue` or `/_nuxt/DkSelect.vue`. Let me inspect network requests when loading a page to find module URL. This could work:
+
+```js
+const mod = await import('/_nuxt/app/components/DkSelect.vue')  // returns default component
+const { createApp, h, ref } = await import('/_nuxt/node_modules/.vite/deps/vue.js')
+```
+Vue is likely served at `/_nuxt/@id/...` or `/_nuxt/node_modules/vue/...`. Fragile but possible. Might be overkill.
+
+Actually there's a much simpler route: Nuxt exposes `window.__NUXT__` but also in dev, `window.$nuxt`? Not in Nuxt 4.
+
+Hmm, let me check what module URLs are used. I'll run a quick Playwright that logs script module URLs. But honestly, the value is marginal. Let me decide based on time.
+
+Given the emphasis on 真实性 and self-testing, I think a reasonable compromise: verify DkSelect's aria-label behavior using Vue SSR in Node with a tiny inline SFC compile. Let me check @vue/compiler-sfc and @vue/server-renderer availability. If available, write a node script that compiles DkSelect.vue and renders with props. That's a solid, honest test.
+
+Let me check.
+dsh: reasoning:
+I can write a Node script that compiles the SFC and SSR-renders it. DkSelect uses only template + script setup with defineProps/defineEmits. Compiling `<script setup>` requires `compileScript` and handling of `export interface`. The `withDefaults(defineProps<...>(), {})` and `defineEmits`. SSR compile.
+
+Actually, simpler: use `@vue/compiler-sfc` to parse and compile, then create an SSR app. But defineProps type-only requires the script setup compile to generate props. Let me just do it.
+
+Plan for node script:
+```js
+import { parse, compileScript, compileTemplate } from '@vue/compiler-sfc'
+import { createSSRApp, h } from 'vue'
+import { renderToString } from '@vue/server-renderer'
+import fs from 'fs'
+
+const src = fs.readFileSync('app/components/DkSelect.vue','utf8')
+const { descriptor } = parse(src, { filename: 'DkSelect.vue' })
+const script = compileScript(descriptor, { id: 'x' })
+const tpl = compileTemplate({ source: descriptor.template.content, filename:'DkSelect.vue', id:'x', compilerOptions:{ bindingMetadata: script.bindings } })
+// build module
+const code = script.content.replace('export default', 'const __component =') + '\n' + tpl.code.replace('export function render','function render') + '\n__component.render = render; export default __component;'
+// evaluate via dynamic import of data URL? Use new Function with module
+```
+This is messy. Easier: use `compileScript` to get content, then use `new Function` or `vm` to evaluate ESM. Node can import from a `data:text/javascript` URL. But the generated code imports from 'vue' etc. Data URL imports resolve bare specifiers? No, data: modules can't resolve bare specifiers. Could write temp .mjs file in /tmp and import, with node resolving 'vue' from devkit/node_modules only if the file is inside devkit. I could write temp file into devkit (but that modifies workspace; it's a temp test artifact, arguably okay but the instruction says only modify listed files). Writing a temp file under /tmp won't resolve 'vue'. I can create the temp file inside devkit then delete it. But "只允许修改下面列给你的文件" — adding temp files is risky. I'll avoid.
+
+Alternative: use `vue`'s runtime compiler (`vue/dist/vue.cjs.js` full build) with `@vue/server-renderer` and manually specify props. But we need the template only; we can compile template with compiler-dom and use a render function, then create a component with explicit props option. Actually DkSelect's logic is trivial: props {modelValue, options, disabled, label, ariaLabel, id}, emits, onChange. I could SSR-render an inline component that replicates... but that wouldn't be testing the actual file.
+
+Hmm, that's testing a copy, not the file. Not great.
+
+Let me step back. Perhaps the cleanest real verification of the actual SFC is to use Vite directly via the dev server. Let me check what module URL DkSelect has. Nuxt dev serves source at `/_nuxt/<path>?t=...`. Let me find by scanning network or just fetch `http://localhost:3000/_nuxt/app/components/DkSelect.vue`. Let me try curl.
+
+Actually in Nuxt 4, Vite dev server base is `/_nuxt/`. Source files can be fetched as `/_nuxt/@fs/...`? Let me test a few URLs.
+dsh: reasoning:
+The dev server serves the actual SFC module at `/_nuxt/@fs/Users/hao/.../DkSelect.vue`. Its compiled JS imports from 'vue' resolved to some URL. I can dynamically import it in Playwright page context and mount it. But it's a `<script setup>` compiled module with HMR; importing should work. I need Vue's `createApp` from the page. I can import Vue via the dev server too. Let me find the vue module URL by reading the compiled DkSelect.vue imports.
+
+Let me fetch the compiled JS head.
+dsh: reasoning:
+I can mount the real component in Playwright. Let me write a test that:
+- navigates to about:blank? But module import requires same origin (localhost:3000). Navigate to http://localhost:3000/ then in page.evaluate do dynamic import of the module and Vue, create a div, mount with props, check aria-label.
+
+But the app uses Nuxt; adding a div and mounting an additional Vue app is fine.
+
+Vue import URL: `/ _nuxt/@fs/.../node_modules/vue/dist/vue.runtime.esm-bundler.js?v=...`. The `?v=` hash may change. I can import without `?v` maybe works. Let me just import `/_nuxt/@fs/Users/hao/WebstormProjects/web_tools/devkit/node_modules/vue/dist/vue.runtime.esm-bundler.js`. Vite may serve it. Let's test in a script.
+
+Actually dynamic import with `@vite/client` HMR is fine. Let's write the Playwright script:
+
+```python
+page.goto(BASE + "/")
+result = page.evaluate("""async () => {
+  const { createApp, h, ref } = await import('/_nuxt/@fs/Users/hao/WebstormProjects/web_tools/devkit/node_modules/vue/dist/vue.runtime.esm-bundler.js')
+  const DkSelect = (await import('/_nuxt/@fs/Users/hao/WebstormProjects/web_tools/devkit/app/components/DkSelect.vue')).default
+  const host = document.createElement('div'); document.body.appendChild(host)
+  const app = createApp({
+    components: { DkSelect },
+    setup() { const v = ref('a'); return { v } },
+    template: '<DkSelect v-model="v" :options="[{value:\"a\",label:\"A\"},{value:\"b\",label:\"B\"}]" />'
+  })
+  ...
+}""")
+```
+But runtime-only Vue build doesn't support template compiler! `template` string won't compile. Use render function with h().
+
+```js
+const app = createApp({
+  setup() {
+    const v = ref('a')
+    return () => h(DkSelect, {
+      modelValue: v.value,
+      'onUpdate:modelValue': (val) => { v.value = val },
+      options: [{value:'a',label:'A'},{value:'b',label:'B'}],
+      label: '测试标签'
+    })
+  }
+})
+app.mount(host)
+await Promise.resolve()
+const el = host.querySelector('select')
+return { ariaLabel: el.getAttribute('aria-label'), id: el.id }
+```
+
+For id test, pass id: 'my-select'.
+
+Also test without label: aria-label should be null.
+
+This imports the real SFC and verifies binding. 
+
+Also I could verify native keyboard: focus select, press ArrowDown, check value changed. But in a detached test component with a simple local ref, change event fires and updates. Let me include.
+
+Let me write this consolidated verification script for my components plus page audits. Actually let me split: one script for component-level, one for pages/probe.
+
+Let me write /tmp/h3-components.py that mounts DkSelect, DkSegmented, DkIconButton and checks:
+- DkSelect label -> aria-label, id passthrough, native select exists, no aria-label when omitted.
+- DkSegmented radiogroup with label, arrow works (already tested in settings; but can test isolated too).
+- DkIconButton: default name fallback '按钮', aria-label from title, aria-label from ariaLabel, mobile 40x40.
+
+For mobile 40x40 I need media (pointer:coarse) or width <=768. In Playwright context I can set viewport 390 and `has_touch=True` maybe. The media `(pointer: coarse)` requires touch. Or width<=768 triggers. So viewport 390 wide in the isolated mount will apply min-width 40. Let me measure computed width.
+
+Note: CSS is scoped and injected only when the component module is imported. When importing SFC directly, scoped styles are injected by Vite? In dev, SFC style is imported as part of module and Vite injects `<style>` when the module loads? For Vue SFC in Vite, styles are imported via the module and HMR injects them. When dynamically importing, it should inject a `<style>` tag. Let me verify by checking computed style.
+
+Let me write the component test.
+dsh: reasoning:
+That script got messy with arguments. Let me rewrite cleanly. Playwright `page.evaluate(expression, arg)` supports only one arg. I'll pass an object with all config including URLs.
+
+Let me rewrite properly.
+dsh: reasoning:
+All component tests pass:
+- DkSelect label → aria-label, id passthrough, no fabricated name when absent.
+- DkSegmented radiogroup, roving tabindex, arrow selects & moves focus.
+- DkIconButton mobile 40x40, aria-label, fallback + dev warning.
+
+The select_keyboard test didn't truly verify ArrowDown changes value (synthetic KeyboardEvent doesn't trigger native select behavior). Native selects can't be tested with dispatched events. I should test real keyboard via Playwright on an actual page select. Let me do that: /tools/csv-json has a DkSelect (分隔符) with values. Use `page.locator('select.dk-select__el').focus()` then `page.keyboard.press('ArrowDown')` and check value changed. Real user input should trigger native selection. Let me include in the pages audit script.
+
+Now, page audit script for buttonsNoName, inputsNoLabel, overflow, console errors across main pages. Let me write and run in background maybe. Pages:
+- /
+- /settings
+- /favorites
+- /recent
+- /help
+- /privacy
+- /offline
+- /tools/json-format, /tools/csv-json, /tools/timestamp, /tools/qrcode, /tools/aes, /tools/vue-sfc, /tools/jwt, /tools/base64, /tools/text-encoding, /tools/svg
+
+Also test DkSelect keyboard on /tools/csv-json.
+
+Also verify buttonsNoName == 0 on all pages (this is a required check).
+
+Let me write /tmp/h3-pages.py.
+
+Note: some tool pages may load async libs (jsQR). networkidle may be slow. Use domcontentloaded + wait. I'll use wait_until="networkidle" with timeout maybe. Keep it simple.
+
+Also check horizontal overflow: `document.documentElement.scrollWidth > clientWidth`. But probe uses doc.w/h. Requirement: no horizontal overflow. I'll report both.
+
+Let me write.
+dsh: reasoning:
+Zero buttonsNoName across all pages. Good.
+
+inputsNoLabel: DkSelect instances remain unlabeled (csv-json, timestamp, qrcode x2, vue-sfc x2, jwt). These are in tool files I'm not allowed to modify. Also filedrop__input (decorative) in text-encoding/svg — pre-existing, low severity.
+
+Hmm. The task item 2 wanted DkSelect labels fixed. Since I can't modify those files, the DkSelects remain unlabeled. But wait — could I make the DkSelect component itself supply an accessible name from a visible nearby label automatically? The tool files have visible labels in `<span class="t04__label">分隔符</span>` etc., but they're not programmatically associated. The cleanest general fix without touching tool files is what the task suggests: pass label prop — but that requires touching callers.
+
+Let me re-read the task scope constraint carefully: "只允许修改下面列给你的文件；其它文件一律不要动". So I cannot fix those call sites. This is a genuine conflict: the audit issue 6.3 asks to fix DkSelect labels, but the fix at call sites is out of scope. The best I can do within scope is add the prop and report remaining unlabeled selects as "not reachable within allowed file scope" per the 真实性红线. That's exactly what I'll do.
+
+But could DkSelect do something clever that provides a reasonable accessible name without call-site changes? Consider: the DkSelect could use the label from a wrapping/nearby visible text. There's a well-defined pattern in these tool files: 
+- t04: `<span class="t04__label">分隔符</span>` immediately before DkSelect inside `.t04__sep`.
+- t18: `<span class="t18__opt-label">时区</span>` immediately before DkSelect inside `.t18__opt`.
+- t24: `<span class="t24__opt-label">数组下标键</span>`.
+- t39: `<span class="t39__param-label">尺寸</span>` within `.t39__param`.
+- t28: no visible label (it's a type selector in a row).
+- t33: wrapped in DkField with label "算法（从 Header 带出，请确认）".
+- t40: wrapped in DkField.
+
+A heuristic like "find previous sibling with class containing 'label'" is fragile and could produce wrong names. I'd rather not.
+
+However, there IS a clean, standards-based enhancement possible within DkSelect: support `aria-labelledby` passthrough. But still requires call sites.
+
+I'll be honest in the report: DkSelect gained label/ariaLabel/id props; the 6 remaining unlabeled selects live in out-of-scope tool components and must be fixed by their owners (or by a follow-up that wraps them in DkField/passes label). That is a clear "不可达" report.
+
+Actually, wait. Let me reconsider whether the DkField labels could be associated via DkSelect automatically. The DkField usage is prevalent and the label is a semantic `<label>` element. A minimal, low-risk improvement: in DkSelect, when no `label`/`ariaLabel`/`id` is provided, look for the closest `.dk-field` ancestor and its `.dk-field__label`; if found, set `aria-labelledby` pointing to that label element (assigning an id if needed). This is a real accessibility improvement and doesn't require touching DkField. It would fix t33 and t40 selects. But it's DOM introspection in onMounted, causing SSR/CSR attribute difference. Since Nuxt SSR is on, the server-rendered HTML won't have aria-labelledby; client adds after mount. Vue hydration: attribute added post-mount isn't a hydration mismatch because it happens after hydration completes (onMounted). SSR output lacks it, but screen readers on initial SSR before hydration would too — minor. Actually the app is likely hydrated immediately; fine.
+
+But does it risk breaking? The label text `算法（从 Header 带出，请确认）` would become the name. Good.
+
+Yet the tool files t04/t18/t24/t39/t28 use spans, not DkField — still unlabeled.
+
+Given the instructions emphasize not touching prohibited files and honesty, I think adding DOM sniffing is unnecessary scope creep and could be seen as violating "不要影响任何现有调用方" / introducing fragility. I'll document instead. Actually, hmm, the task explicitly says the DkSelect fix is "新增可选 label 属性 → 渲染为 aria-label（或与可见标签关联），并允许透传 id". The expected work is exactly the prop. Done.
+
+But there's a subtle issue: verification says "python3 audit/tools/probe.py /settings 与几个工具页：无 console/pageerror，无横向溢出。" It doesn't require inputsNoLabel=0. Good.
+
+Now, let me run probe.py for /settings and a few tool pages to get official counts and confirm no console/pageerror/overflow. Note probe only records console error/warning; the DkIconButton dev warning could appear if any icon button lacks name, but all have title. On pages, no warning. Good.
+
+Let me run probe.py on /settings, /tools/csv-json, /tools/aes, /tools/qrcode. The output is huge; I'll extract the relevant a11y/metrics fields with jq or python. probe.py prints JSON. Pipe to python to summarize.
+
+Also test DkSelect real keyboard on /tools/csv-json.
+
+Let me write a small keyboard test for the native select.
+dsh: reasoning:
+No console/pageerror, no overflow (doc.w == viewport 1440). buttonsNoName=0.
+
+Now native select keyboard behavior test. Let me test on /tools/csv-json: focus the select and press ArrowDown, verify value changes and output updates. Let's write a quick Playwright inline.
+dsh: reasoning:
+ArrowDown didn't change the select value. Hmm. In Chromium, when a native `<select>` is focused and closed, ArrowDown may change selection. But headless Chromium may not. Actually for a closed select, Arrow keys change selection on some platforms; on Linux/Chromium it does. But maybe the synthetic key on focus requires the select to be "open"? Let me try pressing "s"? Or use `page.keyboard.press("ArrowDown")` should work. It didn't.
+
+Maybe because the selected option is the first (index 0), ArrowDown moves to index 1 (value ';') only if the select processes it. Let me check if the page listens and reverts? The handler sets sep = $event. Hmm.
+
+Actually, for a focused-and-closed HTML select, keyboard behavior: On Chrome, pressing Arrow Down when closed does change the selected option (increments). Let me test on a plain select? Could be that Playwright's keyboard events go to the focused element but Chromium's headless doesn't implement the native increment for closed select. 
+
+Alternatively, the test may need to dispatch `page.select_option`. But that's not keyboard.
+
+Let me verify no regression differently: check `select.value` reflects v-model and `change` works programmatically via `select_option`, and that keydown isn't preventDefaulted (our component adds no keydown handler). The key point "native select keyboard behavior not broken" — since we added no key handlers, `@change`, `:value`, and no tabindex changes, the DOM is native. That's provable by code. The ArrowDown test failing is a headless limitation, not a regression. Let me confirm by testing the same on a raw HTML select in the same browser to establish baseline.
+
+Let me do a quick page.set_content with a plain select and test ArrowDown.
+dsh: reasoning:
+Confirmed: headless Chromium doesn't change closed select on ArrowDown even for a plain native select. So my DkSelect test result is a browser limitation, not a regression. Good — I'll note that keyboard on the native select is by construction (no handlers added), and baseline confirms the test method can't observe it.
+
+Actually, let me test with a real "open select" using `press("Alt+ArrowDown")` or Space? On Chrome, Alt+ArrowDown opens the dropdown. Then ArrowDown + Enter selects. Let me try on the plain select and the app select to demonstrate keyboard operability.
+
+Let me test: focus select, press "Alt+ArrowDown" to open, then "ArrowDown", then "Enter". In headless, popups may behave. Let me try.
+dsh: reasoning:
+Headless Chromium native select popup isn't controllable this way. Fine. I'll report that native select keyboard behavior cannot be automated in headless Chromium (baseline plain select also doesn't respond to ArrowDown), and that the component adds no keydown/tabindex handlers so native behavior is preserved. That's honest.
+
+Actually, let me at least verify with `select_option` that our `@change` handler works and v-model updates. On /tools/csv-json, select_option to ';' should update sep. Let me check UI: value changes to ';'. And that focus can reach the select via Tab. Let me quickly verify focus via Tab reachability and programmatic change.
+
+Also verify that DkSelect isn't given tabindex (native) — it isn't.
+
+Let me run a small test for select_option + Tab reach.
+dsh: reasoning:
+Good. `select_option` works (change handler fires, v-model updates), select is focusable, no tabindex override, native role.
+
+Now let me also verify mobile touch target on an actual page (tools/aes) at 390 width, for real DkIconButtons, and no horizontal overflow. And check segmented mobile min-height maybe. Let me do a quick mobile probe.
+
+Also need to ensure adding min 40px to icon buttons doesn't cause horizontal overflow on mobile at 390 or 360. Let me probe /settings and /tools/aes at 390 width.
+
+Let me run a mobile audit.
+dsh: reasoning:
+No `.icon-btn` on these pages. DkIconButton appears on t14 aes at lines 356-417, but only in results after running. Let me find a page with visible icon buttons. t36 http-status has one. t28 vue-sfc has delete buttons. t15 sm2. Let me check /tools/vue-sfc or /tools/http-status. Let me query without device emulation weirdness. Actually `/tools/aes` icon buttons appear conditionally after run. `/tools/vue-sfc` prop rows may be empty initially. `/tools/http-status` detail panel maybe hidden. Let me test /tools/text-encoding? It has a DkIconButton "移除文件" only when a file loaded.
+
+Hmm, hard to find always-visible icon buttons. The component-level test already verified 40x40 at 390 width. That's sufficient. But let me find one real page to be thorough: t36 http-status has `<DkIconButton title="收起详情">` when selected. Not default.
+
+Let me check t15-sm2 lines 520,545 context. Might be sample buttons always visible? Let me check quickly. Actually not necessary. Component test is solid; I'll note it.
+
+But wait, maybe I should measure at mobile width on a page where `.icon-btn` exists. Let me search which tool pages render icon buttons unconditionally. `t29-css-units` line 440 copy row (only after results). `t30-color` copy button maybe always visible. Let me check /tools/color. And /tools/qrcode? Let me just query all pages for `.icon-btn` count at desktop and pick one. Quick script across all tools.
+
+Actually the component-level test at 390 viewport already measured 40x40 for the real compiled component. Good enough; I'll cite that.
+
+Now, one more consideration: I added `min-height: 40px` for coarse pointer to `.dk-seg--md .dk-seg__item`. On mobile, radiogroup items 40px tall — no overflow observed on /settings at 390 (settings has segmented). Good, overflowCount 0.
+
+Now, let's run typecheck to ensure no TS errors in my files. `npm run typecheck` runs `nuxt typecheck` and may be slow but let's do it. Actually vue-tsc across whole project might report pre-existing errors. Let me run and grep for my files. It could take a while; run in background? Let's just run with timeout.
+
+Actually, the DkIconButton `import.meta.env.DEV` should be typed via vite/client. Let me run typecheck.
+
+Also potential TS issue: `withDefaults(defineProps<...>(), {})` with optional props — fine.
+`root.value?.querySelectorAll<HTMLButtonElement>('.dk-seg__item')[index]?.focus()` fine.
+In DkSelect, `withDefaults(...)` result unused (was already). Fine.
+
+Let me run typecheck and capture errors.
+dsh: reasoning:
+Typecheck found one error in my file: `DkSegmented.vue(34,29): error TS2532: Object is possibly 'undefined'.` That's `props.options[next].value` (line 34?). Let me look. Actually line 34 might be `const next = ...` then `emit(... props.options[next].value)`. Under noUncheckedIndexedAccess, indexing returns possibly undefined. Fix by capturing the option.
+
+```ts
+const option = props.options[next]
+if (!option) return
+emit('update:modelValue', option.value)
+```
+
+Also `focusAt` query index fine.
+
+Let me fix. Also check whether pre-existing errors number is limited; only my file error. Good.
+
+Let me edit.
+dsh: reasoning:
+No TS errors now. Good.
+
+Now re-run the segmented test to confirm fix didn't break, and maybe re-run component test quickly. The fix is logically equivalent. Let me re-run /tmp/h3-seg.py quickly to confirm no regression.
+
+Also, I should double check the DkSegmented file final content and other files.
+
+Let me read final files and re-run tests.
+dsh: reasoning:
+All good.
+
+Now, one concern: DkSegmented `aria-label` fallback. If neither label nor ariaLabel is passed, `aria-label` is undefined → attribute omitted. Good. But existing callers in tools don't pass label, so they're unnamed radiogroups. That's still a minor a11y gap, but those are out of scope. However, could I at least ensure the `title` on options provides some accessible name? No.
+
+Actually, radiogroups without aria-label are still navigable; the audit only demanded semantics + keyboard. Fine.
+
+Now let me consider whether changing role from tablist to radiogroup could break any existing tests in audit tooling. The r6 report tests? There may be Playwright scripts in audit/tools only (probe/crawl/pen). No role=tab tests. Fine.
+
+Let me also double check that DkSegmented usage in t30 has size="sm" and many options; roving works. Fine.
+
+Now let me review final DkSelect/DkIconButton files and check `settings.vue` diff. Then write the report.
+
+Also, the task says "报告最后一行输出 DONE: <绝对路径>".
+
+Let me view the rest of DkSegmented template/style to ensure quality. Already wrote. Let me read DkSelect and DkIconButton final.
+
+Actually, let me reconsider the DkIconButton `title`/`aria-label` semantics: For icon buttons, `title` provides a tooltip and also an accessible name if no aria-label. We set both title and aria-label to the same value, which is fine (aria-label wins for AT; title tooltip visible). Good. If only ariaLabel provided, title = ariaLabel so tooltip shows too. Good. If neither, fallback name '按钮' and title = undefined (because `title || ariaLabel` → ''||undefined = undefined). Wait: `:title="title || ariaLabel"` → both undefined → undefined, so no title attribute. But aria-label='按钮'. That's fine. Dev warning shown.
+
+Hmm, but requirement: "title 或 aria-label 二选一必填，缺失时在开发期给出可读兜底". We provide '按钮' fallback + warning. Good.
+
+Now, should I make `title` optional in props but callers all pass it. TS: any caller relying on required title? Making optional is backward compatible.
+
+One more: `import.meta.env.DEV` in production is false, so no warning. Good.
+
+Let me verify the dev warning doesn't appear on real pages (it didn't in probes). Because all icon buttons have title.
+
+Now, potential issue: the `size` default 30 and inline style `--icon-size`. If a caller passed `size={40}`, now it would actually take effect (before it was ignored). No caller passes size, so no visual change.
+
+Now, mobile: `@media (max-width: 768px), (pointer: coarse)` sets min 40x40. In the component test with viewport 390, width=40. Good.
+
+Now, does the DkSegmented mobile min-height 40 cause any layout issue? /settings mobile overflow 0. Good. But wait, I only set min-height for `.dk-seg--md`, not `--sm`. t30 uses sm. That's fine; requirement about touch targets was for icon buttons. Actually audit said "移动端触控目标偏小" generally. Segmented sm at 22px is small. Maybe add min-height 40 for `--sm` too? But that would significantly change compact toolbars on mobile and could cause overflow. The必做 only mandates DkIconButton ≥40. I'll leave sm alone to avoid regressions. Actually I already added md min-height 40. Hmm, should I? It might alter settings page appearance on mobile (radiogroups 40px tall). That's acceptable and arguably required for touch. But it's not explicitly required for segmented. Risk: /settings two radiogroups side by side in a row; on mobile row wraps, 40px height fine. Overflow check passed. I'll keep it; it improves touch.
+
+But wait — is it within "视觉与现有 API 保持不变" for DkSegmented? "视觉...保持不变". Adding mobile min-height changes mobile visual. The requirement said visual unchanged. Hmm. That might conflict. The instruction for DkSegmented says "视觉与现有 API（v-model、options、size）保持不变". Changing mobile height from 26→40 violates "视觉保持不变" on mobile. The touch target requirement was specifically for DkIconButton (必做 3). So I should remove the segmented mobile min-height to honor "视觉保持不变".
+
+Let me remove the `@media (pointer: coarse)` block from DkSegmented. Yes, safer and compliant.
+
+Let me edit.
+dsh: reasoning:
+Now verify final files. Let me read DkSelect and DkIconButton.
+dsh: reasoning:
+Looks good.
+
+Now, one thing: `withDefaults(..., {})` for DkSelect is unnecessary but harmless; original had it. Fine.
+
+Now settings.vue diff check. Let me view the three segmented blocks to confirm.
+dsh: reasoning:
+Good.
+
+Now I removed the segmented mobile min-height; re-run a quick page audit? Not necessary, but the earlier mobile /settings overflow was 0 with min-height; without it still 0. Fine.
+
+Now let me consider whether I should address DkSelect's remaining unlabeled instances more. The report will note them. But let me double check if maybe I'm allowed to touch those tool files — no. The task explicitly lists only 4 files. So I'll note as out-of-scope.
+
+Actually, hold on. Let me re-read the "必做" 2: "若 settings.vue 或其它被允许的文件里有裸 select，补上可读的标签。" This implies they know no other allowed file has DkSelect, so it's fine. Good.
+
+Now, I should also verify that I haven't broken other callers of DkSegmented across tools. Let me run a broader page audit on a few pages with segmented controls to check no console errors and radiogroup semantics. Already did json-format? /tools/json-format doesn't have segmented. csv-json has segmented (first DkSegmented) — audited, no console errors. Let me also check t30-color (segmented size sm), t27-json2ts (many segmented), t14-aes (many), t29-css-units. Quick probe to be safe. Also verify those pages still render and no pageerrors.
+
+Let me run a quick batch: /tools/color, /tools/json2ts, /tools/css-units, /tools/aes, /tools/sm2 (t15), /tools/vue-sfc. Check console errors and radiogroup count > 0. Actually probe.py captures console. Let me write a quick script to check radiogroup counts and errors on segmented-heavy pages.
+
+Also need to ensure that the `@keydown` on container doesn't interfere with typing/other keys. Only arrows/home/end handled with preventDefault; other keys pass through. Good.
+
+One potential issue: In tools where DkSegmented sits inside a larger container with its own arrow-key handling, our preventDefault could conflict. Unlikely.
+
+Let me run the batch check.
+dsh: reasoning:
+Excellent. All segmented-heavy pages: radiogroups with exactly one tabbable each, no overflow, no console errors, buttonsNoName 0.
+
+Now let me do a final review of the changed files and produce the report. Also should I check the audit prompt file audit/prompts/h3.md to make sure I'm matching expected report format? Let me read it.
+dsh: reasoning:
+Now let me verify no other files changed. Since no git, I can't diff easily. But I only wrote to the 4 allowed files + /tmp. Good.
+
+Let me double check settings.vue didn't get unintended changes (the edits were targeted). And DkSegmented full file. Read final DkSegmented lines 70-136.
+dsh: reasoning:
+Good.
+
+Now, one more consideration on the DkSegmented `type="button"`: was there any caller relying on it being a submit button? Unlikely; adding type=button is safe and prevents accidental form submission. Good.
+
+Now let me also verify that the `settings.vue` theme test persisted something to localStorage that could affect subsequent page audits (dark mode). The full page audit ran after the segmented test possibly set theme to dark? In h3-seg.py the final wrapLeft selected "跟随系统" (system), which with light color scheme → light. Fine. Also localStorage is per browser context; page audits use fresh contexts. Good.
+
+Now write the report. It should be comprehensive: files changed, implementation details, verification commands + key outputs, remaining/unreachable items.
+
+Let me capture the exact command outputs I'll cite:
+1. `npx nuxt typecheck` → 0 errors in my files (note pre-existing vue-router warning).
+2. `python3 /tmp/h3-seg.py` output (key parts).
+3. `python3 /tmp/h3-components.py` output.
+4. `python3 /tmp/h3-pages.py` summary: buttonsNoName 0 on all 17 pages; inputsNoLabel remaining selects.
+5. probe.py on /settings, /tools/csv-json, /tools/aes, /tools/qrcode → no console/pageerror, doc 1440.
+6. Mobile check: icon target 40x40 (component-level), page overflow 0.
+
+Let me write the report in Chinese.
+
+I should mention the unreachable part honestly:
+- DkSelect's remaining unlabeled instances in tool components (t04/t18/t24/t39/t28/t33/t40) are in files outside the allowed set; the new `label` prop must be passed by those call sites, which I'm not permitted to edit. Reported as 不可达 within scope.
+- DkIconButton: all current call sites already pass title; dev fallback + warning added.
+- Probe `inputsNoLabel=1` on csv-json etc. — expected, out of scope.
+- The only console warning my code can emit is the DkIconButton missing-name warning; zero pages triggered it.
+
+Also note: `/tools/text-encoding` and `/tools/svg` have `filedrop__input` unlabeled (FileDrop, out of scope, decorative).
+
+Report last line: `DONE: /Users/hao/WebstormProjects/web_tools/audit/reports/h3-a11y.md`.
+
+Let me create the report.
+
+Also, I should double check the exact DkSegmented behavior for "只有当前项可 Tab 到" — verified tabbablePerGroup all 1.
+
+Let me note the arrow test results precisely:
+- Tab from 浅色 → 代码字号/13 px (roving); Shift+Tab → 浅色.
+- ArrowRight: checked 浅色→深色, html.dark false→true; ArrowLeft reverses.
+- ArrowLeft from 浅色 wraps to 跟随系统.
+
+Now, one nuance: `wrapLeft` from 浅色 (index 0) ArrowLeft → 跟随系统 (index 2). Good wrap.
+
+Write report.
+dsh: reasoning:
+Now let me do a final sanity: ensure only my files changed and no syntax issue. Also confirm report last line is DONE. Let me verify the report tail and re-run a quick probe to ensure HMR still compiles after my last edit (removed media query). Also verify DkSegmented component test still passes after removing media query (it doesn't affect logic).
+
+Let me run a final quick verification: fetch /settings 200, run h3-components quickly? Already ran after fix. The last edit was removing CSS media block only. Let me just fetch settings to ensure no compile error and check report tail.
+
+Also, I should double check that I didn't accidentally create /tmp files inside workspace — no.
+
+Let me also verify the report file exists and last line.
+dsh: reasoning:
+The mtime list includes many tool files but those are likely from other agents working concurrently (HMR touched them? No, find shows mtime newer than 30 min, meaning other agents are editing). I only modified my 4 files. Let me explicitly check mtimes of my 4 files and confirm I didn't touch others. The find output is noisy because other agents are actively working. That's expected in a multi-agent environment.
+
+Let me confirm the exact 4 files I changed plus the report exist and their mtimes. Also verify no changes to forbidden files by me — I only used write/edit on the 4 allowed. Good.
+
+Now, the task is essentially complete. Let me do one final full re-verification of the segmented test after the CSS removal (already fine) and the component test. Actually component test already validated 40x40; removing segmented media doesn't affect. Let me not rerun everything.
+
+But wait — the report says "在 390px 视口实测 40×40" from the component test. True.
+
+One more: I want to double-check that the `aria-label` on DkSegmented doesn't get overwritten by Vue fallthrough when a caller passes `aria-label` directly (e.g., none do). Fine.
+
+Let me verify the 4 file mtimes and finalize. Also update todos.
+dsh: reasoning:
+macOS ls doesn't support --time-style. Not important. Let me just do a plain ls -l.
+Done. Summary of H3 work:
+
+## 改动（仅限授权的 4 个文件）
+- **`DkSegmented.vue`**：`tablist/tab` → `radiogroup/radio`；`label`/`ariaLabel` 透传；←/→/↑/↓（含 Home/End）移动并选中且首尾环绕；roving tabindex（每组仅当前项 `tabindex=0`）。`v-model`/`options`/`size` 与视觉不变。
+- **`DkSelect.vue`**：新增可选 `label`/`ariaLabel`/`id`，渲染为原生 `select` 的 `aria-label` 与 `id`；不传时不编造名称；未加任何键鼠覆盖，原生键盘行为保留。
+- **`DkIconButton.vue`**：可访问名 `ariaLabel || title || '按钮'` + 开发期告警；移动端 `min 40×40`；显式 `focus-visible` 焦点环；`size` 通过 CSS 变量真正生效（默认仍 30）。
+- **`settings.vue`**：仅给 3 个 DkSegmented 补 `label`（主题/代码字号/默认缩进）。
+
+## 验证结果
+- `npx nuxt typecheck`：本次文件 0 错误。
+- Playwright 设置页：Tab 进 radiogroup、每组 1 个可 Tab、←/→ 切换且 `aria-checked`/主题同步、环绕、无 console 错误。
+- 组件级挂载真实 SFC：`label→aria-label`、`id` 透传、DkIconButton 在 390px 下 40×40、兜底名与告警均生效。
+- 17 个主要页面 `buttonsNoName=0`、无横向溢出、无 console 错误；9 个 segmented 密集工具页 roving tabindex 全部正确。
+- `probe.py /settings` 及 csv-json/aes/qrcode：无 console/pageerror、无横向溢出。
+
+## 据实上报的不可达项
+工具页 `DkSelect`（csv-json/timestamp/qrcode/vue-sfc/jwt）仍无程序化名称——这些调用点在本次**不允许修改**的文件中，已提供 `label` prop 但需由对应文件作者补传；settings.vue 及授权文件内无裸 `<select>`。headless Chromium 对关闭态原生 select 方向键不可脚本化验证（基线原生 select 同样不响应），已在报告说明。
+
+报告：`/Users/hao/WebstormProjects/web_tools/audit/reports/h3-a11y.md`（末行 DONE 已输出）。

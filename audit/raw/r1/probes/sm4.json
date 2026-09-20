@@ -1,0 +1,864 @@
+{
+ "url": "http://localhost:3000/tools/sm4",
+ "console": [],
+ "pageerrors": [],
+ "failed_requests": [],
+ "status": 200,
+ "title": "SM4 加解密 · DevKit",
+ "metrics": {
+  "body": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "bg": "rgb(244, 245, 247)",
+   "color": "rgb(18, 22, 31)",
+   "font": "\"Noto Sans SC\", -apple-system, \"system-ui\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+   "size": "14px",
+   "border": "rgb(18, 22, 31)"
+  },
+  "header": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 60,
+   "bg": "rgb(255, 255, 255)",
+   "color": "rgb(18, 22, 31)",
+   "font": "\"Noto Sans SC\", -apple-system, \"system-ui\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+   "size": "14px",
+   "border": "rgb(18, 22, 31) rgb(18, 22, 31) rgb(228, 231, 236)"
+  },
+  "nav": {
+   "x": 0,
+   "y": 60,
+   "w": 236,
+   "h": 840,
+   "bg": "rgb(255, 255, 255)",
+   "color": "rgb(18, 22, 31)",
+   "font": "\"Noto Sans SC\", -apple-system, \"system-ui\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+   "size": "14px",
+   "border": "rgb(18, 22, 31) rgb(228, 231, 236) rgb(18, 22, 31) rgb(18, 22, 31)"
+  },
+  "sidebar": {
+   "x": 0,
+   "y": 60,
+   "w": 236,
+   "h": 840,
+   "bg": "rgba(0, 0, 0, 0)",
+   "color": "rgb(18, 22, 31)",
+   "font": "\"Noto Sans SC\", -apple-system, \"system-ui\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+   "size": "14px",
+   "border": "rgb(18, 22, 31)"
+  },
+  "main": {
+   "x": 236,
+   "y": 60,
+   "w": 1204,
+   "h": 840,
+   "bg": "rgba(0, 0, 0, 0)",
+   "color": "rgb(18, 22, 31)",
+   "font": "\"Noto Sans SC\", -apple-system, \"system-ui\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+   "size": "14px",
+   "border": "rgb(18, 22, 31)"
+  },
+  "h1": {
+   "x": 316,
+   "y": 90,
+   "w": 315,
+   "h": 26,
+   "bg": "rgba(0, 0, 0, 0)",
+   "color": "rgb(18, 22, 31)",
+   "font": "\"Noto Sans SC\", -apple-system, \"system-ui\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+   "size": "20px",
+   "border": "rgb(18, 22, 31)"
+  },
+  "h2": null,
+  "htmlBg": "rgba(0, 0, 0, 0)",
+  "cssVars": {
+   "--bg": "#f4f5f7",
+   "--surface": "#ffffff",
+   "--surface-subtle": "#f4f6f9",
+   "--border": "#e4e7ec",
+   "--text-primary": "#12161f",
+   "--text-secondary": "#5a6472",
+   "--text-tertiary": "#8b94a3",
+   "--accent": "#2563eb",
+   "--accent-soft": "#eff4ff"
+  },
+  "textSample": [
+   {
+    "t": "DevKit",
+    "tag": "SPAN",
+    "size": "16px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "搜索工具，例如 JSON、国密、时间戳",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "⌘",
+    "tag": "KBD",
+    "size": "11px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "K",
+    "tag": "KBD",
+    "size": "11px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "源码",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "全部工具",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "41",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "我的收藏",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "0",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "最近使用",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "1",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "工具分类",
+    "tag": "P",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "数据格式",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "4",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "JSON 格式化",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "JSON 差异比较",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "JSON / YAML 转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "CSV / JSON 转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "编码与文本",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "7",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "Base64 编解码",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "URL 编解码",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "Unicode / 字节编码转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "文本去重与整理",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "命名风格转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "文本差异比较",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "正则表达式测试",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "摘要与加密",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(37, 99, 235)"
+   },
+   {
+    "t": "6",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "MD5 / SHA 摘要",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "HMAC 计算与校验",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "AES 加解密",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "SM2 加解密与签名",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "SM3 摘要",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "SM4 加解密",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(37, 99, 235)"
+   },
+   {
+    "t": "时间与标识",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "4",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "时间戳转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "UUID 生成与解析",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "Cron 解析与执行预览",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "日期时间差计算",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "Java 开发",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "5",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "JSON 转 Java 类",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "Java 字符串转义",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "Properties / YAML 转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "Java 异常堆栈整理",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "Maven / Gradle 依赖转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "Web / Vue",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "6",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "JSON 转 TypeScript 类型",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "Vue 单文件组件模板",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "CSS 单位换算",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "颜色转换与对比度",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "SVG 预览与优化",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "HTML / CSS / JS 格式化",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "接口辅助",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "4",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "JWT 解析与验签",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "URL 参数编辑",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "curl / fetch / Axios 转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "HTTP 状态码速查",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "文件与图片",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "5",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "文件摘要与批量校验",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "图片压缩与格式转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "二维码生成与识别",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "文本文件编码转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "文件 / Base64 转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "所有计算在浏览器内完成，输入内容不会上传到服务器。",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "SM4 加解密",
+    "tag": "H1",
+    "size": "20px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "国密 SM4 CBC/ECB 加解密，PKCS#7 与 NoPadding 可选。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "加密",
+    "tag": "BUTTON",
+    "size": "12px",
+    "color": "rgb(37, 99, 235)"
+   },
+   {
+    "t": "解密",
+    "tag": "BUTTON",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "模式",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "CBC",
+    "tag": "BUTTON",
+    "size": "11px",
+    "color": "rgb(37, 99, 235)"
+   },
+   {
+    "t": "ECB",
+    "tag": "BUTTON",
+    "size": "11px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "填充",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "PKCS#7",
+    "tag": "BUTTON",
+    "size": "11px",
+    "color": "rgb(37, 99, 235)"
+   },
+   {
+    "t": "NoPadding",
+    "tag": "BUTTON",
+    "size": "11px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "密钥编码",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "UTF-8",
+    "tag": "BUTTON",
+    "size": "11px",
+    "color": "rgb(37, 99, 235)"
+   },
+   {
+    "t": "Hex",
+    "tag": "BUTTON",
+    "size": "11px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "明文编码",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "UTF-8",
+    "tag": "BUTTON",
+    "size": "11px",
+    "color": "rgb(37, 99, 235)"
+   },
+   {
+    "t": "Hex",
+    "tag": "BUTTON",
+    "size": "11px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "Base64",
+    "tag": "BUTTON",
+    "size": "11px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "输出编码",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "Hex",
+    "tag": "BUTTON",
+    "size": "11px",
+    "color": "rgb(37, 99, 235)"
+   },
+   {
+    "t": "Base64",
+    "tag": "BUTTON",
+    "size": "11px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "随机密钥",
+    "tag": "BUTTON",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "随机 IV",
+    "tag": "BUTTON",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "加密示例",
+    "tag": "BUTTON",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "解密示例",
+    "tag": "BUTTON",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "未执行",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "CBC",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "PKCS#7",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "IV 0 字节",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "密钥（16 字节 / 128 位）",
+    "tag": "LABEL",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "SM4 密钥固定 16 字节（128 位）：Hex 32 字符，或恰好 16 个 ASCII 字符",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "IV（Hex，16 字节）",
+    "tag": "LABEL",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "IV 为空：CBC 模式需要 16 字节 IV（32 个 Hex 字符），可点击「随机 IV」生成",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(220, 38, 38)"
+   },
+   {
+    "t": "明文（UTF-8 文本）",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "1",
+    "tag": "DIV",
+    "size": "13px",
+    "color": "rgb(168, 176, 189)"
+   },
+   {
+    "t": "字符 0",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "字节 0",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "行 0",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "SM4-CBC 密文",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "填写密钥与 IV 后点击「加密」。PKCS#7 会把明文填充到 16 字节整数倍；NoPadding 要求输入字节数本身就是 16 的整数倍。",
+    "tag": "P",
+    "size": "13px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "示例向量与说明（node + sm-crypto 真实计算，往返已验证）",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "CBC / PKCS#7 示例",
+    "tag": "H4",
+    "size": "13px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "DevKit-SM4-Key12",
+    "tag": "CODE",
+    "size": "12px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "4465764b69742d534d342d4b65793132",
+    "tag": "CODE",
+    "size": "12px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "0123456789abcdeffedcba9876543210",
+    "tag": "CODE",
+    "size": "12px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "国密 SM4 分组加密示例",
+    "tag": "CODE",
+    "size": "12px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "38aca3c7539d7e6fff13841268b72c1eb3337a7658b22591e65d1e6cc6ca8ef8",
+    "tag": "CODE",
+    "size": "12px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "点击「加密示例」现场计算，结果应与上值一致；点击「解密示例」载入该密文现场解密，应还原出中文明文（node 已验证往返一致）。",
+    "tag": "P",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "参数约束",
+    "tag": "H4",
+    "size": "13px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "密钥固定 16 字节：Hex 输入须 32 个字符；UTF-8 输入须恰好编码为 16 字节（16 个 ASCII 字符，中文等多字节字符会超长）。",
+    "tag": "LI",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "CBC 需要 16 字节 IV（Hex 32 字符）；ECB 无 IV（安全性弱，仅作兼容用途）。",
+    "tag": "LI",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "PKCS#7 自动填充/去填充（去填充失败说明密钥错误或密文被修改）；NoPadding 要求输入字节数为 16 的整数倍，解密输出不剔除任何字节。",
+    "tag": "LI",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "密文必为 16 字节的整数倍：解密输入长度不满足会直接报错。",
+    "tag": "LI",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "[[]]",
+    "tag": "SCRIPT",
+    "size": "14px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "window.__NUXT__={};window.__NUXT__.config={public:{},app:{baseURL:\"/\",buildId:\"dev\",buildAssetsDir:\"/_nuxt/\",cdnURL:\"\"}}",
+    "tag": "SCRIPT",
+    "size": "14px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "[[\"ShallowReactive\",1],{\"data\":2,\"state\":4,\"once\":15,\"_errors\":16,\"serverRendered\":10,\"path\":18},[\"ShallowReactive\",3],{",
+    "tag": "SCRIPT",
+    "size": "14px",
+    "color": "rgb(18, 22, 31)"
+   }
+  ],
+  "counts": {
+   "a": 48,
+   "button": 37,
+   "input": 3,
+   "imgs": 0,
+   "svg": 29
+  },
+  "doc": {
+   "w": 1440,
+   "h": 900
+  },
+  "a11y": {
+   "buttonsNoName": 0,
+   "imgNoAlt": 0,
+   "inputsNoLabel": 0,
+   "landmarks": {
+    "header": true,
+    "nav": true,
+    "main": true,
+    "footer": false
+   }
+  }
+ },
+ "shot": "audit/raw/r1/probes/sm4.png"
+}

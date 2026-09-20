@@ -1,0 +1,888 @@
+dsh: reasoning:
+Let me start by reading the brief.
+dsh: reasoning:
+Let me look at the tools and get started. Let me run pen.py find for S0 and R0, and check the site is up.
+dsh: reasoning:
+There is no S10 in the design list! The user mentioned S10 (已缓存可处理 / 首次未缓存) but the frames list only shows S01-S09. Let me check more carefully. The find "^S0" matched S01-S09. There's no S10. Wait, maybe S10 uses a different naming. Let me search "S10" and also "离线".
+
+Let me set up a plan. First, gather design data for each frame via pen.py dump/text. Let me be efficient and run several commands at once.
+
+Let me look at the pen.py tool.
+dsh: reasoning:
+There are 43 "slug:" matches? Actually grep -c "slug:" gives 43. But there should be 41 tools. Maybe some slug references in categories have slug. categories have id/slug/name/icon. Let's check. Actually the grep counts lines containing "slug:" — 41 tools + 2 category? No, categories also have slug (like 'format'). Let me count tools specifically.
+
+Let me now plan and be efficient. I'll write a helper script to extract design frame data (text + key metrics), and run probe on all pages. Let me start with design text dumps.
+
+Let me get the text of each frame in batches. I'll write a python script that dumps text of given frames to files for reading. Actually I can just use pen.py text.
+
+Let me first count tools and categories in tools.ts.
+dsh: reasoning:
+The text extraction returned nothing? Maybe frames use "text" property but on type "text" nodes. Let me check the dump of LiwdR.
+dsh: reasoning:
+The pen.py `texts` function looks for `x.get("text")` but nodes use `content`. So pen.py's `text` command is broken relative to the actual schema. Also `dump` looks for "text" key. Let me write my own extractor based on `content`. Let me create a helper script in audit/raw/r1 (writable — audit dir is in workspace, fine; BRIEF says don't modify devkit/design.pen/docs, audit is OK).
+
+Let me write a python helper for design extraction with content, and also handle refs (resolve ref nodes). Refs reference component definitions elsewhere. For full understanding, I need to resolve refs to get text. Let me build a script that resolves refs by id.
+
+Let me write /Users/hao/WebstormProjects/web_tools/audit/raw/r1/extract.py.
+dsh: reasoning:
+Now let me extract design data. Let me start with S01 (both frames), S02, S03. I'll run several extractions in parallel and save to files, then read.
+
+Given the depth of the task, let me be systematic. Let me extract the full text for each frame into files.
+dsh: reasoning:
+Good. Design S01 specifies:
+- Top nav h=60, pad [0,24], gap 28
+- Sidebar w=236, layout vertical gap=3 pad [14,12]
+- Main content gap=20 pad [26,32]
+- Page header h=56
+- Search card h=60
+- Categories: 数据格式 4, 编码与文本 7, 摘要与加密 6, 时间与标识 4, Java 开发 5, Web / Vue 6, 接口辅助 4, 文件与图片 5 = 41. Order matches tools.ts.
+- First-visit variant: 收藏快捷 0/41, empty state text; 推荐工具 (not 最近使用).
+
+Now let me read the other design files. Let me read S02, S03, S04, S05, S06 in sequence. To be efficient, let me read them in batches.
+dsh: reasoning:
+Key S02 insights:
+- Page header: title (22), badge "7 个工具" (10.5), description (13), "本地处理 · 输入不上传" (12), "全部工具" breadcrumb? Actually mDKh3 [文案] fs=12 text-secondary '全部工具' — likely a back link/breadcrumb.
+- Category search box h=44.
+- Tool grouping: 3 groups with names/desc/count and each card has 名称/用途/tags.
+- 摘要与加密: groups 摘要(2), 对称加密(3), 非对称加密(1) = 6. Note sidebar says 6, but header badge says '7 个工具'! Interesting inconsistency in design itself. Wait h1lFMx: yF6ji '7 个工具' but category count in sidebar i15z5='6', and groups total 2+3+1=6. So design frame has an inconsistency (7 vs 6). Java: badge '5 个工具', groups 2+2+1=5. OK.
+
+Let me note that S02 摘要与加密 header badge says 7 while actual is 6 — a design bug. But the audit compares implementation; maybe impl doesn't show badge at all. Need to check.
+
+Now read S03, S04, S05, S06.
+dsh: reasoning:
+S03 is the CommandPalette. Key: search '国密' → 3 results in 摘要与加密 (SM2, SM3, SM4) - actually the frame says '匹配到 3 个工具'. Wait but group count says '3 个结果'. Empty state: '没有找到与「smtool」匹配的工具', hint text, buttons '回到全部工具' (white text on accent presumably) and '修改关键词'.
+
+Now read S04-S06.
+dsh: reasoning:
+S04 is very rich: 收藏页 with sorting, filter, table (工具/分类/收藏时间/操作), 打开 buttons, 全部取消收藏, 说明区 (使用说明 + 常见问题). Empty state.
+
+Now let me read S05, S06. Let me do that, then S07-S10, R. To save time, I should also start probing the site in parallel (background). Let me start probes now.
+
+Let me kick off probe runs for the pages in the background, writing JSON to files. That takes time (playwright). I'll create a loop script.
+dsh: reasoning:
+While that's running, let me read S05, S06, S07-S10 design. And also read the implementation files.
+
+Let me read S05 and S06.
+dsh: reasoning:
+Now S06, S07-S10, R. Let me read the main content sections only (skip nav boilerplate) by grepping. Let me extract just the main content by searching for '主内容区'.
+dsh: reasoning:
+Good. Now S08 was omitted (main content wasn't printed? Actually S08 appeared empty because grep matched? The output shows S07, S09, S10 but not S08. Odd. Let me check S08 separately. And S10 has two frames: S0Kfwk (cached) and rRK06 (first uncached). Note the design says for cached page title '离线模式 · 已缓存', and for uncached '无法加载该工具'.
+
+Wait, the prompt says the S10 design is "已缓存可处理 / 首次未缓存". The implementation page `/offline` — need to see what it looks like.
+
+Let me check S08 quickly and also check probe progress.
+dsh: reasoning:
+I have the design variables. Now let me look at the implementation's CSS tokens. The probe is still progressing. Let me read main.css and key components while waiting. Let me read main.css.
+dsh: reasoning:
+CSS tokens match the design variables well. Note: dark `--accent-soft: #1a2740` matches; `--ok` dark #45d69b; design says ok dark #45D69B; good. `--warn` design dark #F0A94A yes. `--code-key` #7faeff matches. Good match. But `--cat-format-soft` design uses `#2563EB1A` (10% alpha = 0.102) while implementation uses rgba(...,0.1) — close. Dark design `#4D8DFF26` = 0.149 alpha, impl 0.15. Fine.
+
+Now let me check the rest of main.css and the layout. Let me read the remaining part.
+dsh: reasoning:
+Now let me read the layout and shell components. Let me read default.vue, TopNav.vue, SideNav.vue, ToolCard.vue in parallel.
+dsh: reasoning:
+Observations:
+1. TopNav: design has top nav gap=28, padding [0,24]. Impl gap=16, padding 0 20px. Minor deviation. Also design brand logo is 28x28 radius 8, impl radius 7. Minor.
+2. Design "源码" is a button in surface fill (no border) h=32, padding [0,11]. Impl has border and links to https://github.com — design says "源码入口". The help page S08 says 反馈按钮位于顶部导航右侧 — but impl top nav has no feedback button. Actually S08 says feedback button is in top nav right side + tool page help section end. Impl TopNav has no feedback button at all. That could be a gap. Let me check if there's a feedback in ToolPageLayout. Need to verify.
+
+3. TopNav theme switch: design has sun/moon toggle. Impl has two buttons. Design vIaU2 group pad=3 fill surface-subtle radius 9. Impl has border. Minor.
+
+4. `topnav__src` href="https://github.com" — a placeholder/dead link; design says 源码入口 but no repo. Possibly a "建议" issue.
+
+Now let me read SideNav, ToolCard, index.vue.
+dsh: reasoning:
+Important observations:
+1. SideNav category items: design shows category rows with a count and a collapsible sublist expanded by default (design shows sublists with heights 0 because they're collapsed in the design? Actually eHtTt '子列表' h=0 — hmm, height 0 means hidden/collapsed in that variant. In S01, sidebar shows sub-lists with h=0, i.e. collapsed. But wait, the design nodes list child text nodes under them, but the frame height=0 means collapsed. Hmm. In the S01 frame, the sidebar has category items with h=32 and sub-lists h=0. Let me check if there's a cheat: perhaps sublists are `clip: true` with height 0 meaning collapsed. The design doesn't show a chevron though. Implementation shows a chevron and expands by default. That's a difference but maybe acceptable. Actually the design component vxMha is a shared component; the descendants may toggle. Let me check the vxMha component defaults. Actually, S10's cached design likely shows expanded? Let me not over-index.
+
+Wait, actually the design has category rows but no chevron icon and no dot; implementation adds a color dot and chevron. This is a design deviation. Also the impl count font 11 vs design 12, sub item font 12 vs 12.5. Minor.
+
+2. Design 左侧导航 item '全部工具' has active fill `$surface`? In FdLxl, i6Tjy1 fill=$surface (default). In LiwdR descendants i6Tjy1 fill=$accent-soft, oaCsd fill accent, WjSu0 accent weight 600. So active state uses accent-soft background and accent text. Impl uses accent-soft + accent, weight 500. Close.
+
+3. Design sidebar privacy block fill `$surface-subtle` radius 10, with padding [11,12] and has an icon? Design c29ML contains l6g1YP '纯本地运行' and kzRQZ. Impl privacy block is a NuxtLink with border-top, no card background. Deviation (medium/low).
+
+Now, importantly: the design says the sidebar "我的收藏" count "6" and "最近使用" "8" (static sample). Implementation is dynamic; fine.
+
+Now let me check the probes. Let me look at home.json metrics.
+dsh: reasoning:
+Home: header h=60 matches design. Sidebar w=236 matches. Main content x=236, y=60, width 1204. Design main content pad [26,32]; impl shell content padding 24px 32px 48px. So top padding 24 vs design 26. Also the design sidebar h=900 (page height 900); impl fills viewport 840 (900-60). Fine.
+
+Home page height 3131 vs design 1583. That's because implementation renders all 41 tool cards with icons? Design S01 lists categories with 4 cards each? Design has each category section showing all its tools (e.g., 编码与文本 7 tools), and total page ~1583. Impl is 3131 — nearly double. Why? Possibly impl shows all 8 categories expanded, each with all tools → same content but larger cards. Design's category card grid probably more compact: tool cards with name + 用途 in a card. Impl uses ToolCard with desc (2 lines) + tags, larger. Let me check index.vue to see. The design "分类目录" shows each tool as 工具名称 + 一句用途 (13/11px) small rows, not full cards with icon. Impl uses ToolCard for all 41 → much taller. That's a notable design fidelity issue and also affects the S01 first-visit "推荐工具" section which impl may not have.
+
+Let me read index.vue.
+dsh: reasoning:
+Big deviations on S01 homepage:
+- Design S01 页头: 图标底 32x32 accent-soft + 标题 '全部工具' 22/700 + 说明 '41 个开发工具 · 8 个分类 · 解析、转换与加解密都在你的浏览器里完成'; right side: '本地处理 · 输入不上传' chip + '偏好设置' button.
+- Impl: h1 '开发者本地工具箱', sub text different, no local-processing chip, no settings entry, no page-header icon. Title text differs from design ("全部工具" vs "开发者本地工具箱").
+- Design search card: h=60, placeholder '搜索工具名称、缩写或别名，例如 国密 / sm4 / base64', plus '⌘K / Ctrl K' and scope note '只检索工具目录，不检索已处理的输入内容'. Impl search height 52, text '搜索工具：JSON、国密、时间戳、Cron…', no scope note.
+- Design has "快捷与最近" section (收藏快捷 + 最近使用) and first-visit variant. Impl has 推荐工具 / 我的收藏 + 最近使用. Reasonably close but text differs; design first-visit shows '推荐工具' with 提示 '首次访问暂无使用记录'. Impl shows '第一次访问？从这些高频工具开始。'. And the recommended list differs: design recommends JSON 格式化, JSON 转 Java 类, Base64 编解码, 时间戳转换 (4). Impl recommends 6 tools including t17 SM4, t33 JWT, t39 qrcode. Deviation.
+- Design categories: section header 分类名 14, 分类说明 12, '查看全部 →'. Impl: 分类名 16/600, count '4 个工具', '分类详情 →', desc separate. Text differs ('查看全部 →' vs '分类详情 →'). Design's tool items are compact name+用途 rows; impl uses full ToolCard with icon, desc, tags → page much taller (3131 vs 1583).
+- Design S01 has no icons per tool in category catalog; impl adds icons. That's an addition.
+
+Also design's sidebar sub-items are collapsed (h=0) but impl expands by default, making sidebar scrollable. Not necessarily wrong.
+
+Now, critical: design S01 says 41 tools / 8 categories. Impl tools.ts = 41 tools, 8 categories. Good. The prompt asks to check R01/R03 adaptation frames still use old 24-tool version. Let me check the R frames for tool counts. Let me extract R.txt main content and look at counts. Let me search for '24' and '41' in R frames.
+
+Let me now read the probe results for category pages, and other pages. Let me check job status.
+dsh: reasoning:
+Confirmed: R01/R03 adaptation frames use the OLD 24-tool version. Sidebar count '24', each category shows '4 个工具' and only 6 categories likely. Let me confirm the category names in R frames. Let me read R.txt.
+dsh: reasoning:
+Confirmed: R01 (1366) and R03 (dark) are based on an old 24-tool design: 6 categories (数据格式, 编码与文本, 摘要与加密, 时间与标识, Java 开发, Web 开发), 4 tools each, sidebar count 24. These are stale/inconsistent with S01's 41-tool/8-category model and with the implementation. This is a design-document consistency issue, not an implementation bug. Historical docs noted it per the prompt.
+
+Also note: R01/R03 sidebar active '全部工具' is accent text; layout pad [16,12] vs S01 [14,12]. R01 main gap=24 vs S01 gap=20. R01 header doesn't show 本地处理 chip / settings. Also R02 mobile design: top bar h=56, drawer button 40x40, etc.
+
+Now let me look at the rest of the probes. Let me check the job.
+dsh: reasoning:
+Still running. Meanwhile read S07-S10 implementation pages and settings/favorites/recent/privacy/help/offline/error. Let me read them. Start with favorites, recent, settings.
+dsh: reasoning:
+favorites.vue is quite different from design S04:
+- Design: title '我的收藏' 21, description, badge '本地处理', '已收藏'/'收藏' tab; workspace card with sort (最近收藏/工具名称/分类), '仅显示当前可用工具' checkbox, stats '共 6 个收藏', '全部取消收藏' button; table with columns 工具/分类/收藏时间/操作; each row has 名称/用途/category tag/time/'打开' button; footer '收藏记录 · 本地存储' + '共 6 个收藏 · 排序：最近收藏'; plus 说明区 with 使用说明 + 常见问题.
+- Impl: title 22, count '0 个工具', sort DkSelect (按收藏时间/按名称/按分类), hint, grid of ToolCards, empty state.
+Missing: table layout, category tag column, 收藏时间 column, 打开 button, 全部取消收藏, '仅显示当前可用工具', footer, 使用说明/常见问题 说明区, description text.
+
+That's a substantial design-fidelity gap for S04. Also design has page description "收藏的工具入口与快捷打开方式；..." and badges. Impl lacks.
+
+Similarly recent.vue vs S05:
+- Design: title '最近使用' 21, description, badges 本地处理/收藏; workspace card with '只记录工具名与访问时间' accent note, 分组 (按时间/按分类) segmented, 共 8 条记录, '清空全部记录'; table columns 工具/分类/访问时间/操作; grouped by 今天 (count 3) etc.; 说明区.
+- Impl: header with title/count/清空全部; hint; groups 今天/更早; list items with icon/name/time/remove. Missing: categories column, 分组 segmented control (按时间/按分类), workspace card container, description, badges, 说明区, footer status.
+
+Also impl clear button text '清空全部' vs design '清空全部记录'.
+
+Now, settings.vue. Let me read it plus privacy/help/offline/error.
+dsh: reasoning:
+settings.vue differs a lot from S06:
+- Design groups: 外观 (主题), 编辑器 (代码字号 [12/13/14 px segmented], 默认缩进 [2/4/Tab], 编辑器自动换行), 动效与记录 (减少动画, 记录最近使用), 本地数据 (重置偏好 button, 清除本地数据 button '选择清除范围…'). Workspace card with 面板标题 '偏好设置' and hint '偏好保存在此浏览器 · 上次修改 09:41'; footer '偏好 · 本地存储' / '未登录 · 不需要账号'; 说明区.
+- Impl: cards 外观 (主题, 减少动画), 编辑器 (代码字号 range 12-18, 自动换行, 默认缩进), 隐私与记录 (记录最近使用), 清除本地数据 (3 buttons). Missing 说明区 (使用说明/常见问题), footer, panel header, "重置偏好" separate, and the design's 清除本地数据 is a single '选择清除范围…' control vs impl three buttons (arguably better). Code size design is segmented 12/13/14; impl range 12–18. Deviation.
+
+- Offline S10: Design has two variants with a full workspace: 已缓存 tool grid + 未缓存 list with 重试 actions + header (title '离线模式 · 已缓存'), actions 重新检测, 说明区 '缓存状态如何决定？', footer links. Implementation `/offline` is a much simpler page: title based on navigator.onLine, '已缓存工具（N）' list, no 未缓存 list, no two-column cache state, no 6-item sample, no 说明区. Also the design's "已缓存" list is illustrative static content; impl uses localStorage `devkit.visited.v1` heuristic. The title 'S10 离线模式 · 已缓存' vs impl '资源未就绪'/'当前处于离线状态'. Significant fidelity gap.
+
+- Critical question: is /offline actually reachable? Design S10 is a state page for offline. Let me check whether there is any service worker / link to /offline. The prompt asks: S10 离线 (/offline) 真实性: reachable? Let me grep for 'offline' links in the app and check for service worker.
+
+Let me now check the remaining pages: privacy, help, error, category, CommandPalette. And check for /offline links and service worker.
+dsh: reasoning:
+S08 help design vs impl:
+- Design 工作区 has 6 topic sections: 检索工具, 导入文件, 复制与下载, 参数与编码, 快捷键对照, plus tables 字符与字节的区别 and 结果为什么会“待更新” and 反馈入口的位置, 离线与缓存. Impl has 工具检索, 导入文件, 复制与下载, 参数编码, 字符与字节, 结果待更新 (6 cards, close). Missing the "反馈入口的位置" and "离线与缓存" topics (design says feedback button in top nav + tool page help end; impl help says feedback via top nav '源码'). Also design shortcut table has 9 actions (Ctrl+K, Ctrl+Enter, Ctrl+Shift+C, Ctrl+S, Ctrl+Shift+Backspace, Alt+V, Ctrl+I/Ctrl+O, Esc); impl lists 6 and omits 复制结果/下载结果/清空输入/显示隐藏密钥/只看输入只看结果. That's a fidelity gap. Also impl shortcut '切换明暗主题' not in design.
+
+Now error.vue and category/[id].vue and CommandPalette. Let me read.
+dsh: reasoning:
+There's no error.vue at devkit/app/pages/error.vue. Let me find it. Maybe devkit/app/error.vue (Nuxt 4 uses app/error.vue). The prompt listed error.vue but the actual file might be at devkit/app/error.vue. Let me glob.
+
+Also category page: design S02 has page header with badge, description, '本地处理 · 输入不上传' chip, '全部工具' breadcrumb, then 分类内搜索 (h=44 full width, placeholder '在「摘要与加密」内搜索工具', hint '分类切换保留左侧导航与当前筛选'), then 工具分组 grouped by function with group name/desc/count, each card has 名称/用途/tags. Impl category page: title dot + name + count, desc, then a bar with small search (260px, h=32) + category pills, then a flat grid of ToolCards. It does NOT implement the design's grouped sections (摘要分组), and the desc text differs from design. Also the design shows '本地处理 · 输入不上传' chip and '全部工具' text. Also design's category search is a full-width 44px card with placeholder '在「摘要与加密」内搜索工具' and hint; impl uses 32px input placeholder '在当前分类中搜索'. Deviation medium-high.
+
+Also the design's '分类内搜索' says "分类切换保留左侧导航与当前筛选" but impl doesn't preserve query across category switching (query ref resets on route change? Actually the component may be reused; key changes → computed filtered changes but query isn't reset necessarily. Hmm, but page is same component; navigating category may keep query. Not a big deal.)
+
+Also `relatedByTag` computed has suspicious logic: for java it returns tools with id in ['t24','t20'] — t24 is 'Properties / YAML 转换'? Wait t24 is in java cat already (properties-yaml). Let me check: t24 slug 'properties-yaml' cat 'java'. So `t.cat !== 'java'` filters it out, so relatedByTag for java = t24? t24 cat is java, so excluded. t20 is cron cat time. So relatedByTag = [t20 cron]. The condition `t.tags.some(tag => ['国密'].includes(tag)) === false` is weird but always true unless tag 国密. So Java category shows a "相关入口" with Cron 解析与执行预览 — an odd/unexpected addition. Let me verify. Actually this looks like a bug: t24 is already in java so it's excluded, leaving only t20 (Cron) as "相关入口" — is Cron relevant to Java? questionable. And the design S02 Java has no "相关入口" section. This is code smell / possible bug. Let me verify by checking t20 and t24 tags. t20 cron cat time. So yes, Java page shows Cron as related. That's a fidelity+logic issue.
+
+Let me find error.vue.
+dsh: reasoning:
+error.vue deviates substantially from S09:
+- Design S09: page inside normal shell (header/sidebar) with 页头 '工具不存在' + desc + '本地处理', workspace card containing 'HTTP 404 · /t/unknown-tool' status code, 标题 '找不到这个工具', desc '这个地址没有匹配到 DevKit 的 41 个工具。...', a search box with placeholder + 'Ctrl/⌘ K' hint, buttons '返回首页' (accent) + '浏览全部工具', common tools row '常用：JSON 格式化 / Base64 编解码 / SM4 加解密 / 时间戳转换', plus 说明区.
+- Impl error.vue: renders inside NuxtLayout (so header/sidebar present) but content is a centered big "404" number, title '工具不存在或链接已失效', desc, search button, 返回首页, 常用工具 chips. It does not have 页头, workspace card, HTTP 404 path status, or 说明区. Design uses '常用' + 4 tools; impl 5 tools incl JWT/qrcode. Missing the '浏览全部工具' button, missing '本地处理' badge.
+
+CommandPalette vs S03:
+- Design: input shows '国密' with 'Esc 关闭'; group header '摘要与加密' + '3 个结果'; each result has 工具名称 + 简短描述 + 分类 label (e.g. '摘要与加密'); footer hint '匹配到 3 个工具：名称含「SM」且分类为「摘要与加密」' and keys ↑↓选择/Enter打开/Esc关闭; scope note '只检索工具目录，不检索你已处理的输入内容'.
+- Impl: input placeholder different; group title = category name; result has icon + name + full desc + enter icon (no category label, has icon). Footer keys present. No '3 个结果' count; no explicit match explanation. Empty state: design title '没有找到与「smtool」匹配的工具', hint '搜索只覆盖工具目录，可以换用中文名称、英文缩写或别名，例如 国密 / sm2 / base64 / hash。', buttons '回到全部工具' (accent) + '修改关键词'. Impl empty: title '没有找到匹配「query」的工具', hint short, buttons '清空关键词' + '回到全部工具' (order reversed, secondary/primary reversed). Deviation medium.
+
+Also S03 design "国密" search returns 3 results (SM2, SM3, SM4) all in 摘要与加密. Need to verify implementation searchTools('国密') returns exactly these 3. Let me check searchTools logic and run it. Also check 'smtool' returns 0.
+
+Let me now check the ssr / hydration and the probe results. Let me check the job status again.
+dsh: reasoning:
+Important findings:
+1. 404 pages: status 404 with console errors and `[NUXT_E1005] Error caught during app initialization`. That's a hydration/initialization warning on 404 routes. Also for `/category/nope` and `/tools/does-not-exist`. Wait — the 404-tool also logs `NUXT_E1005`, an app initialization error. Interesting — possibly because error.vue uses getTool without importing (auto-import from data? `getTool` is exported from ~/data/tools but not auto-imported!). Let me check: error.vue uses `getTool(s)` but doesn't import it. Nuxt auto-imports composables and utils, but `getTool` is in `~/data/tools` — is there a `utils` auto-import? Nuxt auto-imports from `app/utils/` (dir), and `composables`. `data/tools.ts` is not auto-imported unless configured. Let me check nuxt.config for imports or if other pages import getTool explicitly (they do: `import { getToolById } from '~/data/tools'`). error.vue does NOT import getTool. Yet the 404 page rendered "常用工具" with 5 items? Let me check the visible text sample for 404-tool. If getTool is undefined, the setup would throw. But h1 exists. Let me check the text sample.
+
+Actually `pageerrors` is empty, and the probe on 404 shows the error page rendered (h1 20px). The NUXT_E1005 warning suggests an error during app initialization was caught. Let me check the rendered text.
+
+2. favorites page: `inputsNoLabel: 1` — the DkSelect lacks label. Minor a11y.
+
+3. settings page: `buttonsNoName: 3` — 3 buttons with no accessible name (probably the DkSwitch toggles are buttons with no text/aria-label). Let me verify. Also the range input? inputsNoLabel 0 because it has aria-label. So 3 switch buttons lack names. That's an a11y issue (R04 relevance).
+
+4. offline page: h1 at (793,169) — that's because offline state is centered inside max-width 720 container within main. Not necessarily bad. But note main.doc h=900, so the page is short.
+
+5. Home main h=3071 vs design 1583.
+
+Now let me check the 404 page's rendered text and NUXT_E1005. Let's view the text sample. Also check whether getTool is defined. Let me grep for autoImport config.
+dsh: reasoning:
+The 404 page text sample didn't include the error content in the first 40 items (sidebar dominates). Let me search the full textSample for '404' or '工具不存在'. Also check the getTool issue: error.vue doesn't import getTool. Is `getTool` auto-imported? Let me check devkit/nuxt.config.ts and whether error.vue renders the 常用工具 list. Actually the probe a11y buttonsNoName=0, and count a=47. Let me grep the text sample.
+
+Since error.vue uses getTool without import, when Nuxt initializes the error page, `getTool` is undefined → ReferenceError in setup → NUXT_E1005 "Error caught during app initialization". But the h1 rendered, so maybe Nuxt caught it? Actually if the setup throws, the page wouldn't render. Hmm, but the page DID render h1. Let me check whether the error text '常用工具' appears. If getTool is undefined, setup would fail at line 11 before rendering. Unless Nuxt auto-imports from data dir? Let me check nuxt.config.
+dsh: reasoning:
+Very interesting! The 404 page rendered:
+- 404 code (44px)
+- H1 '页面出现了错误' — but design expects '工具不存在' for 404!
+- desc '工具不存在' (13px) — hmm.
+- '常用工具' rendered, so getTool works? Maybe auto-import works because Nuxt auto-imports all exports from `app/data`? Actually Nuxt 4 auto-imports `utils/` and `composables/` dirs, not `data/`. But maybe `getTool` is being resolved... Hmm, the page rendered so getTool must be defined somehow. Wait — maybe Nuxt auto-imports from all files? No. Let me test: is there a global auto-import? Let me check `.nuxt/imports.d.ts` or the built types.
+
+But more importantly: the error text mismatch: `is404` computed checks `props.error?.statusCode === 404`, and title says '页面出现了错误' (the 500 branch) while desc says '工具不存在' (404 branch)? Wait the text shows H1 '页面出现了错误' and desc '工具不存在'. Actually look: there's `{'t': '工具不存在', 'tag': 'P', 'size': '13px'}`. That's probably the desc? No, desc for 404 is '地址可能拼写有误...'. Hmm. Actually the '工具不存在' P is probably from the sidebar privacy? No.
+
+Wait: the H1 is '页面出现了错误' meaning is404 was false at SSR/hydration (statusCode not 404?), but then it hydrated to 404 branch? Actually console shows NUXT_E1005 error caught during app initialization. And there's a hydration mismatch possibly. Let me look at the actual text more comprehensively. Let me dump all textSample entries for the 404 page in order near the end.
+
+This is a real bug: the 404 error page shows wrong title. Let me investigate `error.statusCode`. In Nuxt, `error.value.statusCode`. The error prop for `createError({ statusCode: 404 })`. For unmatched route /tools/does-not-exist, Nuxt sets statusCode 404. But the H1 shows '页面出现了错误' (non-404). Could be a hydration mismatch: SSR renders using error prop maybe undefined? Let's check the raw SSR HTML with curl.
+
+Let me curl /tools/does-not-exist and see what the SSR HTML contains. Also check the getTool auto-import.
+dsh: reasoning:
+SSR HTML contains '工具不存在' (3 times) and '404' but not '页面出现了错误'. So SSR renders the correct 404 text. The observed H1 '页面出现了错误' in the browser indicates a client-side hydration mismatch/re-render where `error.statusCode` became something else (maybe 500). Wait, actually the console NUXT_E1005 "Error caught during app initialization" suggests an error occurred during hydration (maybe the getTool ReferenceError), and Nuxt's error handling re-rendered the error page with a 500 status → H1 '页面出现了错误'. That explains: `getTool` is NOT auto-imported → during client hydration, setup throws ReferenceError → Nuxt catches → error page re-renders as 500. On SSR, maybe getTool resolves because... hmm.
+
+Actually SSR would also throw. But SSR HTML shows '工具不存在' and 3 occurrences (title + desc + common?). Let me check: SSR HTML might not contain '常用工具' if getTool threw. The grep found 3 '工具不存在' - the title attr? Let me examine the SSR HTML more.
+
+Anyway, this is a genuine bug: `/tools/does-not-exist` (and any 404) triggers `[NUXT_E1005] Error caught during app initialization` console warning and the page then shows the non-404 error title '页面出现了错误' instead of '工具不存在或链接已失效'. Let me verify by checking the probe for 404-cat (same). Both show pageerrors empty, but console E1005.
+
+Hold on — maybe getTool IS auto-imported. Let me check whether the SSR HTML includes '常用工具'. Let me grep.
+
+Also note the design S09 says title '找不到这个工具' and page header '工具不存在'; implementation uses different text. But the mismatch (SSR '工具不存在或链接已失效' vs client '页面出现了错误') is a real hydration bug.
+
+Let me dig. Let me get the SSR HTML fragments and count.
+dsh: reasoning:
+The SSR HTML does NOT contain the error page content ('常用工具', '返回首页' absent) — meaning SSR fails to render the error page fully. It only contains '工具不存在' (from title meta probably). The client then renders the error page, and because of the SSR/client mismatch it shows '页面出现了错误'? Actually the browser probe showed both '404' and '页面出现了错误' and '工具不存在' and '常用工具'.
+
+Let me look at the full SSR HTML body to understand. Let me look for `<div id="__nuxt">`.
+dsh: reasoning:
+The SSR HTML is only 1461 bytes and has no `__nuxt` div. So SSR for the 404 route returns a minimal HTML (probably Nuxt renders an error shell without content). Let me print the whole HTML.
+dsh: reasoning:
+Wow, big finding: curl without an Accept: text/html header returns JSON error (that's Nitro's default for non-HTML accept). But the probe (browser) got HTML. Let me curl with `-H 'Accept: text/html'`. The earlier grep on curl output was matching the JSON. That's why '常用工具' etc were absent. So my curl test was misleading. Let me redo with Accept text/html.
+dsh: reasoning:
+So SSR ALSO renders H1 '页面出现了错误' and desc '工具不存在'. So `is404` is false on SSR! Why? Because `error.statusCode` — the error object in error.vue props. The rendered `err__code` is 404, but `is404` computed returns false. So `props.error?.statusCode === 404` is false even though `error?.statusCode` renders 404 via `error?.statusCode ?? 500`. That's weird.
+
+Ah — `error.statusCode` might be a string "404" rather than number 404. `{{ error?.statusCode ?? 500 }}` renders "404"; `=== 404` false. Yes! The statusCode could be string. Actually Nuxt's error object statusCode is a number normally. But maybe when serialized via `createError` it's a number. Hmm.
+
+Wait, the error prop for an unmatched dynamic route: in `[slug].vue` line 28 `throw createError(...)`. Let me look at that page. Actually `/tools/does-not-exist` is matched by `tools/[slug].vue` which throws `createError({statusCode:404...})`. That statusCode should be number 404. But `is404` false... Let me check: maybe the error payload is `{ statusCode: 404, statusMessage, message }` but `props.error` is a NuxtError where `statusCode` is stored... Hmm.
+
+Actually look: the desc shows '工具不存在' not the 404 desc '地址可能拼写有误，或该工具已更名。...'. Wait the desc renders `error?.message || ...` in the non-404 branch. The message is '工具不存在'. So indeed is404 false.
+
+So there is a real bug: `is404` is always false → the error page shows the generic 500-style title for 404s, and the 404-specific description ('地址可能拼写有误…') and text is never shown. And this happens in SSR too. Let me confirm by checking statusCode type. Perhaps `props.error.statusCode` is a string because of `error.statusCode = ...`? Let me test by evaluating in the page... Actually easier: check other places. The `err__code` prints 404. Let me look at how Nuxt passes the error. Actually the issue might be that error.vue's prop `error` is typed but the runtime object uses `statusCode`. Hmm.
+
+Let me quickly test with a small script? I can't modify source. But I can use the browser to evaluate `useError().value`. Actually probe already loaded page. Let me use a one-off playwright script to evaluate the error state? `window.__NUXT__` maybe. Simpler: `curl` the `_payload.json`? Nuxt 4 error payload. Let me fetch `/tools/does-not-exist/_payload.json` or check the HTML inline `__NUXT__` data for statusCode type.
+
+Let me search the SSR HTML for `"statusCode"`.
+
+Actually let me just write a quick playwright eval to check typeof.
+dsh: reasoning:
+Let me look at the __NUXT_DATA__ payload for error.statusCode. Let me parse the JSON.
+dsh: reasoning:
+Not worth deep parsing. Let me instead check the title: page title is '页面不存在 · DevKit' per probe. And `is404` computed uses `props.error?.statusCode === 404`. The title uses is404 too: `title: is404.value ? '页面不存在 · DevKit' : '出错了 · DevKit'`, and the probe title was '页面不存在 · DevKit' → so is404 was TRUE for the SEO meta. But the H1 showed '页面出现了错误' (false branch). Contradiction! Unless there are two renders: SSR rendered is404 true for title but the body H1... no.
+
+Wait, `useSeoMeta` might be evaluated during setup with is404 true, but the template H1 shows false. Hmm. Actually maybe SSR and client differ: SSR title '页面不存在', client hydration H1 '页面出现了错误'. The SSR HTML I fetched (with Accept text/html) shows H1 '页面出现了错误' though, and title? Let me check the title in SSR HTML.
+
+Hold on: maybe the error page rendered twice: once as the actual 404 error (correct) and then Nuxt re-rendered due to the NUXT_E1005 error during app initialization with a 500 error. The console warning says "Error caught during app initialization". So probably: SSR renders correct 404 title (is404 true). Then client hydration has an error (getTool not imported! ReferenceError) which causes Nuxt to set a new error (500) and re-render error.vue with the 500 error → H1 '页面出现了错误', desc = message '工具不存在' (from the original error message carried over). Wait but the SSR HTML already shows '页面出现了错误'.
+
+Hmm, let me just check the title tag in the SSR HTML.
+
+Actually, let me reconsider: The SSR HTML shows H1 '页面出现了错误' and desc '工具不存在' but the probe title (client) is '页面不存在 · DevKit'. useSeoMeta in SSR might produce '页面不存在'. Let me check `<title>` in /tmp/r1ssr.html.
+
+If SSR title is '页面不存在' but SSR H1 is '页面出现了错误', then there's an internal inconsistency in SSR itself: is404 true during useSeoMeta setup but false during template render? That can't be unless `props.error` is a reactive ref that changes between. Actually `useSeoMeta` is called during setup synchronously; template renders later. If `props.error` is a proxy that resolves differently... unlikely.
+
+Alternatively '页面出现了错误' in SSR could be from... no, it's clearly err__title.
+
+Let me check the actual title tag. And also check getTool auto-import: is there an error in the 404 page? The console warning NUXT_E1005 indicates an app-init error. Let me get the client error details via playwright with page.evaluate on window.__NUXT__ or by capturing console with more detail. The probe truncated to 400 chars: "[NUXT_E1005] Error caught during app initialization.\n╰▶ fix: ...". Let me capture full console text.
+
+Let me run a focused playwright script.
+dsh: reasoning:
+Confirmed: `<title>页面不存在 · DevKit</title>` (is404 true in useSeoMeta) but H1 '页面出现了错误' (is404 false in template). That's bizarre but consistent both SSR and client. This strongly suggests `useSeoMeta` computed `is404` true, but the template's `is404` is false. How?
+
+Wait — maybe `error.statusCode` is 404 for the SEO meta, and the H1 uses `is404` too. Both use the SAME computed. Unless... the H1 is not `is404 ? ... : ...`? Let me re-read error.vue:
+
+```
+const is404 = computed(() => props.error?.statusCode === 404)
+...
+<h1 class="err__title">{{ is404 ? '工具不存在或链接已失效' : '页面出现了错误' }}</h1>
+```
+So H1 should be '工具不存在或链接已失效' when is404. It shows '页面出现了错误', so is404 false at render. And useSeoMeta title shows '页面不存在 · DevKit' when is404 true, '出错了 · DevKit' otherwise. So there IS an inconsistency. Unless the title in SSR came from somewhere else... The title '页面不存在 · DevKit' is set by `useSeoMeta` only when is404 true. Hmm.
+
+Unless: `props.error` is `NuxtError` and `error.statusCode` is a number 404 at setup time (so is404 = true for useSeoMeta since computed is lazy? useSeoMeta with a computed... it calls `.value` during setup? For SSR it may reflect later). Actually the title could be evaluated at a later time during SSR (after render) when is404 was true, then something mutates error to 500 during client... no, title is same in both.
+
+Wait: maybe there are TWO error.vue invocations: the main app errored (unhandled) → Nuxt renders a 500 error page, but the `<title>` from the ORIGINAL 404 error's useSeoMeta persisted (head not refreshed?). Actually when Nuxt re-renders the error page with a new error, useSeoMeta would update title. Hmm.
+
+Let me think about the NUXT_E1005 error. This is logged by Nuxt when `app:created`/`beforeMount` hook errors. It could be the getTool ReferenceError in error.vue setup (line 11). But then the whole component fails. However, the template did render. Actually if setup throws, Vue catches? No.
+
+Let me test: does `getTool` resolve? The common tools rendered? Let me check whether '常用工具' items are present in the browser. The text sample had '常用工具' P and earlier text sample showed 'JSON 格式化','Base64 编解码','SM4 加解密','时间戳转换','文件 / Base64 转换' — those could be from the error page common list or the sidebar. Actually sidebar has all tools including these. Hmm.
+
+Let me check specifically `.err__common-item` count via playwright. That will tell if getTool works.
+
+Actually, more robust: let me check Nuxt's generated auto-imports for `getTool`. In Nuxt 4, `app/utils/` is auto-imported. `app/data/tools.ts` would NOT be. But wait, maybe `usePalette` etc. are composables. `getTool` is not a composable. So `getTool(s)` in error.vue should be a ReferenceError. But template rendered '常用工具'? Let me verify .err__common count.
+
+Actually, the reference error would occur in the error.vue setup → the error page fails to render → Nuxt shows a fallback? But we saw the full error page rendered. So getTool must be defined. Maybe Nuxt auto-imports from `~/data/tools` because of some config? No config. Hmm, maybe Nuxt 4 auto-imports all `.ts` in app/ except pages? Actually Nuxt's default `imports.dirs` includes `composables/**`, `utils/**`. Not `data/**`.
+
+Let me just check via playwright whether .err__common-item exists.
+dsh: reasoning:
+`.err__common-title` exists ('常用工具') but `.err__common-item` list is EMPTY. So `commonTools` is empty → getTool returned undefined for all, OR `getTool` threw and was caught? Actually `common.map((s) => getTool(s)!)` — if `getTool` is undefined, this throws ReferenceError. But it didn't crash... Because `getTool` might be auto-imported but the `common` slugs don't match? The slugs are 'json-format','sm4','timestamp','jwt','qrcode' which all exist (t01, t17, t18, t33, t39). So getTool should return them. Unless `getTool` is auto-imported as something else/undefined... 
+
+Wait: `.err__common-title` exists and grid exists but empty. That means `commonTools` = [] (all filtered out by `.filter(Boolean)`), meaning `getTool(s)` returned undefined for all 5. That would happen if `getTool` is a different function — e.g., Nuxt auto-import resolved `getTool` from somewhere else? Or if `getTool` is undefined and `.map` throws... no.
+
+Hmm, actually if `getTool` were undefined, `common.map((s) => getTool(s)!)` throws TypeError during setup → NUXT_E1005. And the component setup fails → but the template partially rendered? No, if setup throws, nothing renders. But err__common-title IS rendered, meaning setup completed with commonTools=[].
+
+So maybe `getTool` resolves to *something* that returns undefined. Is there a `getTool` auto-imported by Nuxt? Possibly from `~/composables`? Let me grep for a `getTool` definition elsewhere or auto-import. Hmm, maybe Nuxt's auto-import from `app/utils` includes `bytes.ts`/`json.ts` only.
+
+Alternatively, maybe `getTool` is auto-imported from `#imports` as a global that doesn't exist → but then it'd throw. 
+
+Actually wait — maybe there's a Nuxt component auto-import conflict: `getTool` could be auto-imported as a *component resolver*? Unlikely.
+
+Let me directly evaluate in the page whether getTool exists as a global, and also check the built imports. Nuxt app setup: auto-imported functions are exposed via `#imports` module, not window. Can't evaluate directly. But I can check the generated `.nuxt/imports.d.ts`. Earlier grep found nothing (maybe .nuxt doesn't exist / different path). Let me look.
+
+Actually, let me reconsider the NUXT_E1005. The `pageerrors` array is empty, and console warning NUXT_E1005. Nuxt logs this when an error is thrown in an app hook. Could it be from `app.vue`? Let me read app.vue. Also, maybe the error is thrown by `usePalette().show()` in error.vue's button - no.
+
+Let me check `.nuxt` dir for auto-imports and search for getTool.
+dsh: reasoning:
+`grep getTool devkit/.nuxt/` returned nothing. And imports.d.ts exists but no getTool. So `getTool` is NOT auto-imported. So in error.vue, `getTool` is undefined → ReferenceError. But how did the page render `.err__common-title`?
+
+Hmm, maybe the error page in the browser is not error.vue's full render; maybe Nuxt rendered the page and the error was thrown *after*? Let me check: `.err__common-title` present means the template rendered through that point. Vue renders template as a whole; if setup throws, template never renders. Unless the ReferenceError happened in a different place.
+
+Wait—maybe the error is thrown in the `useSeoMeta` computed? No.
+
+Actually, maybe `getTool` IS imported in error.vue but auto-imported via Nuxt's `imports.dirs` default? Let me grep imports.d.ts for 'getTool' explicitly (maybe my grep path was wrong). The grep returned nothing. Let me cat imports.d.ts to see what's auto-imported.
+
+Actually maybe Nuxt auto-imports work at build via unimport scanning all of `app/`? Let me check imports.d.ts content.
+dsh: reasoning:
+Confirmed: `getTool` is NOT auto-imported (0 occurrences). So error.vue line 11 `getTool(s)` is a ReferenceError. Yet the page rendered `.err__common-title`. How?
+
+Maybe the setup error is caught by Nuxt and the error page is shown with the error's *template partially*? No.
+
+Hmm. Actually: In Nuxt/Vue SSR, if a component's setup throws, the error propagates. Nuxt catches it and renders error.vue. But error.vue itself would also throw, leading to infinite recursion... Nuxt guards against that. The NUXT_E1005 warning is exactly "Error caught during app initialization". So what likely happens:
+- The original page ([slug].vue) throws 404 → Nuxt shows error.vue with the 404 error.
+- error.vue setup throws ReferenceError: getTool is not defined.
+- Nuxt catches that and... maybe renders error.vue again with the new error but the new error's statusCode is 500 (hence H1 '页面出现了错误'), and on the second render `getTool` is still undefined but somehow the render proceeds?
+
+But the second render would throw too. Unless the throw is at line 11 and Nuxt's error boundary retries rendering with the *same* component but... no.
+
+Actually, maybe modern Vue's SSR compiles `const commonTools = common.map((s) => getTool(s)!)` where `getTool` is treated as a global identifier; when undefined, it throws. But note: `getTool` might be resolved at runtime to `undefined` due to how the bundler handles unknown identifiers? No, it'd be a build error in TS? Actually Vite doesn't error on undeclared globals; it leaves `getTool` as a free variable reference → ReferenceError at runtime.
+
+Wait, but maybe the page didn't actually render error.vue's setup; maybe Nuxt rendered the error page but the `.err__common-title` presence is because... Let me actually check the SSR HTML: it contains '常用工具' (grep=1). So error.vue rendered with commonTools presumably []. That means `getTool` did NOT throw and returned undefined.
+
+Could `getTool` be defined as a global by Nuxt's error handling? Hmm.
+
+Alternatively, maybe there IS an auto-import via a different mechanism: Nuxt auto-imports from `app/utils` and `app/composables`, but ALSO there's `imports.presets`. `getTool` might be exposed by the `#imports` of some module... grep=0 though.
+
+Hold on, maybe the error thrown is exactly the ReferenceError, and Nuxt shows the *fallback* internal error page which happens to be error.vue but rendered with commonTools... no.
+
+Let me just test directly: add a temporary check? I can't modify source. But I can create a separate test page outside devkit? Not allowed to modify devkit. Hmm.
+
+Actually, I can evaluate in the browser: the Nuxt app object isn't easily introspectable. But I can check the built server bundle for `getTool` in the error chunk. Let me grep `.nuxt/dist/server` or `.output`. Actually dev mode: the server code is bundled at runtime. Let me check `.nuxt/dist/server/_nuxt/error-*.js`? In dev, Vite SSR transforms on the fly. 
+
+Let me instead reason from the evidence and report: 
+- On 404 routes, the error page H1 shows the generic '页面出现了错误' instead of the 404-specific '工具不存在或链接已失效', while `<title>` correctly says '页面不存在 · DevKit'. The 常用工具 chips list is empty. Console emits `[NUXT_E1005] Error caught during app initialization`. Root cause candidate: `devkit/app/error.vue:11` uses `getTool(...)` without importing it from `~/data/tools` (not auto-imported; only composables/utils are). This undeclared reference throws during error-page setup, producing the app-init error and breaking 404 rendering/state.
+
+But the H1 rendering contradiction needs explanation. Actually! Maybe it's the reverse: `props.error` is a proxy. On SSR, `useSeoMeta` title computed is `is404 ? ...` and it's evaluated... Hmm.
+
+Actually wait. Let me reconsider: maybe `is404` is `false` because `props.error.statusCode` is `"404"` as a *string*, and the title '页面不存在 · DevKit' comes from a DIFFERENT source: the `[slug].vue` page's `useSeoMeta`? No, that throws before calling useSeoMeta (line 28 throws before line 30). Hmm, but `useSeoMeta` at top... no, throw is before.
+
+Could the title come from error.vue but with is404 true, while template is404 false? Only if `props.error` mutates between setup and render. Since `is404` is a computed depending on `props.error`, and props are reactive; if Nuxt replaces `props.error` after the original error... Actually Nuxt's error.vue receives `error` as a prop from the `<NuxtErrorBoundary>`? The error prop is `error` ref from `useError()`. During setup: error = 404 → useSeoMeta registers computed → title computes later (during head render) when error still 404 → '页面不存在'. Then during template render, error becomes... no.
+
+Hmm, actually the order: setup runs → useSeoMeta called → template render happens. If by template render time `props.error` changed to 500 (due to the app-init error!), then H1 false-branch. And head was already computed with 404? Head is computed at end of SSR after render, so it'd also see 500. Unless head computed cached earlier.
+
+The cleanest explanation: The 404 error page setup throws (getTool), Nuxt catches, sets a NEW 500 error, and re-renders error.vue with the 500 error. The re-render: `props.error.statusCode` = 500 → is404 false → H1 '页面出现了错误', desc = message ('工具不存在' carried over). `commonTools` still computed with getTool... if it threw again, recursion. Possibly Nuxt suppresses repeated same error and renders a bare page. But `.err__common-title` present suggests it rendered. 
+
+I think the safest, evidence-backed report: 404 error page renders the wrong branch (H1 '页面出现了错误', empty 常用工具 list), while title says 404; console NUXT_E1005; code evidence error.vue:11 uses getTool without import. Mark severity 高.
+
+Let me verify the `getTool` name: `[slug].vue` imports it explicitly, `error.vue` does not. That's a strong static evidence. Let me double check error.vue imports: lines 1-2 only `import type { NuxtError } from '#app'`. Yes, no getTool import.
+
+Now, is `getTool` maybe globally available because `~/data/tools` is imported in `app.vue`? No, auto-import only works for configured dirs.
+
+To be thorough, let me check whether there's a `imports` config hidden in `devkit/nuxt.config.ts` — no. So error.vue is buggy.
+
+Actually, wait. Let me reconsider the empty common list. If `getTool` threw, `commonTools` wouldn't be assigned. But `.err__common-title` rendered. Let me verify the SSR HTML actually contains the `.err__grid`/`.err__common` markup with no items. From the earlier region dump, after the 返回首页 button it was cut off. Let me grep SSR HTML for 'err__common-item' count and 'err__common-title'.
+
+Let me do that.
+dsh: reasoning:
+So SSR rendered `.err__common-grid` empty. That means `commonTools` = [] at SSR render, meaning `getTool` returned undefined without throwing. How can an undefined identifier not throw? It CAN'T. Unless `getTool` IS defined but returns undefined. 
+
+Hmm! Maybe Nuxt auto-imports `getTool` from... Let me search the entire devkit for a `getTool` function that might be auto-imported from a global. `[slug].vue` imports from '~/data/tools'. Any other `getTool`? grep earlier showed only error.vue and [slug].vue. So the only definition is in data/tools.ts. If it's not imported, it's a ReferenceError. Unless the build inlined it? No.
+
+Wait, maybe TypeScript + Nuxt's auto-import DID include it but `.nuxt/imports.d.ts` wasn't regenerated / grep failed because of formatting. Let me grep with `grep -rn "getTool" devkit/.nuxt/` — earlier returned nothing. Let me re-run carefully; maybe the grep output was suppressed.
+
+Actually the earlier command `grep -rn "getTool" devkit/.nuxt/ 2>/dev/null | head` printed nothing. And `grep -c "getTool" devkit/.nuxt/imports.d.ts` = 0.
+
+Hmm, but maybe Nuxt's auto-import is via `unimport` at build time with a preset that scans `app/**` and injects, but imports.d.ts would list it.
+
+Let me test differently: run a tiny node script that imports the built server? Too complex. 
+
+Alternative: Maybe `getTool` resolves to a *browser global*? No.
+
+Let me look at the actual dev-server-transformed error.vue to see if Vite injected an import. In Nuxt dev, Vite serves modules. The error page is client-side; the SSR module URL might be fetchable. Let me try to fetch the transformed module for error.vue from the Vite dev server and see whether `getTool` is imported. The URL is something like `/_nuxt/app/error.vue`. Let me try.
+dsh: reasoning:
+The transformed module. Let me grep it for getTool.
+dsh: reasoning:
+Confirmed: transformed error.vue references `getTool` but there is NO import for it. So at runtime `getTool` is a free variable → ReferenceError. The NUXT_E1005 warning is exactly this. And the error page setup fails; Nuxt then shows... however `.err__common-title` rendered. Hmm, but maybe Vue's setup threw *after* `commonTools`? The code order:
+```
+const is404 = computed(...)
+useSeoMeta(...)
+const common = [...]
+const commonTools = common.map((s) => getTool(s)).filter(Boolean)
+function goHome() {...}
+```
+The throw is at line 28 (commonTools). If it throws, setup aborts → no render. Yet SSR rendered the whole template with empty commonTools. Contradiction persists.
+
+Unless... in the transformed code, `getTool` is imported via an auto-import inlined elsewhere? grep found only 1 occurrence of "getTool" (line 28), so no import binding. So it must throw.
+
+Wait, maybe the SSR render we saw was produced by a *cached* previous build where getTool was auto-imported? No.
+
+Let me look at the SSR HTML around `.err__common`. It shows `.err__common-grid` exists but empty. In Vue SSR, if setup throws, the whole component fails and Nuxt renders nothing. Hmm.
+
+Let me test the actual behavior more directly: does the error page show the 常用工具 title because the SSR HTML we fetched is stale? Let me re-fetch and check the timestamp / whether it changed. Actually the page renders the same content client-side (playwright confirmed `.err__common-title` present, `.err__common-item` empty). So setup must be completing.
+
+Is it possible that `common.map((s) => getTool(s))` doesn't throw because `getTool` is resolved as a *global property of globalThis*? In Node SSR, `globalThis.getTool` is undefined, so referencing `getTool` would throw ReferenceError... unless the code is in non-strict mode and `getTool` was somehow declared? 
+
+OR: Vite/rollup's `__unimport` transform might have added a fallback. Let me look at the actual line 20-30 of transformed file.
+dsh: reasoning:
+Confirmed: `getTool` is a free variable, not imported. So `commonTools = common.map((s) => getTool(s))` throws ReferenceError: getTool is not defined.
+
+But the page rendered! Unless Nuxt catches the setup error and renders the error page *again* but this time... Hmm. Actually, maybe the ReferenceError is thrown during SSR, Nuxt catches it as the error, and renders the fallback error page from `error.vue` again — and because Nuxt uses `createError` with the ReferenceError, it might render the same component but the *props.error* is the ReferenceError whose `statusCode` is undefined → is404 false → H1 '页面出现了错误', desc = message 'getTool is not defined'... but the desc showed '工具不存在'. Hmm no.
+
+Let me stop over-analyzing and just get direct evidence of what error is active. Let me run playwright and read `document.querySelector('#__nuxt')` inline or the Nuxt error state. Actually Nuxt exposes `window.useNuxtApp`? Not globally. But we can read the payload script `__NUXT_DATA__` on the client (it's in the DOM). Actually on client navigation the payload is inline. Let me parse the `__NUXT_DATA__` JSON from the browser and find statusCode/message.
+
+Alternatively, simply report the concrete observable facts, which are damning enough:
+- 404 route: `<title>` 页面不存在, but H1 shows 页面出现了错误 and empty 常用工具 list; console emits NUXT_E1005; code has undeclared `getTool`.
+That's solid evidence.
+
+But I want to explain the contradiction to be accurate. Let me parse the payload. Let me do it in playwright via the DOM element textContent.
+dsh: reasoning:
+No statusCode in client payload. Let me just try to read the payload for 'message'. Actually the payload is a flattened array with references. Hard.
+
+Let me try another approach: catch the ReferenceError text. The console only shows Nuxt's generic warning. Let me listen to 'pageerror' — the probe said none. Let me use `window.onerror` / listen.
+
+Actually the NUXT_E1005 is logged via `console.warn` with only the generic message. But the underlying error might be logged elsewhere as console.error — we only saw a 404 resource error. So the ReferenceError is swallowed.
+
+I think the honest description: "error.vue:11 references `getTool` without importing it; the module is not auto-imported (`.nuxt/imports.d.ts` has no getTool; Vite-transformed module lacks the import). At runtime this throws and Nuxt logs NUXT_E1005; the 404 error page ends up rendering the generic branch (H1 '页面出现了错误') with an empty 常用工具 list, contradicting its own <title>." That's evidence-based and actionable. Whether the mechanism is a re-render, I'll note as mechanism with the observable result.
+
+Hmm, but if it throws, the page shouldn't render at all. Let me reconsider: maybe Vue's setup error is caught by Nuxt's `onErrorCaptured` and Nuxt renders the error page but with `error` = the new error; the template still renders because Vue renders the component even if setup partially failed? No.
+
+Actually! There's another possibility: `getTool` is resolved at runtime via the global scope because Nuxt's dev server injects `#imports` auto-imports into the SSR context using a `with` statement or `globalThis` assignment. In dev, Nuxt's `nuxt-imports` plugin may set auto-imports on `globalThis` for the SSR runtime (the "unimport" virtual module). But imports.d.ts shows no getTool, so no.
+
+OK here's another thought: the ReferenceError thrown during setup on the SERVER causes Nuxt to treat the error as fatal and render `error.vue`... which again throws... Nuxt might detect the same error and render a minimal fallback. But we saw the full template. 
+
+Let me try to actually reproduce by checking if the empty `.err__common-grid` is consistent with `commonTools=[]`. If setup throws, `.err__common-grid` wouldn't exist. It exists. So setup did NOT throw. Therefore `getTool` DID resolve to something that returns undefined. What could it be? Perhaps a global function named `getTool` registered by Nuxt as a component? No.
+
+Hmm, maybe the `nuxt` app has `globalThis.getTool`? Let me just evaluate `typeof getTool` in the browser's module scope? Can't from console (module scope). But I can check `window.getTool`.
+
+Actually in a browser, an unqualified `getTool` in a module would be a ReferenceError (modules are strict). But in the SSR context, maybe the module is wrapped and `getTool` is a property of the Nuxt app's `#imports` injected via `imports` object spread? 
+
+Let me search the server-rendered HTML for a script that defines `getTool` globally. grep /tmp/r1ssr.html for 'getTool'.
+dsh: reasoning:
+I'll just report the observable facts. This is enough.
+
+Actually, let me reconsider once more, because I want the root cause right. Perhaps Nuxt's error.vue is rendered via `<NuxtErrorBoundary>` and the setup error is caught, then Nuxt renders `error.vue` a second time but with a *fatal* flag causing it to render only the shell... no.
+
+Let me test the hypothesis that removing getTool would fix it — I can't modify. But I can test by creating a route that throws 500? Not needed.
+
+Actually, maybe the reason the page renders is: Nuxt 4 renders error.vue for the 404 on the server. The setup throws ReferenceError. Nuxt catches it and re-renders the app with the *new* error (a 500 with message "getTool is not defined"), which again renders error.vue → setup throws again → Nuxt's `showError` has a guard: `if (import.meta.dev) console.warn(...)`. Eventually it renders a minimal shell but... we see full error.vue markup.
+
+Hmm, but here's a subtlety: the SSR HTML shows `.err__common-grid` EMPTY. If setup threw, the grid wouldn't render. So no throw. So `getTool` resolves. But transformed module has no import. UNLESS the SSR/server bundle inlines auto-imports differently (Nitro build vs Vite client). The client module (Vite) has no import, and the browser console would show "getTool is not defined" as a pageerror/console error if it threw. We saw no such error. So on the client too, getTool resolves. 
+
+Wait — browser modules are NOT strict by default? ES modules ARE always strict. So an unqualified undefined identifier throws ReferenceError. But maybe Vite's HMR wrapper wraps in a function with `with(imports)`? Actually Nuxt's auto-import plugin (`unimport`) transforms code: it replaces auto-imported identifiers with `__unimport_xxx` and adds imports. For identifiers it doesn't recognize, it leaves them. So `getTool` stays free.
+
+Could `getTool` be defined by the `<script>` in `#__NUXT_DATA__`? No.
+
+I'm going in circles. Let me do a decisive test: create a standalone HTML? No. Instead, evaluate the error page's client module in isolation? No.
+
+Let me try: in the browser, `pg.evaluate` cannot see module scope. But I can check the Vue component instance's setupState: `document.querySelector('.err').__vueParentComponent.setupState`. If the error page rendered, there's a component instance; its setupState will reveal commonTools. Let me check and also whether there's a hidden error. Actually if setup threw there'd be no component. Let me check setupState.
+dsh: reasoning:
+The `.err` element's nearest Vue parent component is the **layout** (`default`), with setupKeys ['drawerOpen','route','palette','onKeydown']. That means the `.err` markup in the DOM is **stale SSR markup** — the client-side error.vue component failed to mount (setup threw), so Vue left the SSR DOM in place but there's no component instance for it. That's the "hydration failed / app initialization error" and explains:
+- SSR rendered the full error.vue markup once (before/despite the throw? perhaps SSR used a working build where getTool... hmm) — wait, the SSR markup has empty common grid. So on the server, `getTool` resolved to undefined returning undefined? Or the SSR render partially succeeded.
+
+Actually now it's clearer: On the client, error.vue setup threw (`getTool is not defined`), so Vue couldn't hydrate the error page → the SSR DOM remains (stale) and the app-init error is logged. The DOM shows SSR content: H1 '页面出现了错误', empty common grid. And the SSR content itself is from the second render pass after Nuxt caught the original 404 and... 
+
+Regardless, the root cause is clear: `error.vue` uses `getTool` without importing it. On the server this yields an empty common list (getTool somehow treated as undefined—maybe server bundle runs in non-strict CJS where undeclared globals resolve to undefined without throwing? Actually in sloppy mode, reading an undeclared variable still throws ReferenceError; only assignment creates a global. Hmm. But maybe the server bundle is CJS and the SSR renderer wraps setup in a `with`? Enough.). The client-side throw breaks hydration of the error page and logs NUXT_E1005.
+
+The observable, reportable facts:
+1. `/tools/does-not-exist` and `/category/nope` both return HTTP 404 and render the **wrong error variant**: H1 '页面出现了错误' + empty 常用工具 list, while `<title>` says 页面不存在.
+2. Console warning `[NUXT_E1005] Error caught during app initialization` on both.
+3. `.err` DOM has no Vue component instance (stale SSR markup; app init failed) → error page is effectively not hydrated/interactive.
+4. Code root cause: `devkit/app/error.vue:11` uses `getTool` without importing from `~/data/tools`; the Vite-transformed module confirms no import.
+
+Also `/category/nope` throws `createError` at page setup; the error page is broken the same way.
+
+This is a 高/阻断 for S09. Let me mark severity 高 (not blocker for the whole app but breaks 404 UX).
+
+Let me verify the 404-cat probe similarly (same console). Yes, it showed same console E1005. Good.
+
+Now let me check more states:
+- favorites empty state by default (localStorage empty) → probe favorites: does it show empty? Let me check text sample.
+- recent empty → probe.
+- settings → buttonsNoName 3.
+- S06 clear confirm layer: design S06 second frame has a confirmation modal (遮罩层 + 确认弹层). Impl has DkModal with 420px width and danger. Design modal w=540, has 3 rows (偏好设置/我的收藏/最近使用) with counts. Impl modal shows single-purpose text. Deviation but functional.
+- home 最近使用 in no-record state: index.vue firstVisit true when no fav & no recent → shows 推荐工具 (hardcoded list of 6), not fabricated history. Good — but design says 4 recommended tools with descriptions; impl shows 6 ToolCards. Also design's first-visit 快捷与最近 section shows 收藏快捷 0/41 empty state + 推荐工具. Impl shows only one block '推荐工具'. Also design's first-visit empty favorite text '还没有收藏的工具。点击任意工具卡片右上角的星标，即可加入收藏。' — impl doesn't show that; instead shows recommended only. Minor.
+
+Now let me check the dark theme, 1366, and 390 probes. I need to run probe with --dark, --w 1366 --h 768, --w 390 --h 844. Let me run those in background. Also check document.scrollWidth overflow.
+
+Let me also check SSR content for main pages via curl (Accept text/html) to verify no white screen: home has 41 tools in SSR? Let me check. And the hydration console errors were empty for normal pages, good.
+
+Let me kick off responsive+d ark probes.
+dsh: reasoning:
+While that runs, let me look at the text samples of the key state pages from the 1440 probes to check empty states and content.
+
+Let me examine favorites, recent, settings, offline, help, privacy text samples and count.
+dsh: reasoning:
+Observations:
+- All empty states work (no fabricated data): favorites empty, recent empty, offline 0 cached. Good.
+- privacy page: title '本地处理与隐私说明', but design S07 says '了解 DevTools 在浏览器内如何处理你的输入、偏好与文件。' — note design text says "DevTools" (a naming inconsistency/bug in the design) while impl says DevKit. Also design page has 工作区 with 2 sections (浏览器本地计算 / 离线与缓存) + 4 cards? Actually S07 design mentions a 工作区 with sections. Impl has 6 sections. Let me re-check S07 design fully — earlier awk output for S07 was partly cut ('ih0ztxt-primary' weird). Let me re-extract S07 properly. Also I should note the design's privacy page mentions 'DevTools' instead of 'DevKit' — a design typo.
+
+- settings: impl shows '代码字号 13px' and a range; design segmented 12/13/14.
+- help: impl shows 6 topics + shortcut table 6 rows. Design has 8 shortcut rows + more sections.
+
+Let me now look at the dark/responsive probe results when ready. Check job.
+
+Also I need to check SSR HTML for key content (point 6). Let me do that now for a few pages. The probe metrics for home already showed all content present; but SSR specifically: curl with Accept text/html and grep for a few tool names + first-visit content. Let me test.
+
+Also check the `report` needs coverage table. Let me gather remaining items:
+- S01 homepage: check dark theme tokens (probe k). 
+- responsive 390: sidebar hidden, top nav menu, overflow.
+
+Let me check the background job.
+dsh: reasoning:
+While waiting, let me verify SSR content and hydration for main pages, and check the /offline reachability (is there a service worker? is there a link to /offline? a 404 route for offline?).
+
+Let me grep the repo for 'offline' and service worker / manifest / pwa.
+
+Also check `useRecent` visited storage key 'devkit.visited.v1' — offline.vue reads it, but does anything write it? Let me grep. If nothing writes it, /offline will always show 0 cached tools → S10 "已缓存" state is unreachable, which is a functional gap.
+dsh: reasoning:
+Findings:
+- `devkit.visited.v1` is written by ToolPageLayout (when visiting a tool). So /offline's "已缓存工具" is just "visited tools", not actual cache. Design says缓存状态以浏览器缓存为准; impl approximates. Also no service worker / PWA → there is no real offline support. The site is SSR (nuxt server), so offline would not work at all: with a server-rendered Nuxt app and no service worker, visiting /offline offline would fail to load. So S10 "离线" claim is not real: no service worker, no caching strategy. The `/offline` route itself requires the server. That's a significant finding: S10 offline support is not implemented (design claims offline cached tools usable). Actually the design itself says "缓存由浏览器按页面与脚本粒度决定". But without a service worker, browser HTTP cache may serve assets, but the HTML page navigation offline won't work (no SW). So the S10 premise is largely unattainable. Severity 高/中.
+
+- `/offline` is reachable via privacy page button and direct URL. Let me confirm it's linked from privacy only. Also `help` mentions 离线与缓存 topic in design but impl help doesn't include it. And privacy has link.
+
+Let me verify no nuxt `routeRules`/`prerender` for offline. No PWA. Confirmed via no public dir? `ls devkit/public` printed nothing (no output = dir empty or missing). Let me check.
+
+Now, let me check the SSR output for main pages (point 6) — confirm key content is in SSR HTML. Let me curl home with Accept text/html and grep for tool names and '全部工具'. Also check for hydration mismatch console warnings: probe console arrays were empty for normal pages → no hydration warnings. Good. Except 404.
+
+Let me also verify the homepage's first-visit recommended section: probe home text sample — did it show 推荐工具? Let me check the home text sample for '推荐工具' and '第一次访问'. Also check whether '最近使用' fabricated. Let me look.
+dsh: reasoning:
+SSR works — key content present, no white screen. Good. `本地处理 · 输入不上传` and `首次访问` are design-only (impl doesn't have them).
+
+Now check the 390/1366/dark probes.
+
+Wait, the 390 probe for `/` should have sidebar hidden. Let me wait for job.
+
+Meanwhile, let me check the design S07/S10 complete text (the awk output was garbled because of a text content line splitting). Let me re-extract S07 and S10 main content with min font, to compare precisely. Use grep on the raw file for lines with the specific content. Actually S07 raw file lines 1-162; let me read the main content region.
+dsh: reasoning:
+S07 design is much richer (工作区 with 9 sections + data-flow rows + two tables 会保存在本地/不会保存 + 说明区). Impl privacy has 6 sections + 2 action buttons. So S07 restored partially (content is similar in spirit but layout/structure and many items missing: data flow diagram, the two tables, '我们不作过度承诺', '性能取决于你的设备', etc.). Also design title '本地处理与隐私'; impl title '本地处理与隐私说明'. Design description mentions 'DevTools' (design typo). Impl actions include 离线与缓存状态 (design has 查看离线说明). Good but content coverage differs.
+
+Now let me check the background job.
+dsh: reasoning:
+Still running. Let me use the time to inspect the DkModal, DkSwitch (a11y), and check settings buttonsNoName. And check main.css remaining line 340. Also the theme init (dark mode flicker) - usePrefs likely applies class on mount → possible flash. Let me read usePrefs and check dark rendering.
+
+Let me also check for hardcoded light colors in components (grep #fff / white backgrounds that would break dark).
+
+Let me read usePrefs and DkSwitch.
+dsh: reasoning:
+DkSwitch: role="switch" with aria-checked but no accessible name (no aria-label, no text). In settings, the switch is adjacent to a label span but not associated (no aria-labelledby / id). So buttonsNoName=3 matches the 3 switches. A11y issue (R04). Design R04 可访问性样板 requires keyboard focus & errors. Let me check R04 design content to compare focus states. Let me extract R04 frames.
+
+Also theme: `applyTheme` only in onMounted → on first paint with theme=dark (stored), SSR renders light (no class) then client adds dark after mount → flash of light theme (FOUC). Also colorScheme 'dark' probe sets prefers-color-scheme dark and default theme 'system' → systemDark set on mount → dark applied after mount. So there is a potential flash. The probe k results will show whether dark applied. Let me check.
+
+Also `usePrefs` `media.addEventListener('change', onSystemChange)` but onSystemChange doesn't call applyTheme directly; the watch on isDark triggers applyTheme. OK.
+
+Let me check R04 design and R02 mobile design quickly. Extract R04 text and R02 (BCDR3 already; also FguCb drawer). Let me get R04 frames.
+dsh: reasoning:
+R04 is a design spec page ("设计文档 · 非网站页面") — not an actual site page. So it's essentially requirements: focus-visible 2px accent + 2px offset (impl main.css uses outline 2px accent, offset 1px → offset is 1px not 2px, minor); contrast ratios; toast behavior; error not color-only; disabled non-focusable; modal focus trap and focus return; icon buttons have accessible names.
+
+Key testable R04 items against implementation:
+- focus-visible outline offset: design 2px, impl `outline-offset: 1px` (main.css:259). Minor.
+- contrast: text-primary #12161F on #FFFFFF ≥7:1 — impl tokens same. But impl text-secondary is #5a6472 and text-tertiary #8b94a3 identical. So contrast matches design.
+- Modal focus trap and focus return: need to test DkModal. Let me read DkModal.
+- Toast: success auto-dismiss 3s, error persistent. Let me read useToast/DkToastHost.
+- Icon buttons accessible names: probe buttonsNoName=0 on most pages, except settings switches (3). DkSwitch is role switch without name — R04 requires accessible names for icon buttons; switch is not icon button but still should be labeled. Report as a11y.
+- Disabled buttons non-focusable: DkButton uses `disabled` attr? Let me check.
+
+Let me read DkModal, DkButton, useToast, DkToastHost quickly.
+dsh: reasoning:
+DkModal: focus moves into panel (panel itself focus). But no focus trap (Tab can escape to background). Design R04 requires focus limited within. Also the modal is not `inert`/no focus trap. Report as a11y medium. Also design S06 confirm modal w=540; impl width 420px in settings. Minor.
+
+Now let me check the responsive/dark probe results.
+dsh: reasoning:
+Let me wait but also do more analysis. Let me check the category page's `relatedByTag` output by probing /category/java text (already have cat-java.json). Let me check its text sample for '相关入口' and 'Cron'.
+dsh: reasoning:
+Confirmed:
+- /category/java shows '相关入口' with only "Cron 解析与执行预览" — a bug/oddity (design has no such section; the computed logic excludes t24 because it's already in java). Evidence: `devkit/app/pages/category/[id].vue:31-34`.
+- cat-format: page shows a flat grid with ToolCards (name/desc/tags). No page description/chip, no grouped sections. Design S02 wants grouped sections. Also the header title font is 22 (design 22 OK), count '4 个工具' 12 (design badge 10.5) etc.
+
+Now let me check the responsive job. Let me also verify the search palette '国密' result. Let me write a quick playwright test that opens palette with Ctrl+K and types 国密, counts results. And test 'smtool' empty. Also test settings modal focus. Let me do that after job.
+
+Let me check job.
+dsh: reasoning:
+Responsive:
+- 390×844: no horizontal overflow (docW 390 == viewport). Sidebar hidden (w=0), top nav h=60. Good. But R02 design top bar h=56; impl 60. Minor.
+- 1366: sidebar 236, main 1130, no overflow. Good.
+- Dark: all pages dark, tokens match design dark values. No console errors. Good.
+
+But wait: 390 homepage docH 7786 — extremely tall (all 41 cards). Also at mobile, the top nav search is a button with text hidden → an icon-only search button? Let me check touch targets and whether the ⌘K hint hidden. And the design R02 mobile has bottom-ish categories chips, favorites grid, etc. Not implemented. Also the mobile `home__grid` uses auto-fill minmax(260px) → single column at 390, fine.
+
+Now let me test palette search and dark screenshots maybe. Let me view the dark screenshot quickly to check contrast and the mobile screenshot. Let me read images. Actually reading images costs a lot; but it's useful for visual fidelity. Let me view home-dark.png and home-mobile.png.
+
+Actually, let me first do targeted functional tests via playwright:
+1. Palette '国密' → result count and categories.
+2. Palette 'smtool' → empty.
+3. Settings switch accessible names / focus.
+4. Modal focus trap.
+5. Check that `最近使用` records after visiting a tool.
+6. Check `首页 推荐` doesn't fabricate.
+
+Let me script these.
+dsh: reasoning:
+Confirmed:
+- Palette search match works: 国密 returns exactly 3 tools in 摘要与加密, matches S03 design. Good.
+- Empty state matches semantically but text differs.
+- Settings switches: 3 role=switch buttons all with empty accessible names → a11y issue (verified). probe buttonsNoName=3.
+- Modal focus trap BROKEN: after 6 Tabs, focus escapes to `.topnav__src` (background) while modal is open. R04 requires focus limited within the modal. Confirmed a11y bug (medium/high).
+- Recent records after visit. Good.
+
+Now S04 favorites: let me test with a favorite added — check that it renders cards. Not necessary.
+
+Let me also verify S06 clear confirm modal works (clear) — the modal open test confirms.
+
+Now let me look at screenshots. Let me view home (light), home-dark, home-mobile to visually assess fidelity. But images may be large. Let me read home-dark and home-mobile to check contrast/overflow.
+
+Actually, the probe metrics are sufficient. But visual check of dark theme might reveal hardcoded light values. Let me grep the CSS variables only. Dark tokens matched; all main pages dark. Let me also check the `--editor-bg` dark etc. Fine.
+
+Let me check for hardcoded background in shell/layout: TopNav uses var(--surface). Good.
+
+Let me check the theme flash (FOUC): Since theme applied onMounted, with system dark preference the SSR HTML has no `dark` class, so first paint light then dark. Let me test by measuring computed bg immediately vs after. Hard. The design R03 requires dark theme; a flash is a minor issue. Let me detect: load page with colorScheme dark and check whether the initial HTML includes class 'dark'. curl can't (SSR always light). So first paint is light → flash. I'll report as low/medium.
+
+Actually, `nuxt.config` has no inline script to set theme before hydration. Let me confirm no plugin. grep for 'dark' in app. usePrefs only. So FOUC exists. Report low.
+
+Now let me quickly view a couple screenshots for visual confirmation of homepage vs design and dark.
+
+Let me check image sizes first.
+dsh: reasoning:
+Visual confirms:
+- Home page has 推荐工具 section with 6 cards, then category sections. Dark theme applied correctly, no obvious hardcoded white.
+- Sidebar category sublists fully expanded by default (design S01 shows collapsed? Actually design shows h=0 sublists; but maybe the design's shared component uses collapsed default). Hmm, in the design the sub-lists have height=0, meaning collapsed. The impl expands all 8 categories with all 41 tools → very long sidebar requiring scroll. Design sidebar height 900 with privacy block visible at bottom, and sublists collapsed. Actually in the design, the privacy block is at the bottom (flex spacer). With sublists at h=0 they'd be collapsed and everything fits. The impl expands all → sidebar scrolls and the privacy card may be pushed. From the screenshot, the sidebar is scrollable and shows all items; privacy block might be below fold. Minor/medium fidelity issue.
+
+Wait, look again: design S01 sidebar items show category rows AND sub-list item names as children with h=0. Since the children have h=0, they're collapsed. But the design also has `descendants`/variant toggles. The impl default expanded. Probably acceptable (design may intend expanded on tool pages). I'll mention as minor.
+
+- Homepage title '开发者本地工具箱' 22px vs design '全部工具' + icon. Also no '本地处理 · 输入不上传' chip nor '偏好设置' entry. Also no search scope note. These are design fidelity issues.
+
+- The recommendation cards include SM4/JWT/二维码 which aren't in design's recommended (design recommends JSON格式化, JSON转Java类, Base64, 时间戳). Minor.
+
+Let me view the mobile screenshot and the 404 screenshot. Actually 404 screenshot would show the wrong title. Let me view 404-cat.png to confirm and mobile.
+dsh: reasoning:
+The 404 screenshot clearly shows:
+- H1 '页面出现了错误' (wrong)
+- desc '工具不存在'
+- 常用工具 heading with NO items.
+- A Nuxt dev error overlay at bottom-right ("An error has occurred" Nuxt logo) — that's the app-init error overlay! This is visible to the user in dev. Confirms the error.
+- Also sidebar shows '源码' etc.
+
+Mobile screenshot:
+- Top nav: menu button, logo, search icon-only button, 源码 icon, theme toggle. Looks OK. Sidebar hidden. No overflow.
+- R02 design top bar h=56 and has drawer button + brand + search icon + star icon. Impl has theme toggle too. Minor.
+
+Now I have enough for a solid report. Let me also quickly check the remaining design frame S10 first-uncached and R02 drawer design for completeness, and check whether the design mentions a Nuxt dev overlay. Not needed.
+
+Let me also verify some specific claims:
+- S01 design says "8 分类 41 工具" and impl tools.ts 41/8 ✓. But R01/R03 use 24/6 ✓.
+- Design S02 摘要与加密 header badge says '7 个工具' while sidebar says 6 and groups total 6. This is a design internal inconsistency. Worth noting: implementation shows '6 个工具'. Actually design bug. Also '每个分类 4 个工具' in R01.
+
+Let me double check S02 design frame for badge: yes yF6ji '7 个工具' but category has 6. And impl /category/crypto would show 6. Wait we only probed /category/format and /category/java. Let me probe /category/crypto quickly to confirm count 6 and page text. Actually not necessary; tools.ts crypto has 6 (t12-t17). Design sidebar count 6. Design badge 7 is a design error. Let me note.
+
+- S09 design: 'HTTP 404 · /t/unknown-tool' with 41 tools reference. Impl error page title mismatch (bug). Also design '常用' 4 tools; impl 5 and empty.
+
+- Design S03 result item includes 分类 label; impl uses icon only. Minor.
+
+Let me also check `favorites.vue` a11y: `DkSelect` input no label (probe inputsNoLabel=1). Let me read DkSelect to confirm it's a native select without label. Minor.
+
+Now, the report's coverage table should cover S01-S10 and R01-R04. Let me also mention that S10 mentions "已缓存可处理/首次未缓存" two states but impl only approximates via localStorage visited; and there is no service worker / PWA (no devkit/public, no PWA config), so offline is not actually implemented. Let me verify no service worker registered: probe failed_requests empty, and grep for 'serviceWorker' returned nothing. Also check `devkit/package.json` for @vite-pwa. Let me quickly check package.json.
+
+Also check "line count 43 for slug" earlier; tools 41 + 2 categories? categories don't have slug. Actually grep -c "slug:" = 43? Let me not worry; the registry count is 41.
+
+Let me check package.json and whether there's a manifest link.
+dsh: reasoning:
+No PWA / service worker. Confirmed.
+
+DkSelect is a bare `<select>` with no label/aria-label → favorites page inputsNoLabel=1 (the sort select). Design S04 has a visible '排序' label. Impl's select has no visible label either. A11y minor.
+
+Now let me finalize. I have plenty of evidence. Let me also quickly confirm the tools count per category matches design S01 counts: from tools: format 4 (t01-t04), text 7 (t05-t11), crypto 6 (t12-t17), time 4 (t18-t21), java 5 (t22-t26), web 6 (t27-t32), api 4 (t33-t36), file 5 (t37-t41) = 41. Matches design S01 exactly. Good.
+
+Also design S01 sidebar order: 全部工具, 我的收藏, 最近使用, 工具分类, 数据格式, 编码与文本, 摘要与加密, 时间与标识, Java 开发, Web / Vue, 接口辅助, 文件与图片. Impl categories order in tools.ts: format, text, crypto, time, java, web, api, file → matches names: 数据格式, 编码与文本, 摘要与加密, 时间与标识, Java 开发, Web / Vue, 接口辅助, 文件与图片. ✓
+
+Now one more: the design S01 category section names and tool order match impl. ✓
+
+Let me confirm the "源码" link points to https://github.com (placeholder). It's a real fidelity issue (dead link). Also S08 feedback says link to repo. Design S08 says "反馈按钮位于顶部导航右侧". Impl top nav has no feedback button. Report.
+
+Also note TopNav '源码' design is a surface button; impl has border + github icon. Minor.
+
+Let me now check the CSP/dark for editor etc. Not needed.
+
+Now let me also verify point 6 (SSR/hydration) more: normal pages have no hydration warnings (console empty). 404 has NUXT_E1005. Good.
+
+Let me check the probe console for cat-format etc: empty. Good.
+
+One more: check that `/category` (no id) doesn't crash? Not needed.
+
+Let me check the 404 for `/category/nope`: createError thrown at setup with fatal true. Its SSR title? probe title '页面不存在 · DevKit', H1 same wrong. Good.
+
+Now let me write the report. I need to be thorough but within reason. Let me structure:
+
+## 结论摘要 (coverage %, top 3-5 severe)
+## 覆盖对照表
+## 设计还原问题 (per issue)
+## 功能与代码缺陷
+## 无法验证/存疑项
+## 修复优先级建议
+
+Let me organize the findings:
+
+Severity 阻断:
+1. 404 错误页渲染错误分支 + hydration/初始化失败 + Nuxt 错误浮层. evidence: error.vue:11 getTool undeclared; probe 404-tool/404-cat console NUXT_E1005; H1 vs title mismatch; empty 常用工具; screenshot shows Nuxt error overlay. Impact: S09 broken.
+
+Severity 高:
+2. S10 离线页与离线能力不真实: 无 service worker/PWA（无 devkit/public，package.json 无 PWA 依赖，nuxt.config 无配置），SSR 站点离线无法打开任何页面；/offline 只展示 localStorage 'devkit.visited.v1'（由 ToolPageLayout 写入）近似"已缓存"，首页/其他页面无离线入口；实现内容与设计稿 S10（已缓存/未缓存两栏、重试、说明区）差距大。Evidence: probe offline text, grep, files.
+3. S04 收藏页实现与设计稿差异大：设计稿是工作区表格（工具/分类/收藏时间/操作、排序、仅显示可用、全部取消收藏、状态栏、使用说明+常见问题），实现是卡片网格 + DkSelect；缺分类列/收藏时间/打开按钮/说明区。Evidence: favorites.vue, design S04 nodes, probe.
+4. S05 最近使用同样缺表格列/分组切换/说明区/状态栏；清空文案不符。
+   -- actually severity 中/高. I'll put 中.
+5. 设计稿 R01/R03 仍用旧版 24 工具 / 6 分类（Web 开发），与 S01 的 41/8 及实现不一致；R01/R03 的首页结构也是旧版（常用工具/热门标签），需明确。Severity 高 (文档不一致) — it's a design doc issue.
+
+Severity 中:
+6. S01 首页结构/文案偏差：标题、页头缺失（图标、说明、本地处理标记、偏好设置入口）、搜索卡片尺寸与说明、无"快捷与最近"分区、无首次访问空收藏态文案；分类目录用整卡（图标/描述/标签）而非设计的名称+一句用途，页面高度 3131 vs 设计 1583。
+7. S02 分类页未实现设计稿的分组（摘要/对称/非对称、代码生成/配置转换/日志诊断）、页头徽标、'本地处理 · 输入不上传'、分类内搜索文案与尺寸；Java 页出现设计中没有的"相关入口"且只含 Cron（逻辑可疑）。
+8. S06 设置页结构差异：设计稿为工作区（面板标题/提示/分组：外观/编辑器/动效与记录/本地数据 + 重置偏好 + 清除范围选择 + 说明区），实现为卡片 + 3 个清除按钮；代码字号用 range 12–18 vs 设计分段 12/13/14；缺说明区/状态栏。
+9. S07 隐私页内容覆盖不足（缺数据流向、会/不会保存两张表、我们不作过度承诺、性能提示等），标题文案不同；设计稿页说明误写 "DevTools"（设计 bug）。
+10. S08 帮助页快捷键表缺 5 项（复制/下载/清空/显示隐藏密钥/只看输入结果），缺"反馈入口的位置"和"离线与缓存"两节；反馈按钮在顶栏缺失。
+11. S03 命令面板：结果项缺分类标签与"3 个结果"计数/匹配说明；空态文案与按钮主次不同；输入样式（设计为居中弹层带输入内容/Esc 关闭）。功能正确（国密→3 条）。
+12. 无障碍：3 个 DkSwitch 无可访问名称（settings）；DkModal 无焦点陷阱（Tab 逃逸到背景 topnav__src），与 R04 要求不符；focus-visible offset 1px vs 设计 2px；favorites 的排序 select 无 label。
+13. 深色主题首帧闪烁：主题在 onMounted 才应用，SSR 输出无 dark class，首次绘制为浅色（FOUC）。
+14. 顶栏尺寸/间距：设计 gap=28 pad [0,24] vs 实现 gap=16 pad 0 20；侧栏设计 pad [14,12] vs 实现 12；主内容设计 pad [26,32] vs 实现 24/32；侧栏隐私块设计为 surface-subtle 卡片，实现为带 border-top 的链接。
+15. '源码' 链接硬编码 https://github.com（占位/无效），设计为"源码入口"。
+
+Severity 低/建议:
+- logo radius 7 vs 8; 侧栏分类项加了设计稿没有的色点与折叠箭头；侧栏默认全展开（设计稿子列表 h=0 折叠）。
+- 首页推荐工具数量/内容与设计稿不同。
+- 设计稿 S02 摘要与加密徽标写 '7 个工具' 实为 6（设计 bug）。
+- 移动端顶栏 60 vs 设计 56；R02 移动端设计（分类 chips、收藏网格、最近使用列表、抽屉）未实现。
+
+Let me verify a couple statements before writing:
+- "无离线入口" — privacy has a link to /offline. So there IS an entry (privacy page). Let me correct: /offline reachable via privacy page button + direct URL, but not in top nav/sidebar; and no offline-capable SW.
+- Home main height design 1583 vs impl 3131. Yes.
+- Design S01 page header has '偏好设置' entry (q4hd8U) and '本地处理 · 输入不上传' chip (MOlzt). Impl lacks both. Evidence lines 114-115 of S01.txt.
+
+Let me double check the design S01 first-visit recommended content: 4 items (JSON 格式化 '最常用', JSON 转 Java 类 'Java 工程', Base64 编解码 '编码入门', 时间戳转换 '零参数'). Impl 6 items.
+
+Now regarding "首页最近使用/推荐是否编造数据": impl firstVisit shows hardcoded recommended (labeled 推荐), no fabricated timestamps. When not first visit, shows real favorites/recent. Good — no fabrication. Mention as pass.
+
+Also S04/S05 empty states real (probe shows empty). Good.
+
+Let me also verify favorites page with a favorite to ensure sorting etc works — optional. Skip.
+
+Now let me confirm the R02 mobile design details for the coverage table: R02 frames: 首页/搜索弹层/JSON格式化/SM4/图片压缩/导航抽屉/SM4 IV错误. Implementation relevant: category pages and tools. Let me note we verified 390 responsiveness on system pages (no overflow, sidebar hidden, drawer exists). I could verify drawer opens. Let me quickly test the mobile menu button opens drawer, and search palette on mobile. Also check touch target sizes.
+
+Let me run a quick mobile interaction test.
+dsh: reasoning:
+Mobile drawer works. Touch targets: menu 30x30, logo 28x28, search 69x34, src 32x32, theme buttons 28x26. Design R02 drawer button is 40x40 and icon buttons 40x40. Impl targets are below 40x40 (WCAG 2.5.8 min 24x24 is met; 44x44 recommended). Theme buttons 28x26 and 26px height are small. Report as a11y/touch 中/低: touch targets below design's 40x40 and below 44px recommendation.
+
+Now I have plenty. Let me write the report.
+
+Let me also double check S10 rRK06 first-uncached design title '无法加载该工具' and page '尚未缓存到本机' — impl /offline when offline shows '当前处于离线状态' and when online '资源未就绪'. Also the design has 已缓存 list and 未缓存 list with 重试. Impl only 已缓存 list (from localStorage visited). Confirmed.
+
+Also need to note: `offline.vue` reads `navigator.onLine` but the page itself requires the server to load (SSR). Design intends cached offline. Note.
+
+Let me also check that the `/offline` page is reachable and returns 200 (probe status 200). Yes. And accessible via privacy. So "可达性" is fine but not in nav.
+
+Now, "覆盖对照表" — list S01..S10, R01..R04.
+
+I'll now write the report file. Must be Chinese, Markdown, with evidence and severities. Last line `DONE: <abs path>`.
+
+Let me also mention the design S02 badge '7 个工具' inconsistency and R01/R03 24-tool.
+
+Let me recall exact evidence line numbers:
+- error.vue:11 getTool usage; error.vue:1-2 imports.
+- main.css:257-261 focus-visible offset 1px.
+- main.css:60-61 topnav/sidenav dims: --topnav-h:60px; --sidenav-w:236px.
+- default.vue:84 shell content padding 24px 32px 48px; default.vue:139-146 mobile breakpoint 960.
+- TopNav.vue:92 gap:16; :94 padding:0 20px; :45-54 源码 link github.
+- SideNav.vue:105 padding 12px; :228-235 privacy block border-top.
+- index.vue:37-41 title/sub; :44-48 search; :50-77 quick; :79-91 categories; :167/203 grid 260px.
+- category/[id].vue:31-34 relatedByTag; :48-65 bar.
+- favorites.vue:32-41 select; :45-54 grid.
+- recent.vue:25-27 clear button.
+- settings.vue:83-92 range.
+- help.vue:42-49 shortcuts (6).
+- privacy.vue:4-35 sections (6).
+- offline.vue:16-23 visited key.
+- CommandPalette.vue:74 placeholder; :101-109 empty.
+- DkSwitch.vue:8-15 no aria-label.
+- DkModal.vue:19-33 (focus moves but no trap).
+- usePrefs.ts applyTheme onMounted.
+- tools.ts:34-43 categories; 41 tools.
+- ToolPageLayout.vue:13-16 writes devkit.visited.v1.
+
+Let me confirm ToolPageLayout line numbers quickly (grep gave 13,16). Good.
+
+Also S01 design node IDs: LiwdR; page header RYjz8/gQRAV; chips jTHS9/tOcVI. S02: h1lFMx groups. S04: FdLxl/vO8fN. S05: hVwyK/G5GfwW. S06: Io3lB/l5gzJ. S07: zCSiu. S08: q9n6x. S09: edecI. S10: S0Kfwk/rRK06. R01: tUNVK; R02: BCDR3; R03: A51Nl; R04: C8oVvR/ubJHY.
+
+Now let me write. I'll be comprehensive but not bloated.
+
+One more check: verify the design S01 says sidebar '我的收藏 6' '最近使用 8' and impl shows 0 (fresh) — that's expected dynamic. Fine.
+
+Also impl home shows "推荐工具" when 0 favorites & 0 recent — matches design first-visit variant (J8Yrb) which also shows 推荐工具. Good. But design first-visit also shows 收藏快捷 0/41 with empty text. Impl doesn't. Minor.
+
+Let me write the report now.
+
+I should mention coverage: S01–S10 (11 frames incl S10 two variants, plus S02 two variants, S03 two, S04 two, S05 two, S06 two) and R01–R04. Coverage: all inspected.
+
+For the "无法验证/存疑项":
+- Real offline behavior cannot be fully verified without a service worker; and disconnecting network would make the dev server unreachable. Mark as unverifiable/high risk.
+- R02/R03 tool-specific frames (JSON 格式化/SM4/图片压缩 深色) partial check via /tools/sm4 probe only; detailed tool-level not in scope (subagent #1 scope is system pages). Mention.
+- Design dark variables for code highlighting matched tokens but I didn't compare each editor token.
+- SSR-only flash not directly measured with performance trace; inferred.
+- The exact mechanism of error.vue empty common list (why setup didn't hard-crash) is uncertain, but the undeclared-getTool evidence is definite.
+
+Let me write it.
+dsh: reasoning:
+Let me verify the file exists and the last line is correct. Also double-check a couple of evidence line numbers I cited (settings.vue:141 DkModal, help.vue:42-49, etc.) to avoid inaccuracies.
+
+- settings.vue:141 DkModal width="420px" ✓ (line 141).
+- help.vue:42-49 shortcuts ✓ (42 computed, 43-48 items).
+- privacy.vue:4-35 sections ✓.
+- CommandPalette.vue:101-109 empty ✓.
+- DkSwitch.vue:8-15 ✓ (template button lines 8-15).
+- DkModal.vue:19-33 → my cited lines 31-33 for focus. Let me check: file lines 17-25 watch, 27-29 onKeydown, 30-33 onUnmounted... Actually the focus move is lines 22-23. Let me re-verify. The report says "`DkModal.vue:31-33` 只把焦点移入面板" — that's wrong. Let me check the actual file lines.
+
+From earlier read:
+```
+1 <script setup lang="ts">
+2 const props = defineProps<{
+...
+9 const panelRef = ref<HTMLElement>()
+10 let lastFocus: HTMLElement | null = null
+11
+12 watch(
+13   () => props.open,
+14   (v) => {
+15     if (import.meta.server) return
+16     if (v) {
+17       lastFocus = document.activeElement as HTMLElement
+18       nextTick(() => panelRef.value?.focus())
+19       document.body.style.overflow = 'hidden'
+20     } else {
+21       document.body.style.overflow = ''
+22       // 模态框关闭后焦点回到触发入口
+23       lastFocus?.focus?.()
+24     }
+25   }
+26 )
+```
+The read output didn't include line numbers by me, but the tool did number them. Let me just re-check the exact lines to fix citations. Actually the read tool output showed line numbers? It didn't show them explicitly in the rendered output I received (it showed code only). Let me grep to get accurate line numbers for the focus lines, and a few others I cited.
+
+Let me verify and correct.
+dsh: reasoning:
+I need to fix a few citations:
+- DkSwitch: cited `DkSwitch.vue:8-15` → actual button is lines 7-16; role switch line 9, aria-checked line 10. Change to `DkSwitch.vue:7-16`.
+- DkModal: cited "DkModal.vue:31-33 只把焦点移入面板" → actual focus lines 19-20; tabindex line 51. Change to `DkModal.vue:19-20`.
+- DkSelect cited `:16-18` → actual `<select>` line 17. Change to `DkSelect.vue:17`.
+- error.vue:31 reference is correct.
+
+Let me make these edits.
+dsh: reasoning:
+Now let me verify the report reads well and the last line is exactly `DONE: <path>`. It is. Let me do a final sanity check of the file (headings) and confirm no accidental issues.
+
+Also the report file should be the only output; I created helper files under audit/raw/r1 (allowed, audit dir). That's fine.
+
+Let me do a quick grep of the report for the required sections.
+Report complete and written to `/Users/hao/WebstormProjects/web_tools/audit/reports/r1-system-pages.md`.
+
+## 审核要点回顾
+
+**方法**：逐帧读取 S01–S10（含各双变体，解析 `content` 与 `ref`）与 R01–R04 的真实节点数据；逐页对运行站点跑了 1440×900 / 1366×768 / 390×844 / `--dark` 的 Playwright 探测；用 curl 校验 SSR；用 Playwright 实测搜索、弹层焦点、开关可访问名、移动抽屉。
+
+**最严重问题**：
+1. **【阻断】404 页故障** — `/tools/does-not-exist`、`/category/nope` 的 H1 走错分支（“页面出现了错误”），常用工具列表为空，console 报 `NUXT_E1005`，右下角出现 Nuxt 错误浮层。根因是 `error.vue:11` 调用未导入的 `getTool`（Vite 转换产物与 `.nuxt/imports.d.ts` 双重确认）。
+2. **【高】S10 离线能力实际不存在** — 无 service worker/PWA，SSR 站点断网无法加载任何页面；`/offline` 仅用 `devkit.visited.v1` 近似“已缓存”。
+3. **【高】R01/R03 适配稿仍是旧版 24 工具 / 6 分类**（含“Web 开发”），与 S01 及实现的 41 工具 / 8 分类冲突。
+4. **【高】S04/S05 工作区表格与说明区未实现**。
+
+**通过项**：明/暗主题令牌与设计 dark 变量逐项一致、1366/390 无横向溢出、41/8 目录准确、空态不编造数据、普通页面无 hydration 警告、SSR 首屏完整。
+
+报告含覆盖对照表、逐条带证据（设计节点 ID / `文件:行号` / 命令输出）、存疑项与优先级建议，末行为 `DONE: <绝对路径>`。

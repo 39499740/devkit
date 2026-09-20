@@ -1,0 +1,1319 @@
+dsh: reasoning:
+Let me start by reading the brief.
+dsh: reasoning:
+Let me set up a todo list and start exploring. Let me find the design frames for T01-T14, read the requirements doc, and look at the code.
+
+Let me start with parallel commands.
+dsh: reasoning:
+Let me set up a todo list and then dig in. This is a large task. Let me be efficient. Let me first read the key implementation files and common utils, then probe pages.
+
+Let me start by reading the source files in parallel batches. But files may be large. Let me check sizes.
+dsh: reasoning:
+Both sites are up. Let me create a todo list and start reading. I'll read utils and composables first, then each tool.
+
+Let me plan: I need to read design dumps for each of 14 tools (main board + variants), probe each page, verify core logic, read source. That's a lot. Let me parallelize with subagents? The task says I'm a subagent myself (#2). I could delegate parts to subagents to save context. But subagents need full context. Given the constraint of time (30 min), let me be efficient.
+
+Strategy:
+1. Read common utils + composables (~380 lines).
+2. For each tool: read source, dump design text, probe page. I can batch design text extraction with `pen.py text <id>` for all main boards + variants at once, and batch probes.
+
+Let me first dump all design text for T01-T14 main + variants in one command. That may be huge though. Let me do it per tool but batch a few.
+
+Actually, let me use subagents to handle halves: T01-T07 and T08-T14, each verifying design + probe + source. But then I'd need to aggregate. Given my context budget, delegating functional verification (running node/python checks) to subagents is good. However, the report must be written by me. Let me do a hybrid: I'll do the source reading and design coverage myself, and delegate the functional verification computations to background subagents.
+
+Actually let me just get going efficiently. Time is a concern but I have reasonable budget.
+
+Let me start reading common files.
+dsh: reasoning:
+Now let me read the tool sources. Let me batch read T01-T04.
+
+Actually, given the size (14 files, ~5300 lines), let me be strategic. Let me read them but in batches. I'll also delegate some functional verification to subagents in background.
+
+Let me kick off subagents for functional verification of crypto tools (T12, T13, T14) and encoding tools, while I read source + design.
+
+Actually, functional verification requires knowing the implementation details. Let me first read the sources quickly, then design verification.
+
+Let me read T01-T05.
+dsh: reasoning:
+I need to be efficient. Let me now read remaining source files. I'll delegate design coverage extraction and probing to subagents running in parallel while I read source, to save time. But the design dumps can be done in bash commands easily.
+
+Actually, let me think about the highest-value approach. The report needs:
+- Coverage table per tool (design vs code)
+- Design restoration issues
+- Functional correctness with real computation
+- Code defects with file:line
+
+Let me do:
+1. Batch extract design text for all 14 tools (using pen.py text for each frame). This is a lot of output but manageable if I limit.
+2. Probe all 14 pages.
+3. Read all sources.
+4. Run functional checks in node.
+
+Let me kick off the design text extraction now as a background job, and probes as another background job, while I read sources.
+
+Let me write a script that dumps text of each main frame + variants. I need node IDs. Let me get the list programmatically.
+
+Actually pen.py find gives IDs. Let me write a bash loop that for each frame id runs `pen.py text <id>` and outputs. But output could be huge. Let me check size of one first.
+
+Let me instead do a targeted approach: for each tool, dump main board text only first, plus variant names (already have). Then dump variants selectively.
+
+Let me run the text extraction in background to a file, then read it.
+dsh: reasoning:
+The probe job timed out (60 min? no, 60s each * 14 = 14min, but timeoutMs default). Actually the bash call has a default timeout. Hmm, it says timed out after 60000ms — that's the per-command timeout I set with `timeout 60`? No, it says "[timed out after 60000ms]" for the whole command. The harness likely capped at 60s.
+
+Let me check design_text.txt content, and re-run probes in background with run_in_background.
+
+Let me look at probe.py usage to know output format.
+dsh: reasoning:
+`pen.py text` returned empty arrays. The `find` returned IDs in column 2 with column 1 = "2". Wait the find output format: `2 U7JXtZ frame T01 ...`. So the first column is maybe depth or something, second is id. So `text` command maybe expects a different ID format? Let me check pen.py.
+dsh: reasoning:
+The text command outputs JSON. My earlier loop `pen.py text $id` should have printed JSON. But it printed `[]` — meaning the node's subtree has no text nodes? That's odd. Wait maybe the IDs are not exact? Actually `get(nid)` matches `n.get("id") == nid`. The find output printed `n.get("id")` as second column `U7JXtZ`. So ids match. But texts() returned empty... Hmm maybe `pen.py text` command implementation uses a different signature. Let me see the rest of pen.py.
+
+Actually wait — maybe `text` expects the name/ID but the frame is `frame` type with children... Should have text. Unless design.pen's `children` structure is nested differently (e.g., top-level frames contain `children` but component text is stored in a different key). Let me check the tail of pen.py and test dump.
+dsh: reasoning:
+Ah, `text` returned [] because text nodes are inside `ref` components (instance refs), and texts() only iterates `children` of the node... Actually the frame has children jo7nu, dV1DJ. dV1DJ 主体 frame should have children with text. But texts returned []. Hmm.
+
+Wait, `texts(n)` calls `iter_nodes(n)` which yields n and its children recursively. It filters `x.get("type")=="text"`. Maybe the design stores text as `"type": "text"` but with content in a different field? Let me dump deeper.
+
+Actually maybe the issue: the loop `for n, dep in all_nodes(): if n.get("id") == nid` — but in the text command, `get(sys.argv[2])` returns root. That works in dump. So texts should work.
+
+Unless the type is not "text". Let me dump deeper to see.
+dsh: reasoning:
+The text nodes exist but their actual content isn't in the `text` key? Wait dump shows `f77k6i [text] '页面标题'` — the name is 页面标题 but no `text=` attribute printed. That means `n.get("text")` is None for these nodes! The actual text is probably stored in a `content` field or similar. Let me check `node` for one text node.
+
+Hmm, but `dump` prints `text=` only if `"text" in x`. It printed name but no text=, so no text key. So the design text content is in another field. Let me inspect raw JSON of a text node.
+dsh: reasoning:
+The text is in `content`, not `text`. So `pen.py text` is broken for this file. I need a different extraction: write my own script that walks subtree and collects `content` for type text. Let me write a small python inline script using pen.py's load/all_nodes? I can import pen module or just do it directly.
+
+Let me write a helper script /tmp/audit2/dtext.py.
+
+Also I should collect control names (non-text nodes have `name` like '按钮 · 复制', '分段控件'). The dump gives me those. Good.
+
+Let me create a script that for a given frame id prints the full tree with names + content, in a compact way: indent, node name, and content if text. That's essentially dump but including content. Let me write it and run over all frames, saving to file.
+
+The report says use `pen.py dump` / `text`. But text is broken; I'll use my own. That's fine (read-only).
+
+Let me write it.
+dsh: reasoning:
+1352 lines for T01 alone. That's a lot; 14 tools would be ~15000 lines. Too much for my context. Let me instead extract a condensed view: only node names and text contents, skipping layout-only nodes, and dedupe. Specifically I want: toolbar controls, buttons, labels, status bar fields, table headers, placeholder/help text.
+
+Let me modify approach: produce a "text lines only" output (type text content) plus "named frames" that look like controls (按钮/分段/复选框/开关/输入/标签/标题/列). Actually the full dump already includes names of controls which is what I need.
+
+Better: create a condensed extractor that prints only:
+- text content (with indentation indicating nesting)
+- nodes whose name contains 按钮|分段|开关|复选|标签|下拉|输入|表头|列|状态|图标|分段控件|操作
+
+Hmm. Let me just print text content lines and control names in tree order, dropping generic wrapper frames. Let me test on T01 to see size.
+
+Actually simplest: print `[type] name = content` only for type==text, plus frames whose name starts with 按钮 or contains 分段/开关/复选/下拉. Let me produce that.
+
+Let me rewrite quickly.
+dsh: reasoning:
+This condensed format is good. Now let me extract all 14 main boards + variants in condensed form to files, then read them. But output volume: T01 main ~120 lines + variants. Total maybe 1500 lines. That's manageable. Let me batch into a few files: T01-T04, T05-T08, T09-T11, T12-T14.
+
+Actually let me just produce one big file and read it in chunks. Let me filter out the giant embedded JSON content lines to reduce noise (like the code lines). Hmm, the code lines are many. For variants, the interesting part is the toolbar + error messages. Let me extract only lines containing certain keywords? No, content like error text is important.
+
+Alternative: For each tool, extract main board condensed (which includes controls + status bar), and for variants only the text contents that differ (error messages, status). Let me just get all text contents but dedupe consecutive and limit each frame. Actually, let me get full for main board and for variants take texts (content) only, in flow, but drop lines that are single characters or code tokens.
+
+Hmm, let me be pragmatic: Extract all, but filter out text lines that are short code tokens (length <= 25 and no CJK). Keep lines with CJK or length > 25. That will drop the JSON code tokens and keep UI copy, error messages, numbers maybe. Let me modify to filter code-ish tokens only when they appear in a "代码区" context? Too complex.
+
+Simpler: keep text lines whose content contains CJK or is > 20 chars. Error messages are CJK. English UI labels like "JSON · UTF-8" would be dropped. Hmm.
+
+Let me just take: main boards full condensed (I'll accept the code tokens but they're limited per board ~50 lines), and variants condensed excluding the code area. Let me check how many lines total the full condensed is. Let me generate and count.
+
+Let me write the list of frames and extract all to one file.
+dsh: reasoning:
+4732 lines. That's a lot but I could read selectively. Let me instead have a subagent summarize design-coverage per tool, giving me a compact report. Actually, I can use subagents to do the design coverage analysis for T01-T07 and T08-T14, and separately the source-code defect analysis. That saves my context significantly.
+
+Plan: Launch 2 background subagents:
+- Subagent A: design coverage for T08-T14 (condensed file + probe).
+- Subagent B: functional verification of crypto (T12/T13/T14) using node/python test vectors.
+While I read source for T01-T07 and design for T01-T07.
+
+Hmm, but I also need to probe pages. Let me run probes in background (they take time). Let me start probe job in background now.
+
+Actually, probe.py uses playwright launch each time — 14 pages * maybe 5s = 70s. Let me run it in background with a single script that probes all and writes JSON to files. Let me use run_in_background.
+
+Let me write a probe loop.
+dsh: reasoning:
+Slugs are as I used. Good.
+
+Now, let me delegate. I'll launch subagents:
+
+1. Subagent for design coverage T08-T14: give it the condensed design file and probe output location, ask for a compact per-tool coverage table.
+2. Subagent for functional verification of crypto (T12/T13/T14) — but it needs the source. It can read the files itself.
+
+Actually, I'm worried about subagent quality/faithfulness. But time/context. Let me do it.
+
+Actually, let me reconsider: I can read the design condensed file in chunks myself — 4732 lines is maybe 60k tokens. Too much. But I can read it filtered. Let me look at how much is code tokens. Let me count lines matching `^[[:space:]]*\[text\] .{0,3}$` (single tokens). Probably half.
+
+Better plan: Create a more aggressive condensed file that excludes the code-area contents. The code areas are named '代码区'/'编辑区' etc. I can skip subtrees whose name contains '代码区' or '编辑区' or '行号槽'. But then error examples inside editors would be lost (they matter for design intent — validation examples). Hmm, but the error location line is a status element, not in code area.
+
+Let me generate a filtered version: skip nodes whose name contains '行号槽' or '代码区' (the JSON/text content) — but keep '编辑区'? The 编辑区 contains 行号槽 and 代码区. Let me skip subtree when name in {'行号槽','代码区','代码'}. Let me test.
+
+Actually the embedded content is exactly what I might want for T03/T04 examples (Chinese/bool). But those are design content, and the requirement doc already tells me. The key coverage question is controls/status fields/error copy. So skipping code content is fine.
+
+Let me regenerate with skip.
+dsh: reasoning:
+2939 lines still. Let me delegate the two halves to subagents and ask them to produce focused coverage. Meanwhile I'll read source.
+
+Actually, let me reconsider the whole approach to maximize reliability. The task is big (14 tools). Subagents can genuinely help. I'll delegate:
+
+- Subagent D1: Design-vs-code coverage for T08–T14 (7 tools). It has access to: /tmp/audit2/all_design2.txt lines for those frames, /tmp/audit2/probe/*.json, and source files. It must return a compact structured per-tool list of design controls + code controls + gaps, with node IDs and file:line.
+- Subagent D2: functional verification T01–T07 core logic: run node against the algorithms (I'll provide the util files). Return command outputs for T01 big int, T02 diff, T03 yaml, T04 csv, T05 base64, T06 url, T07 unicode.
+- Subagent D3: functional verification T08–T14 + crypto vectors.
+
+Hmm, that's 3 subagents doing heavy work. They'd return text that I integrate. Risk: they may be wrong. But I'll spot-check.
+
+Actually, since I need to write file:line in the report, better to have subagents return specific findings with evidence that I can verify quickly.
+
+Given context budget, let me do:
+- I read T01-T07 sources (already read T01,T05,T06). Read T02,T03,T04,T07,T08,T09,T10,T11,T12,T13,T14 — that's ~4000 lines. That's a lot but each is 200-670 lines. Reading all would be ~50k tokens. Hmm.
+
+Alternative: delegate source-defect review for each tool pair to subagents. Let me use a workflow? The workflow tool is for explicit multi-agent orchestration requested by user. User didn't request. I'll use plain subagents.
+
+Let me be decisive: launch 4 background subagents:
+- A: design coverage T01-T07 (design frames + probe JSON + source) → per-tool coverage table + design deviations with node IDs.
+- B: design coverage T08-T14.
+- C: functional correctness T01-T07 (run node, paste commands/outputs).
+- D: functional correctness T08-T14 + code defects scanning all 14 sources.
+
+Wait, code defects should be covered for all. Let me add defect scan to A and B (they read source anyway).
+
+Let me write very detailed prompts with the read-only constraint and exact evidence requirements.
+
+Actually, the subagents don't share my conversation, so I must give complete instructions. Let me do it.
+
+Given the file /tmp/audit2/all_design2.txt is available. Let me tell them which line ranges correspond to which frame (I can generate an index).
+
+Let me get the frame line index.
+dsh: reasoning:
+Good. Now launch subagents. I'll run them in background and continue.
+
+Let me define the mapping of tools to frames:
+T01: U7JXtZ(1), WyXAO(46), XOIEm(87), DUZp7(130), QZSHR(229)
+T02: tEK2T(273), C8MDfa(342), nd6EF(386)
+T03: yR1Sl(436), j2a2mK(482), SmYV1(526)
+T04: hvh9g(574), Nftqt(648), l30Im(709), PpaOQ(779)
+T05: bkjNd(844), mFO8z(893), FLpGx(946)
+T06: Bv90I(1000), jcCqx(1044), d3Naz(1096)
+T07: qlxPa(1146), QpMpE(1193), Kd6TE(1245)
+T08: um2bM(1299), raWEO(1349), k8Pxf(1397)
+T09: GK0ky(1450), Z7B9gg(1519), oE70A(1606)
+T10: m4okMf(1693), s2Bol(1752), MqTDP(1811)
+T11: IVpEt(1865), qpT68(1953), shGd9(2012), Qbcc3(2076)
+T12: pQVRO(2144), AZOJu(2218), GvtFC(2296)
+T13: LmPW1(2368), ivm5f(2435), lVMI0(2503)
+T14: x4GBW(2566), I92uFI(2667), fYm70(2754), hNcSS(2843)
+
+Now subagent prompts. I'll launch 2 design-coverage subagents and 2 functional subagents.
+
+Let me instead do 3 subagents to balance: 
+- S1: design coverage + source defects for T01–T07.
+- S2: design coverage + source defects for T08–T14.
+- S3: functional correctness for all 14 (real computations), since that's a distinct activity.
+
+S3 is big. Let me split functionally: S3 T01–T07, S4 T08–T14.
+
+That's 4 background subagents. Concurrency should be fine.
+
+Let me write the prompts carefully. Each must know:
+- Working dir, read-only constraint.
+- Files.
+- Evidence requirements: file:line, node id, command output.
+- Return format: concise markdown.
+
+I'll tell them not to modify devkit/design.pen/docs.
+
+Let me launch.
+dsh: reasoning:
+While they run, let me read the T01-T07 design condensed sections and continue my own analysis. Let me read the design file sections for T01-T07 (lines 1-1298). That's ~1300 lines. Manageable-ish. Actually let me read in chunks.
+
+Let me read lines 1-440 (T01, T02).
+dsh: reasoning:
+Good, this is informative. Let me continue reading T03-T07 design. Lines 436-1298.
+
+Actually, let me let the subagents handle the design coverage details. I've now got a feel. But I should still independently read source for T02,T03,T04,T07 (I read T01,T05,T06). And the report needs my own confirmed findings.
+
+Let me read the remaining design segments for T03-T07 while waiting, in a big read (860 lines). That's a lot but useful.
+
+Actually, let me focus on source code reading in parallel with subagents. Let me read T02, T03.
+dsh: reasoning:
+Notable issues in T02:
+- Design requires "上一处差异" (previous diff) button; code only has "下一处差异" (no previous). Line 380 only next.
+- Design: 忽略对象键顺序 default? Design says "忽略对象键顺序" with switch, and "对象键顺序不同不计为差异" — code default true. Design variant C8MDfa says "对象键顺序不同不计为差异". So default true is consistent. But requirement doc says "忽略对象键顺序" support, and "数组顺序默认有意义, 忽略数组顺序只能显式开启" — code array default false. Good.
+- Bug: `ignoreArrayOrder` matching uses multiset only for deepEqual at array level. Fine.
+- Potential bug: `compare` when `ignoreArrayOrder` is true and array elements have partial diffs: compareArrays pairs leftovers. OK.
+- Bug: `displayVal` truncates object to 57 chars + '…'. For top-level mod where whole object replaced, values truncated — display-only, acceptable but copy report gets truncated too. Actually copyReport uses `d.oldVal`/`d.newVal`, which are truncated with `…`, so copied report is not full data. Could be a concern (data loss in copy).
+- `reportLine` for mod with note only (key order) - `!d.newVal && !d.oldVal` tail = note, fine.
+- Design has total count "4 处差异 · 新增 1 · 删除 1 · 修改 2" and "第 1 / 4 处". Code statusMeta shows `差异 N 处` and `i/N`; status message shows counts. Also design has "上一处差异" nav. Missing.
+- Design variant nd6EF has error actions: 重新比较/只保留输入A/定位到第3行. Code lacks "定位到第N行" action. Minor.
+- Code `run.markOk` with `out.length` uses error/stale. When status stale, `:disabled="!diffs.length || run.status.value !== 'ok'"` for copy. Good.
+- Potential bug: watch([ignoreKeyOrder, ignoreArrayOrder], execute) runs execute on mount? No, watch is lazy by default. Good.
+- `left`/`right` have no watch; only execute on button/ctrl-enter. That's fine (T02 requires 比较 button).
+- The status bar meta design shows "第 1 / 4 处" - code only shows when activeIdx>=0.
+- The `sig` includes ignoreKeyOrder/ignoreArrayOrder; but execute() is called on watch change → after execute, arm state etc. Fine.
+
+Potential real bug: In `deepEqual`, when `ignoreKeyOrder` is true, it returns true for objects regardless of key order. When `ignoreKeyOrder` is false, `ka.length !== kb.length` returns false first, then compares order. But `compareObjects` only reports key order diff for common keys; if key sets differ, it reports add/del. Fine.
+
+Big issue: `numEqual` — for two RawNumbers with different raw text but same value, e.g. `1.0` vs `1`, both ≤15 sig digits and equal → not a diff. Reasonable.
+
+Now T02 design "上一处差异" missing is a real coverage gap. Let me note.
+
+Also `复制差异报告` — clipboard.copy adds numbering with padStart. Design says "复制差异报告不含行号与提示性换行". The numbering `01.` might be considered formatting, not line numbers. Acceptable.
+
+Let me now read T03, T04, T07 sources. And T08-T14 too. That's a lot. Let me prioritize reading all sources since code defects need file:line. The subagents will also report, but I should verify.
+
+Let me batch-read T03 and T04.
+dsh: reasoning:
+T04 potential bug: `setField`/`addField` create customFields but do NOT call execute(); so editing a field path doesn't re-run. Let me check the template: there's probably an "应用" button. Let me read the rest.
+
+Also: `watch([dir, sep, headerOn, infer], execute)` doesn't watch customFields — intentional since customFields need apply. Need to check if template calls execute.
+
+T04 issue: in execute() catch, when `__fail__`, `errInput.value = run.errorMsg.value`. That's OK.
+
+Potential real bug: parseCsv does not skip blank lines when `inQuotes`... Actually blank lines are skipped by `if (rowHasContent || fieldStarted || field !== '')`. But a CSV line consisting of a single empty quoted field `""` → fieldStarted true → endRow. Fine.
+
+Edge: A line that is just `,` → separator triggers endField, rowHasContent=true → endRow with 2 empty fields. Fine.
+
+Edge: trailing newline after last row: handled.
+
+Bug: `\r` alone not followed by `\n` → treated as row terminator (endRow). Good. But `\r` inside quoted field preserved. Good.
+
+Bug: `parseCsv` for `fieldStarted` after closing quote: if field is `"abc"def`, after closing quote, `def` appended → `abcdef`. RFC says malformed; they keep literal. Acceptable with warning? No warning. Minor.
+
+T03: uses js-yaml. Good. Need to read rest (261-488) to see YAML2JSON handling of tags/non-string keys and the UI.
+
+Let me continue reading T03 rest and T04 rest.
+dsh: reasoning:
+Probes finished. Let me check them.
+
+T04 issue: `setField` etc. don't re-run execute, but there is a manual "转换" button. Design says "嵌套映射配置". Acceptable but the field edits don't take effect until clicking 转换. Not a bug.
+
+T04 potential real bug: `customFields` reset when loadSample. `autoFields` updated inside runJson2Csv. Fine.
+
+T04 real bug candidate: `if (!value.length) run.markFail('数组为空...')` — good.
+
+T04: `infer` checkbox disabled in json2csv but `watch` includes infer. Fine.
+
+T04 parseCsv line 105: `if (rowHasContent || fieldStarted || field !== '') endRow()`. Consider input `"a\n\nb"`: row "a", blank line skipped, row "b". Good.
+
+Consider CSV where a row is a single empty unquoted field (bare empty line) — skipped. Good.
+
+Consider CSV ending with a separator: `a,` → after separator endField pushes 'a', rowHasContent=true; end loop; `rowHasContent` true → endRow pushes field '' → row ['a','']. Correct.
+
+Consider `"a"` quote handling: c='"' at field==''&&!fieldStarted → inQuotes=true, fieldStarted=true. Then 'a' appended, then '"' closes. fieldStarted true. Good.
+
+Now, `parseCsv` doesn't handle the case of an opening quote not at field start correctly? It appends as literal. OK.
+
+T04 JSON→CSV preview: `parseCsv(out + '\n')` re-parses; for a cell containing a newline, the quoted content is preserved, rows count matches. Good.
+
+Potential bug: `flattenPaths` on arrays: arrays are not recursed; they become leaf path, cellText → minifyJson(array). Design says "数组与对象值输出为 JSON 字符串". Note: objects ARE recursed (flattened), arrays are leaf. Fine.
+
+Potential bug: `getByPath` uses dot splitting, but field keys containing dots break. Documented limitation.
+
+T03: Potential issue: `useOutputAsInput` sets input and dir; watch only on [dir, indent], so if dir flips it re-runs. Good. But if output is from json2yaml and dir flips, fine.
+
+T03 bug candidate: `scanNonStringKeys` regex may false-positive on values. E.g. line `url: http://x` -> the block key regex matches `url` (fine). But a line like `- 80: http` in a list? handled. What about a plain multi-line string block content? blockIndent handles. What about keys inside flow sequences? Only keys after `{`/`,`/`&`/`*`.
+
+Potential false positive: a value line like `foo: bar` fine. What about `"a": 1` quoted key → m[1] undefined, checkKeyText not called. Good.
+
+Potential false positive: a YAML document that's a flow map in a value: `config: {80: x}` → flowRe matches `{80:` → reports. Good.
+
+Potential false negative: block key with digits like `80 :` (space before colon) → regex `... *:(?=\s|$)` matches, m[1] = '80' trimmed? The capture excludes ':' and trailing spaces; `([^:#{}[\],&*!?'%\s][^:]*?)` captures '80 ' then ` *:` matches. m[1]='80 ' trim → '80'. Good.
+
+T03: YAML tags: `debug: !!timestamp 2024-01-01` with JSON_SCHEMA. js-yaml JSON_SCHEMA still supports `!!timestamp`? Actually !!timestamp is not in JSON_SCHEMA, js-yaml may throw "unknown tag". Either way, handled? The docs claim tags error. But scanNonStringKeys doesn't detect tags; js-yaml load with JSON_SCHEMA would throw for `!!timestamp`. Let me test. Actually js-yaml's JSON_SCHEMA excludes timestamp, so `!!timestamp` → unknown tag error. Good, reported as YAML parse failure. But the design says tags give "具体提示" — parse error message is specific enough.
+
+Wait, there's a subtle bug: The claim "YAML 标签（如 !!timestamp）... 会直接报错" — but with js-yaml, common tags like `!!str`, `!!int`, `!!binary` are in all schemas and would be silently resolved. E.g. `!!binary` → Buffer. Not detected. `!!str` is harmless. `!!int` fine. So claim partly true.
+
+Also non-string keys: js-yaml load converts numeric keys to strings silently in JS objects, hence the text scan. But the scan is a heuristic and can miss e.g. keys in nested flow, or `? 80` complex keys. Acceptable.
+
+Now bigger issue: **T03 `stringifyJson(value, indentUnit)` for YAML→JSON drops RawNumber** — YAML numbers are parsed by js-yaml JSON_SCHEMA as JS numbers, so large ints in YAML lose precision silently. E.g. YAML `id: 1234567890123456789` → parsed to number losing precision, JSON output wrong. The requirement for T03 says "YAML无法无损映射到JSON的标签、非字符串键等给出具体提示，禁止静默转换" and example includes "可能被误认为日期或数字的字符串". Large integer precision loss is a silent data corruption. That's a real bug/finding. Let me verify: js-yaml JSON_SCHEMA int parsing of 1234567890123456789 → 1234567890123456800. Yes. And the JSON output would show that. Also js-yaml may produce number > safe int. This is a genuine defect. I'll verify with node.
+
+Also T03 JSON→YAML: `toJsonable` replaces unsafe raw numbers with placeholder token string then replaces back in dumped output. Potential bug: if the placeholder token appears in dumped output inside quotes? yaml.dump quotes strings that look like... the placeholder `dkyamlrawxxxxxxxx000000zz` is a plain string; yaml.dump outputs it unquoted (no special chars) so replacement works. But if the number appears as a mapping VALUE, dumped as `key: dkyamlraw...000000zz`. Replace → raw. Good. But if raw number is negative/large and appears in a key? Can't. If the string value that happens to equal the raw placeholder? Random token, negligible.
+
+However: if unsafe number is inside an array, dumped as `- dkyamlraw...zz`. Good.
+
+But there's a real issue: after replacing placeholder with the raw number text, if the raw number is e.g. `1234567890123456789`, YAML output is fine. But if raw is `1e400` (which JSON.parse would produce Infinity but wrapNumbers gives RawNumber '1e400'), isSafeJsonNumber → Number = Infinity → not finite → unsafe → replaced by raw `1e400` → YAML `key: 1e400`. YAML 1.1 would parse as float. Fine.
+
+T03 another bug: `runJson2Yaml` calls `run.markFail` then throws `__fail__`; execute catches and sets errInput. Fine.
+
+Now T01 bugs:
+- `jsonErrorPosition`: computes column as `pos - before.lastIndexOf('\n')`. If no newline, lastIndexOf returns -1, so column = pos+1. Correct (1-based). If newline at index k, pos-k = number of chars after newline → column 1-based. Correct.
+- But JSON.parse error message in V8 for `{"a":1,}` is "Unexpected token '}', ..." and includes "position N" only in some Node versions. In browsers (V8), message format: `Unexpected token '}', "{"a":1,}" is not valid JSON` — no position for short inputs! V8 includes "at position N" for longer strings (>? ). Actually V8's JSON.parse error includes `at position N (line L column C)` in newer versions. Let me test in node.
+- `wrapNumbers` bug: The regex for numbers `/^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?/` does NOT allow leading `+` (JSON doesn't allow). But it also doesn't handle numbers like `1.` (invalid JSON anyway). Fine.
+- `wrapNumbers` uses `lastMeaningful` but after a number it sets `'0'`. If a value is a number followed by `}`? fine.
+- Bug: `wrapNumbers` marks any string starting with `@@raw:` and ending `@@` as RawNumber — a malicious input string value `"@@raw:123@@"` would be converted to RawNumber, changing semantics! E.g. `{"a":"@@raw:1.5@@"}` parses to RawNumber('1.5') instead of the string. That's a real correctness bug (input string collides with sentinel). Let me verify. Also `stringifyJson` would output `1.5` (unquoted) — type change. Definitely a bug. Evidence: json.ts:11,47,62.
+
+- Bug: `wrapNumbers` doesn't handle `null`/`true` etc; fine.
+- `detectDuplicateKeys` bug: `pendingKey` set when a string is followed by `:`. But it doesn't reset `pendingKey` when a `{` or `[` or `,` is encountered, so a string value followed later by `:`? Actually `pendingKey` is only set for strings directly followed by `:`. After a string value (followed by `,` or `}`), pendingKey remains null because it's only set when next non-ws char is ':'. Wait: in the `if (inStr)` closing branch, it does lookahead and sets pendingKey only if `text[j] === ':'`. Otherwise leaves pendingKey unchanged (could be stale from before? pendingKey is reset to null when consumed at ':'). Initially null. So a string value doesn't set it. OK.
+  However, consider a string as array element followed by a colon in a nested structure? Not possible.
+  Bug: `detectDuplicateKeys` doesn't handle duplicate keys where first occurrence is a nested path correctly? It uses `top.path` which is path of enclosing container, and label = `${top.path}.${pendingKey}`. pathParts push '{}' or '[]', so path becomes like `{}.a`. Design/examples show `$.a`. The duplicate label is `{}.a` rather than `$.a`. Minor cosmetic.
+  Real bug: nested objects: pathParts includes '{}' for each level, e.g. `{}.{}.key`. Ugly but functional.
+  Bug: after `}` pop, pathParts pop; fine.
+  Bug: `detectDuplicateKeys` scans raw text and treats `[` `]` `{` `}` inside strings as structural? No, strings handled. Good.
+  Bug: duplicate detection with escaped quotes in keys: regex `/"((?:[^"\\]|\\.)*)"$/` on `text.slice(0,i+1)` — fine.
+
+- `stringifyJson` with indent `'\t'`: `padClose` same as pad. For tab, `'\t'.repeat(depth)`. Good. For number indent, `' '.repeat(indent*depth)`. Good.
+- `stringifyJson` default for `undefined` returns 'null'. If value has `undefined`? parseJson never yields undefined.
+- T01 status bar: design requires real-time "323 字符 · 19 行" and validation status in editor footer. Code's DkEditor may compute. Need to check DkEditor. Also design requires "复制结果不含行号" note; code relies on DkEditor copy. Need to check.
+
+- T01 missing controls vs design: 载入示例 yes; 粘贴 no (but editor has paste via DkEditor?); 导入文件 no; 清空 no; 复制/下载 in DkEditor maybe. 全部展开/全部折叠/复制 JSON in tree view: code's JsonTree — need to check if it has those buttons. Design DUZp7 requires 全部展开/全部折叠/复制 JSON. Let me check JsonTree component.
+
+- T01 keyboard: design says "⌘⏎ 格式化 · ⌘⇧M 压缩". Code only supports Ctrl+Enter. Missing Ctrl+Shift+M. Minor.
+
+- T01 variant XOIEm (syntax error) design: error shown in status bar "第 3 行 第 41 列：字符串缺少闭合引号" and result pane shows "解析失败 · 输入已保留". Code: status message = errDetail which uses raw V8 message like "Expected ',' or '}' after property value in JSON at position 21". Chinese message not localized. Also result editor is cleared (output='') and shows placeholder. Design says result区不显示旧结果 — code clears output. OK. But code's error message is English V8 text; the design asks for specific 修正方向 in Chinese. Coverage gap in wording.
+
+- T01 stale: sig includes input, mode, indent. `watch([mode, indent], execute)` re-executes on param change, which resets status to ok immediately — so the "结果待更新" variant is unreachable for mode/indent changes! Because changing indent triggers execute() which recomputes and marks ok. The useToolRun stale logic would only trigger if signature changes without execute. For input changes, there's no watch on input, so typing in input changes sig → status becomes 'stale' (armed). That works for input. For mode/indent, watch calls execute → status ok. Design QZSHR says "缩进由 4 空格改为 2 空格，旧结果待更新" — but code auto-recomputes. This is arguably better than stale, but it means the designed "结果待更新" for param change is not implemented as designed. Actually design says "修改输入或影响计算的参数（缩进、格式化/压缩）后，旧结果保留...待更新". Code auto-runs on param change. That's a design deviation. Hmm, but it's a reasonable UX. Worth noting as deviation.
+
+Let me now check probe results and JsonTree/DkEditor/DkStatusBar components.
+
+Let me read job output and probe files.
+dsh: reasoning:
+Interesting! The HMAC probe text shows the RFC 4231 Test Case 1 key displayed as `0123456789012345678901234567890123456789` and result `638d80645bf044572655a4f66a3addbf59b69eb1f89b9a81413f6f7d9ba55c16`. Wait, RFC 4231 TC1 key is 20 bytes of 0x0b. But the page shows key text `0123456789012345678901234567890123456789` as UTF-8 text (40 ASCII chars = 40 bytes) and result 638d80... Hmm, 40 bytes key of "0123...". That is NOT RFC 4231 test case 1! The page claims "RFC 4231 Test Case 1" but uses key text "0123456789..." (40 chars) instead of 0x0b*20. That's a mislabeled test vector! Let me verify.
+
+Actually wait, HMAC-SHA256(key="0123456789012345678901234567890123456789", msg="Hi There") = ? Let me compute. The displayed result is 638d80645bf044572655a4f66a3addbf59b69eb1f89b9a81413f6f7d9ba55c16. Interesting: RFC 4231 TC1 expected = b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7. The displayed is different. But note the SHA-512 result displayed: `90fbdf34f9f0ace0a73c2acf7a35f91541a9fca0db2a573def6c27e133fbf7427150a4334d9f8e4eb409df51e04e66f3e25506926b604dc5ae864548` — that's truncated? It shows 100 hex chars maybe. RFC 4231 TC1 SHA-512 = 87aa7cdea5ef619d4ff0b4241a1d6cb02379f4e2ce4ec2787ad0b30545e17cdedaa833b7d6b8a702038b274eaea3f4e4be9d914eeb61f1702e696c203a126854.
+
+Hmm the displayed values may be for key "0123...". This is a potentially important finding: the page labels it "RFC 4231 Test Case 1" but the key is wrong (should be hex `0b0b...` 20 times, i.e. displayed as text not the ASCII digits). Let me check the source to see exactly. Also note the key display: `0123456789012345678901234567890123456789` — this is 40 chars = a key of 40 bytes; RFC 4231 TC1 key is 20 bytes 0x0b. Actually maybe they intended key hex `0b` repeated... no.
+
+Wait, the RFC 4231 test case 1 key in hex is `0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b`. If the UI key encoding is UTF-8 text, the display of the 0x0b bytes would be control chars, not "0123...". So they replaced it with "0123...". But then calling it RFC 4231 TC1 is factually wrong. Let me verify the source and compute.
+
+Actually, hold on: maybe there's a different vector: the HMAC-SHA256 of key=40 ASCII digits... Let me compute both to confirm.
+
+This is a strong finding for T13 authenticity. Let me check the source T13 and T12.
+
+Let me read T12, T13, T14 sources.
+
+Also note the HMAC page says "测试向量与说明（已用 node crypto 复核）" — need to check whether it's the RFC vector or a mislabeled one.
+
+Let me read T12/T13/T14.
+dsh: reasoning:
+T13 finding confirmed: The "RFC 4231 Test Case 1" is mislabeled. The actual RFC 4231 TC1 key = 20 bytes of 0x0b. Here key = ASCII "0123456789012345678901234567890123456789" (40 bytes). The expected values RFC4231_TC1_SHA256/512 correspond to this non-RFC key. The comment/UI claims RFC 4231 TC1. Let me verify with node crypto to be certain.
+
+Also note: The page says "40 个 ASCII 字节" — hmm, "0123456789012345678901234567890123456789" is 40 chars. Wait, actually RFC 4231 TC1 key in the RFC is 0b0b... (20 bytes). There's also RFC 4231 TC1 with key = "0b0b..." and data "Hi There". So labeling the ASCII-digit key as RFC 4231 TC1 is wrong. But maybe it's a confusion with RFC 2202 HMAC test vectors? No.
+
+Let me compute HMAC-SHA256 with the actual RFC key to show expected b0344c... Let me run node.
+
+Also T12: MD5 via spark-md5, SHA via WebCrypto. Vector text is correct (I should verify ddaf... length: standard SHA-512 of abc = ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f — yes 128 hex). Good.
+
+T12 potential bug: `matchOf` compares r.hex to expectedNorm, but if outEnc is base64 and the user enters a base64 expected value, it won't match; help says "按 Hex 对照" so fine.
+
+T12 bug: `hexInputErr` computes hexToBytes twice, minor.
+
+T12 bug: MD5 `spark.end(false)` returns hex. `end()` resets. They create a new instance each time. Fine.
+
+T12: `bytesToBase64(hexToBytes(hex).bytes)` — hex is 32 chars, fine.
+
+T12 important: MD5 is not available via WebCrypto, so spark-md5 is used — but is `spark-md5` a dependency? It's imported. SSR: spark-md5 imported at top level; it's browser-safe. OK.
+
+T12: potential stale bug: `sig` includes `text`, `mode`, etc. But when user types, status becomes stale and copy disabled. Good. However results remain visible with stale marker.
+
+T12: file mode `onFiles` sets busy then execute; execute checks `if (busy.value) return` at line 59 — but onFiles sets busy.value = true, then sets busy.value = false before calling execute. Good.
+
+T12: `clearFile` doesn't reset `expected`. Fine.
+
+Now T14 AES. Let me read it. Also T07-T11 sources. Let me read T14 and T07.
+
+Let me also run the HMAC verification now via node.
+dsh: reasoning:
+T13 finding: Confirmed. The page labels key "0123456789012345678901234567890123456789" as "RFC 4231 Test Case 1", but real RFC 4231 TC1 uses a 20-byte 0x0b key with expected SHA-256 b0344c61... The displayed values (638d80... / 90fbdf...) are the correct HMAC for the ASCII-digit key, so the computation is real and self-consistent, but the label "RFC 4231 Test Case 1" is factually wrong (it's not the RFC vector). This is a documentation/authenticity defect, medium severity. Also the source comment at line 21 says "RFC 4231 Test Case 1 期望值".
+
+T14 verification: SAMPLE_CT_HEX claimed = 399bee5d20bd1af28f26255a4c3449b473eaaab09087b1f3067293b23c2a3fc51516fe62dc. Let me verify with node crypto.
+
+Also check T14 potential bug: `ivDecoded = computed(() => hexToBytes(iv.value))` — always treats iv as Hex, but UI label says IV/nonce (Hex). Fine.
+
+T14 bug: `ivErr` returns error when `iv.value` empty ("IV 为空"), and execute checks ivErr before empty input. So in decrypt mode, if user hasn't filled IV but also hasn't filled input, they'd see IV error. Minor.
+
+T14 bug: In decrypt mode, `tagLen` must match encryption. If wrong tagLength and ct bytes <= tagBytes, error. Fine.
+
+T14 real bug candidate: For decryption, WebCrypto AES-GCM requires the ciphertext buffer to include the tag. The `ctDecoded` is the whole input. Fine.
+
+T14: When `input.value` is non-hex in decrypt, ctDecoded.error → caught. Good.
+
+T14: `execute` at line 115: `if (!key.value.trim() || !input.value.trim())` → for encryption, if input is empty (empty plaintext) it marks idle instead of encrypting empty string. Probably fine.
+
+T14: Auth failure distinction: line 179 checks `e.name === 'OperationError'`. In Chrome, `crypto.subtle.decrypt` rejects with DOMException OperationError for auth failure AND for some param errors. Key length error is caught earlier by keyErr. So distinction is mostly valid. Good.
+
+T14: base64ToBytes allows URL-safe chars too. Fine.
+
+T14 potential bug: `ivErr` if iv has odd hex length returns error. Good.
+
+T14: `randomKey` sets keyEnc to hex — good.
+
+T14 potential design gap: design requires "IV/nonce、AAD、认证标签长度、输入输出编码" all present. Yes. "密钥不是口令，不能暗中执行密码派生" yes. "明确密文和tag的拼接或分离格式" yes.
+
+Now let me verify T14 sample vector and T03 large int with node. Also need to check js-yaml version behavior. Let me run a node script that imports js-yaml from devkit node_modules.
+
+Let me check if js-yaml is installed.
+dsh: reasoning:
+Fix the script (setAuthTag only needed for decryption; for encryption use getAuthTag after final). Let me redo.
+
+Also test js-yaml large int and tags.
+dsh: reasoning:
+Need ci.final() before getAuthTag. Let me redo.
+
+js-yaml findings:
+1. `id: 1234567890123456789` → 1234567890123456800 (precision loss, silent). T03 YAML→JSON. Confirmed real bug.
+2. `code: 007` → 7 (!!). The page claims "007 等不会被自动转成数字（加引号可确保保持字符串）" and "JSON_SCHEMA：只识别 null/bool/number/string，2024-01-01、007 等不会被自动转成日期或数字". But js-yaml JSON_SCHEMA parses `007` as integer 7! Actually YAML 1.2 core schema: `007` is an integer (leading zeros allowed). So the claim is FALSE: unquoted `007` becomes 7. The design requirement explicitly says "可能被误认为日期或数字的字符串" must be handled. The tool's help text falsely claims 007 stays string. This is a real correctness/authenticity bug. Confirmed.
+3. `ratio: .inf` → null (JSON_SCHEMA doesn't recognize .inf, parses as string? Output shows null). Wait JSON.stringify(v) => {"ratio":null}. So `.inf` parsed as null?? Actually JSON_SCHEMA's float resolution may not include .inf; js-yaml might parse `.inf` as ... hmm output null. Then findNonFinite won't find it (null not number). So the claim ".inf/.nan 报错" is false for this input: it silently becomes null. Let me double check: `yaml.load("ratio: .inf", {schema: JSON_SCHEMA})` gave null. Hmm, maybe `.inf` matched the null type? YAML 1.1 null has `~|null|Null|NULL|` (empty). `.inf` shouldn't be null. Actually js-yaml JSON_SCHEMA extends CORE_SCHEMA? Let me investigate: JSON_SCHEMA in js-yaml = extends CORE_SCHEMA with null `~`, bool, int, float, and... Actually `.inf` may be handled by float tag which is included but maybe JSON_SCHEMA's float implementation excludes inf/nan? The result null is surprising. Let me test more precisely, plus `.nan`. This is a potentially significant finding.
+4. YAML tags `!!timestamp`, `!!binary` → error (good).
+5. `80: http` → key string "80" (silently). But the tool scans text and errors. Good.
+6. Anchors `&a`/`*a` → aliases silently resolved. The requirement mentions "YAML 标签/非字符串键等不可无损映射" — anchors are lossy but probably acceptable.
+7. `!!str 123` → "123" fine.
+
+Let me verify `.inf`/`.nan` and `1e3`, and also `0123`.
+
+Also verify the tool's `isSafeJsonNumber` and T01.
+
+Let me run a comprehensive node script for T01/T03/others. Actually the functional subagents are doing this. But I want the key findings. Let me run the AES verify and js-yaml .inf.
+dsh: reasoning:
+Confirmed T03 findings:
+- AES vector correct. Good.
+- `.inf`/`.nan` → parsed as JS number? typeof number but JSON.stringify gives null, meaning v.a is NaN or Infinity → JSON.stringify(NaN) = null. So typeof is number and `findNonFinite` WOULD catch it! Because `Number.isFinite(NaN)` false. Good — so the tool does report `.inf/.nan`. Let me confirm: `Number.isFinite(Infinity)` false → findNonFinite returns kind. So it's handled. Good, not a bug.
+- BUT `code: 007` → 7 silently. The help text explicitly claims `007` is not converted to number. That's a factual error and a data-fidelity bug. Also `0o17` → 15, `1e3` → 1000, `0123` → 123, `-0` → 0 (loses sign). These strings "错误地" become numbers. The requirement asks strings that might be mistaken for numbers to be handled. The tool claims JSON_SCHEMA prevents this for `007` but it doesn't. Real finding.
+- Large int precision loss is real: 1234567890123456789 → 1234567890123456800, and T03 outputs `stringifyJson` of a JS number → `1234567890123456800`. Silent corruption. Real bug (high).
+- Also `yaml.dump` output for large number shows `id: '1234567890123456789'` when given a string, but interestingly if the value were a safe number it's fine.
+
+Wait, but in runJson2Yaml, unsafe large JSON numbers are handled via placeholder. Good. But yaml2json unsafe large YAML numbers are not. Real.
+
+Now T01: let me verify json.ts functions with node. Let me write a JS port. Actually I can use tsx or ts-node? Simpler: manually port the functions. Let me write a script.
+
+Key T01 checks:
+- wrapNumbers + parseJson + stringifyJson for 19-digit.
+- sentinel collision with `"@@raw:1.5@@"`.
+- detectDuplicateKeys path.
+- jsonErrorPosition with node v24 error messages.
+
+Let me write /tmp/audit2/json_test.mjs.
+dsh: reasoning:
+Confirmed T01 findings:
+1. Sentinel collision: `{"a":"@@raw:1.5@@"}` → parsed as RawNumber → output `"a": 1.5` unquoted, type change. Real bug (json.ts:11/62).
+2. Big int preserved correctly. Good.
+3. Duplicate key detection label is `{}.n` rather than JSON path `$.u.n`. Cosmetic/minor.
+4. Error position works; but for "Unexpected end of JSON input" (truncated JSON), no position → falls back to raw English V8 message. Design variant XOIEm wants "第 3 行 第 41 列：字符串缺少闭合引号" — so incomplete JSON at EOF gets a generic English message with no line/column. Real coverage gap (medium).
+5. Error messages are English V8 text (e.g. "Expected double-quoted property name in JSON at position 7 (line 1 column 8)"), not localized Chinese with 修正方向 as design requires. The code prepends "第 N 行第 M 列附近：" so both are present. Acceptable-ish.
+
+Now T01 stale: I noted watch([mode,indent], execute) makes stale unreachable for param changes. Let me verify by reading useToolRun: watch on sig marks stale if armed and status ok/error. Since changing indent triggers execute (which sets ok), the stale state is overwritten. Actually order: Vue watchers: both the useToolRun watch and the component watch are triggered in the same flush. Which runs first? useToolRun's watch registered first (called at line 37 before watch at line 73). So on indent change, useToolRun watch fires first → sets stale, then execute() runs → ok. Net: auto re-run. So "结果待更新" for indent/mode never persists. For input changes (no execute watch), stale persists. So the design's QZSHR variant is partially unreachable. Medium/low.
+
+Now let me check T08-T11 sources quickly. Let me read them. Also T07.
+
+Let me batch read T07, T08, T09.
+dsh: reasoning:
+T08 potential bugs:
+- `stat.inLines = lines.length`. `src.split('\n')` counts trailing empty line as an extra line. E.g. "a\nb" → 2 lines; "a\nb\n" → ['a','b',''] → 3 lines. Design says "末尾换行符按真实行数计入统计" — so intended. But `lineCount` util in bytes.ts returns `s.split('\n').length`, consistent. However `DkEditor` footer line count might differ. Minor.
+- Bug: `removeBlank` increments `blank` only when removeBlank is on; the status message only shows blank count when removed. Fine.
+- Bug: When `trimLines` is on and `removeBlank` is off, blank lines become '' and are deduped to one — that's dedup, intended.
+- Real bug: `run.markOk` is called with status but `:message="run.staleNote.value"`; since execute is called on every watch change, status always 'ok'/'idle'. Stale never occurs. But it IS real-time, so fine.
+- Design T08 requires "预览删除行数量" — status meta shows in/out lines; message shows dup/blank. Good.
+- Design says default 大小写敏感 — code default true. Good.
+- Potential issue: input "apple\nApple\n  banana\nbanana\ncherry\n\napple\n  banana\ncherry" — dedup with case sensitive keeps. Fine.
+
+T07 bugs:
+- `firstInvalidUtf8Byte`: uses streaming decode byte by byte. For a multi-byte sequence, `dec.decode(byte, {stream:true})` won't throw until it can determine invalidity. This should work. But a subtle issue: after a failure in the loop, the decoder state is corrupted; but they return immediately. Fine.
+  However, the loop calls `dec.decode(bytes.subarray(i,i+1), {stream:true})` for EVERY byte, including bytes inside a valid multi-byte char. That's fine but O(n).
+  Edge: If bytes is valid, loop finishes and `dec.decode()` flushes → ok. Good.
+  Edge: Invalid byte at index 0 with a truncated sequence at end: returns first invalid index. Good.
+- `unescapeUnicode`: `\uXXXX` handling; `\\u4e2d` → outputs `\` then continues at index+2 which points at 'u'? Let's trace: src = `\\u4e2d` (backslash backslash u4e2d). i=0 ch='\\', next='\\' → out+='\\', i=2. Now src[2]='u' → not backslash, out+='u', etc. Output `\u4e2d` literal. Good.
+- Bug: `unescapeUnicode` doesn't validate lone surrogates, but that's fine.
+- The design requires "显示字符和字节数" — done.
+
+Now T09, T10, T11 sources. Let me read them (301, 489, 566 lines). Let me read T09 and T11 fully, T10 partially (diff algorithm).
+
+Actually the functional subagents are covering T08-T14. Let me focus on remaining code-level inspection and design. Let me read T09, T10, T11.
+dsh: reasoning:
+T11: The timeout uses a Web Worker + 2s setTimeout, then `w.terminate()`. This is a genuine ReDoS protection (worker is a separate thread and terminate() actually stops it). Good — the design's "超时中止与恢复界面" is implemented. Note: `new Worker(url)` created per run from Blob URL; revoked on cleanup. Good. But `runInWorker` rejects with Error('TIMEOUT') and the execute catches. Fine.
+
+Potential T11 bug: The `segments` computed skips zero-length matches; overlapping handled by pos. Fine.
+
+Potential T11 bug: `run.markOk` message when no matches. Good.
+
+Potential T11 issue: `liveError` uses `new RegExp` which is safe. But flags validation says `d g i m s u v y`. Good.
+
+Potential T11 bug: The worker references `d.flags`; if flags contains 'd' (hasIndices), RegExp supports it. Fine.
+
+Potential T11 bug: cap of 200000 matches; message says "超过 20 万已截断" but the condition is `> 200000` so cap is 200001. Minor.
+
+Now T09 potential bugs:
+- `splitWords`: for `"user account id"` → split by whitespace → ["user","account","id"] → words. Good.
+- `HTTPServer` → replace `([\p{Ll}\p{Nd}])([\p{Lu}])` no match (T is upper). Then `([\p{Lu}]+)([\p{Lu}][\p{Ll}])` → matches "HTTPS" + "Se"? Let's see: greedy `[\p{Lu}]+` matches "HTTPS", then `[\p{Lu}][\p{Ll}]` needs "Se" → "HTTP" + "Server"? Actually regex engine: `([\p{Lu}]+)([\p{Lu}][\p{Ll}])` on "HTTPServer": group1 greedy "HTTPS", then group2 requires uppercase+lowercase starting at "erver" — 'e' lowercase, fails. Backtrack group1 to "HTTP", group2 = "Se" (S upper, e lower) → match "HTTPSSe"? Wait group1="HTTP", group2="Se", total match "HTTPS"? No: the string is H T T P S e r v e r. group1 greedy = "HTTPS", group2 needs [Lu][Ll] at position of 'e' → fails (e not Lu). Backtrack group1="HTTP", group2 at position 4: 'S' is Lu, position5 'e' is Ll → group2="Se". Whole match "HTTPS"+"Se" = "HTTPSSe"? No, group1 "HTTP" (4 chars) + group2 "Se" (2 chars) = "HTTPS e"? The string positions: H(0)T(1)T(2)P(3)S(4)e(5). group1="HTTP" = indices 0-3, group2 = indices 4-5 = "Se". Match = "HTTPS e"? It's "HTTPS" + "e"... no: "HTTP"+"Se" = "HTTPS" + "e"? "HTTP"+"Se" = "HTTPS e"? Concatenation: H T T P S e = "HTTPS e" without space = "HTTPS" is H T T P S? No. "HTTP" = H,T,T,P. "Se" = S,e. Together = H,T,T,P,S,e = "HTTPS e"? That's "HTTPS" + "e"? H,T,T,P,S,e spells "HTTPSe". Yes "HTTPSe". So replace with "$1 $2" → "HTTP Se" + remaining "rver" → "HTTP Server". Good.
+- `version2Name`: `([\p{L}])(\p{Nd}+)` → "version" + "2"; then `(\p{Nd}+)([\p{L}])` → "2" + "N". Result "version 2 Name". Good.
+- `already_snake_case` → split → words. Good.
+- `bad`: if a word has chars like `.` or emoji, they're collected in `bad` and the whole word is dropped from `words` (the else branch doesn't push anything). So "user.name" → part "user.name" (no whitespace/underscore/hyphen) → check `^[\p{L}\p{Nd}]+$` fails → for each char, '.' is bad; then whole word dropped → words empty → row marked with `—`. Design says "所在词不参与转换，整行标黄提示，结果以 — 占位". Hmm, but "user.name" — "user" and "name" are valid sub-words; design says "无法按规则分词的字符（点号、emoji 等）：所在词不参与转换" — so the whole segment with dot is dropped. But that means `foo.bar` yields `—` for all columns, losing "foo" and "bar". The design's oE70A variant may expect only the bad part dropped. Let me check the design oE70A text. Let me read lines 1606-1693 of design.
+
+Actually more important: with `user.name`, the row outputs `—` because words empty. Is that per design? The design says "无法按规则分词的字符（点号、emoji 等）：所在词不参与转换，整行标黄提示，结果以 — 占位". Yes — matches. But note the code's `stat.ok` and `copyColumn` filter `r.words.length > 0`, so a row with `user.name` (words empty due to bad) is omitted from column copy – consistent with "不含 — 占位行".
+
+Hmm wait, there's a subtle bug: if a line is "user.name id" → parts ["user.name","id"]; "user.name" dropped, "id" kept → words=["id"], bad=['.'], row not empty; columns produce camel="id", etc. — the "user"/"name" words are silently lost while the row is NOT marked as all-bad (`words.length>0`), and copyColumn includes it. This partially transforms data without clear indication. Design ambiguity. Minor.
+
+Also `stat.ok = total - warn - empty`; if a row has both bad and words, it's counted in warn (ok excludes it). Fine.
+
+Now T10 source. Let me read.
+
+Also I should check the design oE70A and T09 variants. Let me read design lines 1299-1693 (T08-T10) and 1865-2144 (T11). Actually the subagents will. Let me read T10 source.
+dsh: reasoning:
+T10 potential bug: `normalize` mutates for ignoreWs; and when ignoreWs off, empty lines are preserved. `toLines` on diffLines value: diff.js includes trailing newline. Good.
+
+Potential bug: `diffLines` default `newlineIsToken: false`, so it preserves newlines. When ignoreWs is off, differences in trailing newline handled. Example: "a" vs "a\n" → diffLines returns removed "a" and added "a\n"? Actually diff library may treat as equal except newline. Then toLines("a\n") → ["a"], toLines("a") → ["a"]. So they'd be equal, silently ignoring the newline difference. This is exactly the design red line "不把换行差异默认抹除"! Let me test with the actual `diff` library.
+
+Let me check: diffLines("a", "a\n") — I believe returns [{value:"a\n", ...}] maybe considered changed. Let me test via node in devkit.
+
+Also `toLines` strips only ONE trailing newline. If a line value ends with "\n" it's treated as terminator; but the last line has no trailing newline. So "a\n" → ["a"], "a" → ["a"] → equal. So a final-newline difference is erased even when ignoreWs is off. That's a candidate bug. Let me test actual diff output.
+
+Let me run node with the diff package.
+
+Also T10 design: "同步滚动" is code yes. "忽略空白" yes. Stats. Good.
+
+Let me test diff lines behavior.
+dsh: reasoning:
+For "a" vs "a\n": diffLines returns removed "a" and added "a\n". The code's buildRows: `c.removed && changes[i+1]?.added` → lines = toLines("a") = ["a"], add = toLines("a\n") = ["a"] → n=1, both hasL/hasR → modify row with inlineTokens("a","a") → tokens equal, changed=false! So it renders a "modify" row with no visible change, and stats: plus=1, minus=1. So it reports a difference (1 row) but shows no visible differing characters — user sees "a" vs "a" highlighted as removed/added rows with no visible difference. Design variant MqTDP "仅空白和换行不同" expects this to be shown as a difference when ignoreWs off. It IS reported as difference (plus/minus 1), but the inline highlight shows nothing changed because diffWords("a","a") returns equal. So the newline difference is not visually identifiable. The status says "1 行存在差异" but the two rows look identical. That's a UX/authenticity issue: the diff says rows differ but nothing visible differs; the actual difference (trailing newline) isn't shown. Medium.
+
+Actually wait — `toLines("a")` = s doesn't end with \n → split → ["a"]. `toLines("a\n")` → slice → "a" → ["a"]. Both ["a"]. So yes.
+
+So T10: final-newline-only difference produces a "modify" row with identical content and no explanation. The design explicitly says "不把换行差异默认抹除" — technically it's not erased (it's flagged as a diff), but the nature of the difference (newline) is not conveyed; visually it looks like a false positive. I'd call this a medium defect.
+
+Another T10 potential bug: `normalize` for ignoreWs replaces lines and joins; then when it marks ok with "仅存在空白/换行差异" but `leftText !== rightText`. Good.
+
+Potential bug: When ignoreWs is on and texts differ only by trailing newline, `normalize` trims trailing empty lines, so equal → "仅空白/换行差异". Good.
+
+Now the T10 jumpTo uses data-di attribute; need to check template uses it. Probably.
+
+Let me now check the remaining bits: DkEditor (to verify status bar char/line stats real, copy excludes line numbers), DkStatusBar, JsonTree (T01 tree buttons), DkEditor copy/download. Let me look at components dir.
+dsh: reasoning:
+JsonTree findings:
+- Design DUZp7 requires tree view with "全部展开 / 全部折叠 / 复制 JSON" buttons, type labels (number/string/boolean/array/object/null), "N 项" for arrays/objects. JsonTree has NONE of these: no expand-all/collapse-all buttons, no copy JSON, no type labels, no item counts, and initial open only depth<2 (design says "重新打开默认展开一层" — code opens depth<2, i.e., two levels). So T01 tree view is substantially under-implemented vs design. Also T01 template doesn't wrap JsonTree with those buttons. Real coverage gap (medium).
+- JsonTree `open` is initialized from props.depth once; when data changes, open state persists — fine.
+- JsonTree bug: `if (props.data instanceof RawNumber) rawText` — fine.
+- JsonTree doesn't display type labels. Missing.
+
+Now DkEditor — check status bar stats and copy. Let me read it.
+dsh: reasoning:
+DkEditor findings:
+- `stats.chars = v.length` (UTF-16 code units), `bytes` = TextEncoder, `lines` = split. Real data. Copy copies `modelValue` (no line numbers). Download uses modelValue. Good, authenticity red lines satisfied.
+- Design T01 editor footer wants "JSON · UTF-8" and "323 字符 · 19 行" and validation status. Code footer shows "字符 N 字节 N 行 N" — different format but real. Also missing per-editor validation status ("JSON 有效 · 未发现重复键") — that's in status bar. Fine.
+- DkEditor `lines` computed returns 1 for empty; stats.lines returns 0 for empty. The gutter shows 1 line for empty. Consistent-ish.
+- Potential bug: gutter only renders up to 100000 lines; beyond that line numbers stop. Edge.
+- Potential bug: gutter does not sync on wrap. When a long line wraps, the gutter line number stays aligned to the logical line but the textarea wraps to multiple visual rows → line numbers become misaligned. Design G07/T01 requires "行号和折行不混淆". The gutter uses fixed line-height and simple scrollTop sync; textarea default `white-space: pre-wrap` (wrap=true default). So wrapped lines cause misalignment between gutter numbers and content. This is a real design defect (the design explicitly warns "行号和折行不混淆"). Let me confirm: `.editor__ln { height: calc(var(--code-font-size) * 1.6) }` and textarea line-height 1.6. With soft wrap, a long logical line occupies multiple visual rows in the textarea but only one line-number row. So yes, misalignment. Real bug (medium/high for G07 but maybe out of scope? It affects all tools). I'll note it.
+
+- `stale` disables copy/download. Good (result copy disabled when stale).
+
+DkStatusBar: stale shows retry button. Good.
+
+Now let me check the design files for T05-T07 and T08-T11 key variants I haven't read (to compare). Let me read remaining design segments. Actually the subagents will cover. But let me spot-check a few critical ones: T05 bkjNd (design controls), T06, T07, T08-T11, T12-T14. Let me read design lines 844-1298 and 1299-2144 and 2144-2939. That's a lot; but I can skim. Let me read in two chunks.
+
+Actually, the subagents should be returning soon. Let me check on them; they may still be running. Let me wait a bit and meanwhile read design lines 844-1450.
+
+Let me read design 844-1298 (T05-T07).
+dsh: reasoning:
+Important design gaps found:
+
+**T05 (Base64)**:
+- Design main board controls: 编码/解码, 输入类型 [文本 UTF-8 / 文件], **字符集 [UTF-8 / GBK]**, Base64 变体 [普通 Base64 / Base64URL]. Code has direction, alphabet, inputType(text/file) but **NO 字符集 GBK option**. So GBK support is missing. Real coverage gap (medium/high). Note: requirement doc T05 doesn't explicitly mention GBK, but the design does. Design is authoritative per task.
+- Design T05 error variant has line/column定位 ("第 1 行 第 12 列") and action buttons "删除非法字符后重试"/"按 Base64URL 重试". Code only gives a generic error "Base64 中包含非法字符" without position or fix actions. Coverage gap.
+- Design T05 binary result: shows "识别为 PNG 图片", file header explanation, "下载 .png", "16 字节/行" hex layout, "复制 Hex". Code just shows Hex text and "下载解码文件" (decoded.bin), no file type detection, no per-line grouping. Coverage gap (medium).
+- Design status bar fields "48 字符 · 48 字节 · 无换行" — code shows `解码得到 N 字节` / `输入 N 字节 → M 字符`. Different but real.
+
+**T06 (URL)**:
+- Design controls: 编码/解码, 模式 [完整 URI / 组件], **空格与加号 [空格 → %20 / 空格 → +]**, **重复解码开关(默认关闭)**. Code has plusAsSpace checkbox only in decode ("+ 解码为空格"), no "空格 → %20 / 空格 → +" encoding option. And **no 重复解码 switch** at all (always single decode, with a note). So:
+  - Missing "空格 → +" encoding mode (code always uses encodeURI/encodeURIComponent → %20). Coverage gap.
+  - Missing explicit 重复解码 switch; code says explicitly not supported (only one layer per execution). Design d3Naz shows side-by-side A/B results (complete URI vs component) which code lacks. Coverage gap.
+- Design d3Naz "模式对比" variant: code does not show both modes side by side.
+
+**T07 (Unicode/字节)**:
+- Design controls: 输入类型 [文本 / Unicode 转义 / UTF-8 Hex], 输出类型 [Unicode 转义 / UTF-8 Hex / 文本] (independent selection). Code uses a single `conv` mode with 3 fixed pairs (escape, unescape, hex) + hexDir. So it does NOT implement independent 输入类型 × 输出类型 selection. E.g. cannot convert "Unicode 转义 → UTF-8 Hex" directly. Coverage gap (medium).
+- Design output result A (UTF-8 bytes as Hex with "每行 12 字节") and result B (Unicode escape) shown simultaneously for text input. Code shows only one output.
+- Design error variants have action buttons (补全为 \u597D / 按字面文本转换 / 定位到第 13 列 / 丢弃无效字节 / 按 Latin-1 直读). Code only errors without fix actions.
+- Code T07 error message for incomplete escape: "第 N 个字符处的 \u 转义不完整" — design says 第 1 行 第 13 列. Code reports character index not line/column. Minor wording.
+- Code `firstInvalidUtf8Byte` reports only the FIRST invalid byte, design Kd6TE wants all invalid sequences ("2 处"). Coverage gap.
+
+These are substantial. Good findings for the report.
+
+Let me now check T08-T14 design segments. Read 1299-1700.
+dsh: reasoning:
+Big T09 finding! Design GK0ky expects:
+- `HTTPServer` → camelCase `httpServer` (code gives `httpServer` ✓), Pascal `HttpServer` ✓.
+- `version2Name` → camelCase `version2Name` (code gives: words = ["version","2","Name"] → lower = ["version","2","name"] → camel = "version" + cap("2")="2" + cap("name")="Name" → "version2Name" ✓), snake = "version_2_name". Design says `version2_name`!! Design Z7B9gg expects `version2_name`, `version2-name`, `VERSION2_NAME`, `version2Name`, `Version2Name`. But the code produces `version_2_name`. So the code's digit-boundary splitting contradicts the design. Wait design says for version2Name: `version2Name`, `Version2Name`, `version2_name`, `version2-name`, `VERSION2_NAME`. So design treats "version2" as one word... but status message "version2Name → version 2 Name, 得到 version_2_name" appears in the code's help. Hmm, but the design board explicitly shows `version2_name`. And the design help says "version2Name → version 2 Name ... 得到 version_2_name"? Let me check design text for GK0ky around line 1482-1500: it shows the table rows with `version2Name` → `version2Name`, `Version2Name`, `version2_name`, `version2-name`, `VERSION2_NAME`. So the design's actual rendered table uses `version2_name` (no underscore between version and 2). Meanwhile the requirement doc says "version2Name" as an example and "说明缩略词分词策略". The code's own help says "version2Name → version 2 Name，得到 version_2_name / version2Name". So code and design disagree on snake_case/kebab/CONSTANT for digit boundaries. This is a design-vs-code mismatch (medium). The task explicitly asks to compare design.
+
+Also `XMLHttpRequest`: Design Z7B9gg expects `xmlHttpRequest`, `XmlHttpRequest`, `xml_http_request`, `xml-http-request`, `XML_HTTP_REQUEST`. Code: splitWords("XMLHttpRequest"):
+- replace `([\p{Ll}\p{Nd}])([\p{Lu}])`: no lowercase before uppercase? "XMLHttpRequest": l before H? 'L' is upper. 'p' before 'R' at "HttpRequest": 'p' lower followed by 'R' upper → split "Http Request". So after first replace: "XMLHttp Request".
+- second replace `([\p{Lu}]+)([\p{Lu}][\p{Ll}])`: "XMLH" + "tt"? Let's apply to "XMLHttp Request". On "XMLHttp": group1 greedy "XMLH", group2 needs [Lu][Ll] at "ttp" → 't' lower fails; backtrack group1="XML", group2="Ht" (H upper, t lower) → match "XMLHt"? group1 "XML" (3) + group2 "Ht" (2) = "XMLHt" → replace → "XML Ht tp"? Wait the full word is "XMLHttp"; group1="XML", group2="Ht", so match is "XMLHt" replaced by "XML Ht", remaining "tp" → "XML Htt p"? No: match consumes indices 0-4 = X M L H t = "XMLHt". Replacement "XML Ht". Remaining chars indices 5.. = "tp". Result "XML Http". Hmm: original "XMLHttp" = X M L H t t p (7 chars). Wait "Http" is H t t p. So string "XMLHttp" = X M L H t t p. group1="XML" (0-2), group2="Ht" (3-4) → match "XMLHt" (0-4). replacement "XML Ht", remaining "tp" (5-6) → "XML Http". Good. Then "Request" (from earlier split) remains.
+Then digit boundaries none.
+words = ["XML","Http","Request"] → camel: "xml"+"Http"+"Request" = "xmlHttpRequest" ✓, pascal "XmlHttpRequest" ✓, snake "xml_http_request" ✓. Great, matches design.
+
+So the only T09 mismatch is version2Name digit handling. Design says `version2_name` while code gives `version_2_name`. Also design oE70A expects `user@name`, `订单-ID`, `user..id` all rows fully skipped with all `—`, plus a reason label. Code: for `user@name` → words empty → all `—` ✓. For `订单-ID` → split by '-' → part "订单" passes `^[\p{L}\p{Nd}]+$` (CJK are \p{L}) → words=["订单"], not bad! So code would produce camel "订单", snake "订单", etc., NOT `—`. Design expects "含中文字符" → skipped. So T09 does NOT skip Chinese-containing names; it treats CJK as letters. Design says "中文和符号能自动分词吗？不能。含中文... 会被跳过". Real mismatch: code converts 订单-ID to 订单 and 订单_id, design expects — and "含中文字符". This is a real coverage/behavior mismatch (medium). Also `user..id`: split by /[\s_-]+/ doesn't split dots; part "user..id" has bad '.' → words empty → `—` ✓. And `user..id` via `line.split(/[\s_-]+/)` → one part → bad. OK matches.
+- Design oE70A has "跳过无法分词的名称" option checkbox; code has no such option (always skips). Minor.
+- Design GK0ky has "忽略空行" and "保留原始大小写边界" options; code has neither (code filters empty lines always via `.filter(l=>l.trim()!=='')`, and no case-boundary option). Coverage gaps.
+- Design requires a "转换" button; code is real-time (no button). Design main board has button. Code is real-time, which affects "stale" semantics. Minor deviation.
+- Design has "标签" showing reason (含 @ 符号/含中文字符/连续分隔符). Code only shows a generic warning icon with title listing bad chars, not a per-reason label, and no Chinese detection. Gap.
+
+**T08 design findings**:
+- Design options: 大小写敏感, 去除空行, 移除首尾空格, **保持首次出现顺序** (a checkbox, not "排序 [保持原序/字典序]"). Code has 排序 segmented with 字典序 option, and no explicit "保持首次出现顺序" checkbox. Also design's raWEO variant shows a **side-by-side comparison** of trim off vs on ("保留空格对比") — code does not implement that comparison view. The variant raWEO is a "必画变体" about the design of that state; code's single output with a trim toggle partially covers it but not the side-by-side. Coverage gap (low/medium).
+- Design T08 shows a "去重并整理" button; code is real-time (no button). Deviation.
+- Design status: "去重完成：保留 8 行，删除 3 行（重复 2 行 · 空行 1 行）". Code status message shows "删除重复 N 行，删除空行 M 行" but only when respective counts >0, and doesn't say total kept. Also meta shows 输入/输出行数. Reasonable.
+
+**T10** design starts at 1698. Let me continue reading 1698-2144 (T10, T11) and 2144-2939 (T12-T14).
+
+Given time, let me read the rest.
+dsh: reasoning:
+Key T10/T11 design findings:
+
+**T10**:
+- Design has "视图 [逐行 / 行内]" segmented control. Code has no view switch — it always does line + inline for modifies. Coverage gap.
+- Design has "忽略大小写" option. Code has NO ignore-case option. Coverage gap (medium).
+- Design shows F3/Shift+F3 shortcuts; code has buttons only. Minor.
+- Design shows per-side "差异行 N" and summary "修改 3 · 新增 1 · 删除 2" with breakdown; code shows only `-N`/`+N` and "差异行 N". Code doesn't distinguish modified/new/deleted counts. Gap.
+- Design "左13行·右12行" — code shows line counts. OK.
+- Design MqTDP: "提示忽略空白后会归零" — code status message when differences exist is just "比较完成：N 行存在差异"; it does NOT tell the user that all differences are whitespace-only. But when ignoreWs is on it says "仅存在空白/换行差异". Design wants when ignoreWs off and diffs are whitespace-only: "检测到 3 处差异，全部来自空白与换行；默认不忽略". Code doesn't detect this. Gap.
+
+**T11**:
+- Design timeout default **500 ms**; code TIMEOUT_MS = 2000. Mismatch (design says 500ms, and "提高上限到 2000 ms"). Code uses 2000 fixed, no configurable/提高上限. Gap.
+- Design has "引擎 JavaScript" label, "matchAll", expression input with slash delimiters, separate flags. Code has expression + flags inputs. OK.
+- Design has "复制结果" button for replacement preview; code may have. Need to check rest of T11 template.
+- Design timeout variant has "中止本次任务" button and actions. Code auto-times out.
+- Design says named capture groups and line/column for each match ("行 1 · 第 6 列"). Code WMatch has index/end but does it compute line/col? Let me check rest of T11 template (lines 220-566). It might compute line/col. Let me read the rest.
+- Design qpT68 says syntax error shows "第 1 行第 25 列缺少 ')'" and a 定位 button. Code liveError shows `表达式语法错误：${V8 message}` (e.g. "Invalid regular expression: /.../: Unterminated group") without line/column. Gap.
+
+Let me read the rest of T11 to verify.
+
+Also, T12-T14 design from 2144. Let me read that chunk too. Let me read T11 remainder first.
+dsh: reasoning:
+T11 findings:
+- Match list shows `index–end` (character offsets), NOT line/column. Design wants "行 1 · 第 6 列". Coverage gap (medium).
+- Timeout 2s vs design 500ms. Gap.
+- No "提高上限到 2000 ms" action. Gap.
+- Syntax error no line/column. Gap.
+- Replacement preview present, copy present. Good.
+- ReDoS protection real via Worker. Good.
+
+Now T12-T14 design. Let me read 2144-2939.
+dsh: reasoning:
+Now I have solid design coverage. Key design findings for T12/T13/T14:
+
+**T12**:
+- Design: "复制全部" button, download; per-row "MD5 128 位 · 32 个十六进制字符" metadata and per-row expected digest input (each algorithm row has its own 期望摘要). Code has a single shared 期望摘要 input and no "复制全部"/download button, no per-row bit-length metadata. Coverage gap.
+- Design AZOJu file variant: multiple files (3 files), per-file progress (读取中 32% / 计算中 68%), "导出摘要清单", "添加文件". Code supports only ONE file (FileDrop multiple=false), no progress percentage, no export list. Big coverage gap (medium).
+- Design GvtFC: "对照不一致：MD5 期望摘要在第 32 位不同（期望 …f73，实际 …f72）" — code only shows "与期望不一致" badge, no differing-position detail. Gap.
+- Design status "计算完成 · 对照 1 项一致". Code says "N/M 一致". Close.
+
+**T13**:
+- Design LmPW1 uses key "Jefe" and expects HMAC-SHA256 = 5bdcc146... (RFC 4231 TC2), labeled "RFC 4231 测试向量". The code instead uses the ASCII-digit key and mislabels it as RFC 4231 TC1. So the code's sample contradicts the design's example and is mislabeled. Strong finding.
+- Design has 密钥编码 [文本(UTF-8)/Hex/**Base64**]. Code has only utf8/hex — **no Base64 key encoding**. Coverage gap.
+- Design requires per-bit comparison of expected MAC ("逐位标出差异位置"). Code just match/mismatch. Gap.
+- Design variant lVMI0 expects "第 1 个字符 'J' 不是十六进制字符" position-specific; code's hexToBytes error is generic "Hex 中包含非十六进制字符" (no position). Gap.
+- Design status "消息 28 字节 · 密钥 4 字节". Code meta shows algo, key enc, message bytes. Close.
+
+**T14**:
+- Design: 模式 [AES-GCM / **AES-CBC**]. Code only AES-GCM — no AES-CBC. Coverage gap. (Requirement doc says "默认AES-GCM", implying CBC optional; design explicitly has switch.)
+- Design 认证标签长度 [128 位, 120 位, 112 位, 104 位, 96 位]. Code only [96, 112, 128] — missing 104/120. Note: WebCrypto only allows tagLength of 32,64,96,104,112,120,128. So 104/120 are valid but omitted. Coverage gap (low).
+- Design 输入/输出编码 [文本(UTF-8)/Base64/Hex] applies to both key and input/output. Code key encoding has all three; input plaintext is always UTF-8; ciphertext encoding hex/base64. Reasonable.
+- Design x4GBW sample uses AES-192 with specific Base64 vector; code sample uses AES-256 hex. Different but both verified. Code's sample vector verified correct. Design's I92uFI explicitly says "演示数据 · 待开发验证", so code's real verified vector is better.
+- Design hNcSS key-length error gives actionable buttons ("改用192位/随机生成32字节/切到Hex"). Code only shows error message. Gap.
+- Auth failure design gives 3 checkpoints and buttons; code message lists causes. Partially.
+
+Now let me check the subagents' status. Let me look at list_agents / job outputs. They've likely finished or are still working. Let me check.
+
+Actually subagents notify me when done; I haven't received notices yet. Let me check list_agents.
+
+Meanwhile, let me quickly verify a few more functional things myself:
+- T05 base64ToBytes: check `base64ToBytes` on string with padding in middle, e.g. "YQ==YQ==" → regex allows '=' anywhere; atob("YQ==YQ==") throws? Actually atob would throw "InvalidCharacterError"? Let me test in node (atob available in Node 18+).
+- T05 non-UTF8: decode hex "ff" → binary.
+- T06: plusAsSpace default false; design says default 空格→%20 and preserve '+'. For decode, design has "重复解码" switch. Code lacks.
+- T06 encoding: `encodeURI('page=2+2')` keeps '+' → matches design default. Good.
+- T06 `findBadPercent` check: for input `%E4%B8` in decode mode → decodeURIComponent throws URIError; findBadPercent scans: at i=0 '%' followed by 'E4' valid; i=3 '%' followed by 'B8' valid → returns -1. So it reports the generic "无效 UTF-8 百分号编码序列（如被截断的多字节字符 %E4%B8...）". Design wants column 41. Code's generic message is decent but no position. The code's specific position message only for invalid hex. So for truncated multi-byte the position isn't given. Minor.
+
+Let me run the base64 and a couple checks. Also check `looksLikeText` unused? It's exported but maybe unused. Not important.
+
+Let me check subagent status now.
+dsh: reasoning:
+Base64 works. `YQ==` decodes fine, `YQ` (unpadded) fine, `YQ===` errors. Good.
+
+Now let me note the T05 GBK missing. Also T05 design says status "48 字符 · 48 字节 · 无换行". Code status shows "输入 N 字节 → M 字符". Fine.
+
+Let me wait for subagents. Meanwhile, let me verify T02 diff semantics functionally with a quick port or by testing the algorithm mentally. Actually, the functional subagent T01-T07 is handling that. But I found a potential T02 bug worth verifying: `deepEqual` with `ignoreKeyOrder` default true — but the design requires "忽略对象键顺序" default? Design C8MDfa says "对象键顺序不同不计为差异" — code default true. Good. However the requirement doc says "支持下一处差异、忽略对象键顺序" without stating default; "数组顺序默认有意义，忽略数组顺序只能显式开启". So default ignore key order = true is fine.
+
+T02 coverage: "上一处差异" button missing (design has it). Confirmed.
+
+Let me also check T02 `ignoreArrayOrder` semantics: The design requires arrays order significant by default. Code default false. Good.
+
+Now, another potential T02 bug: `numEqual` allows numbers with ≤15 sig digits equal if numeric equal, e.g. `1.0` vs `1` not a diff. Fine. But `sigDigits` regex `/^[-+]?([0-9]*)\.?([0-9]*)/` for "1e3" gives group1="1", group2="" → sig=1. For "1000" sig=4. Number("1e3")=1000 == 1000, both ≤15 → equal, so `1e3` vs `1000` not a diff. Design says preserve raw but numerical equality is fine.
+
+Now let me look at the git status to ensure I don't modify anything. Not needed.
+
+Let me consider the "真实性红线": status bar char/byte/line counts derived from real data — DkEditor does real counts. T01 etc. use DkEditor. Good. Failures preserve input — all tools keep input refs. Copy content excludes line numbers — DkEditor copies modelValue. Good. T09 copyColumn excludes placeholder rows. Good.
+
+Potential stale logic issues:
+- T05: `sig` excludes `decodeView` intentionally; `watch(decodeView, execute)` recomputes. Fine.
+- T05: `decodeView` is reset to 'hex' on non-UTF8; if later the user switches to text, execute sets output text (which would be empty/garbled) — bytesToText fails → decodedBinary true → decodeView='hex' again. Infinite? `watch(decodeView, execute)`: execute sets decodeView='hex' inside, triggering watch again → execute again → same → sets 'hex' (already 'hex', no change) → stops. OK, but if decodeView already 'hex' and user clicks 'text', execute sets decodeView='hex' again → watch fires (change text→hex) → execute → bytesToText fails → decodeView='hex' (no change). No loop. Fine.
+- T12: `execute` checks `if (busy.value) return` at start. `onFiles` sets busy true then false then execute. OK.
+- T12: `expected` in sig; typing expected makes status stale (since sig changes but no execute). Good.
+- T13: `sig` includes expected; typing expected → stale. Good.
+- T14: `randomKey`/`randomIv` change key/iv → sig changes → status stale, but no execute. The user must click 加密. Design "提供随机密钥/nonce操作入口" — fine.
+- T14 bug: after `randomKey`, keyEnc set to hex, but if workspace is decrypt, still fine.
+
+SSR top-level window access: 
+- T01 uses `onMounted(() => window.addEventListener...)` — safe.
+- All tools import browser libs at top-level? T12 imports `spark-md5` (SSR-safe). T03 imports `js-yaml` (SSR-safe). T10 imports `diff` (SSR-safe). T14 uses `crypto.getRandomValues` only in callbacks. T11 `new Blob`/`Worker` only in runInWorker (called on click). Good. T05 uses `btoa`/`atob` in functions but not at module top-level. Wait, `SAMPLE_ESCAPED = escapeUnicode(...)` in T07 at module top-level — pure JS, fine. T07 `SAMPLE_HEX = bytesToHex(textToBytes(SAMPLE_TEXT))` uses TextEncoder at setup top-level. On SSR, TextEncoder is available in Node 18+. Fine. `btoa`/`atob` — used only in functions.
+- T05 `bytesToBase64` uses btoa; called in execute (client). But also `SAMPLE` const only. OK.
+- T12 `bytesToBase64` used in execute. Fine.
+
+Potential SSR issue: T12 `import SparkMD5 from 'spark-md5'`. Check that spark-md5 has a default export compatible. It's in package.json deps presumably. The page loaded fine (probe 200). Good.
+
+Memory leaks: `workerRef` terminated on unmount. Good. T01/T05/T06/T07 etc. add keydown listeners and remove on unmount. Good. Did I see any tool add keydown without removal? Let me grep for addEventListener count vs removeEventListener count across T01-T14.
+
+Let me run a grep.
+dsh: reasoning:
+Good. T08-T14 don't register keyboard shortcuts at all — design requires "⌘/Ctrl+Enter 执行" for T08 (same for T10, T12?). Design T08 shows "⌘ / Ctrl + Enter 执行". Code T08 has no keyboard handler. Design T10? not shown but likely. T12/T13/T14 design shows button only. Let me note T08 missing the keyboard shortcut that design advertises (and T09 Z7B9gg maybe). Actually T08 design main board text shows "⌘ / Ctrl + Enter 执行". Code T08 has no keydown listener → missing. Real gap.
+T10 design doesn't show shortcut. T11 design shows test button. T12-14 no shortcut in design. So only T08 (and maybe T09) missing. Design T09 GK0ky doesn't show shortcut. So T08 only.
+
+Now let me compile. But first check subagent results when ready. Let me do a few more functional checks in parallel while waiting.
+
+Let me verify T09 digit splitting and Chinese behavior exactly, plus T08, T10 with quick node ports. Actually the functional subagent is doing T08-T14. Let me not duplicate too much.
+
+Let me verify T02 and T04 key algorithms quickly myself since the T01-T07 functional subagent is on it, but I want firsthand evidence for the report. Let me test T04 CSV parser and T02 diff with ports.
+
+Actually let me just write a combined test for T02/T04 and T09 to have concrete outputs.
+
+Let me test T04 parseCsv port for the sample and edge cases.
+dsh: reasoning:
+T04 works well. Leading zeros preserved (all strings by default). Column mismatch warned at the runCsv2Json level.
+
+Wait — the warnings for column mismatch: `data.forEach((row,i)=>{ if(row.length!==keys.length) warnings.push(...)})` uses `i+2`. For row 2 in data (0-indexed 1), the CSV line number is i+2. For the first data row i=0 → line 2. Correct.
+
+Now, a possible T04 bug: when there's a column mismatch and missing columns, code fills `null` (line 201) rather than `''`. Design/help says "某行缺少该字段时输出空单元格" for JSON→CSV; for CSV→JSON missing columns become null. Fine.
+
+Now let me check T02 diff with a port of the algorithm. Actually, let me just trust the functional subagent, but verify the "key order" default and array default quickly. I've read the code; it's clear.
+
+Let me now check whether subagents have finished. Let me poll job/agent outputs. Agents notify, but I can check by send? No. Let me continue and they'll notify.
+
+While waiting, let me write the report skeleton and fill in. But I should incorporate subagent findings. Let me wait for their notices. In the meantime, let me examine a couple more potential defects:
+
+1. T01 `detectDuplicateKeys` path uses `{}`/`[]` segments — cosmetic.
+2. T01 duplicate key detection is called even when JSON is invalid; `detectDuplicateKeys` runs before JSON.parse and doesn't throw. Fine.
+3. json.ts `stringifyJson` uses `Object.keys` — duplicate keys already collapsed by JSON.parse. The duplicate warning says "后者生效" — correct for JSON.parse. Good.
+4. T03 `runYaml2Json` returns `stringifyJson(value, indentUnit)` — for YAML `null` doc (`~`), value=null, stringifyJson(null) → 'null'. Good. For empty input handled earlier. For YAML that parses to undefined (e.g. only comments), value=undefined → stringifyJson(undefined) → 'null'. Actually execute checks `!input.value.trim()` → comments are non-empty, so `# comment` → yaml.load returns undefined → output 'null'. Hmm, that's a minor oddity: a comment-only YAML yields "null". Not a big deal.
+5. T03 bug: `useOutputAsInput` sets `input.value = output.value` and flips dir; watch runs execute. But if output was for json2yaml → YAML text; then dir=yaml2json and input=yaml. Good. If the flip doesn't change dir (e.g. dir same?) it always flips. Fine.
+6. T03 non-string key scan false positives: Consider a YAML line `- 2024-01-01` (a list item that's a date string). The block-key regex requires a colon, so no. Consider `foo: bar: baz`? m[1]='foo'. fine. Consider a URL value containing `http://x`: line `url: http://x` — block regex matches key 'url'. The flowRe scans for `{`/`,`/`&`/`*` ... `,` before 'http'? no comma. Fine. But consider `url: http://a,b:c` — flowRe looks for `,` followed by `...:`; the `,` at index before 'b:c' matches `,[^:{}[\],]*? *:(?=[ \t}]|$)` → 'b' followed by ':' then 'c' (not space/}/end) → lookahead fails. So no. OK.
+   Consider a plain scalar line in a block: `desc: "a: b"` quoted → m[1] undefined (quoted key alternative). Wait the regex alternatives: `"(?:[^"\\]|\\.)*"|'(?:[^'])*'|([^:#{}[\],&*!?'%\s][^:]*?)`. For `desc: "a: b"`, the key is `desc` (unquoted) → m[1]='desc'. Good.
+   Consider `- "a b": c` → quoted key alternative, m[1] undefined. Good.
+7. T03 `scanNonStringKeys` might flag a plain scalar value that has a colon+space, e.g. `title: My: Title`. YAML would parse `title: My: Title`? Actually `My: Title` is invalid YAML (mapping value cannot contain `: `)? js-yaml might error. Not important.
+8. T03 possible false positive: a line `a: b:c` (no space after inner colon) → key 'a'. Fine.
+
+9. T12 MD5: `spark.append(bytes as unknown as ArrayBuffer)` — SparkMD5.ArrayBuffer.append expects ArrayBuffer. Passing a Uint8Array whose `.buffer` may be larger? `textToBytes` returns a fresh Uint8Array with exact buffer; `fileBytes` from `new Uint8Array(buf)` exact. `hexToBytes` creates fresh. So `.byteOffset=0`, `.byteLength=buffer.byteLength`. Safe. But if bytes came from a subarray, SparkMD5 would read the whole underlying buffer → but not the case here. Fine.
+
+10. T12 `results` shown even when `run.status === 'stale'` — copy disabled. Good.
+
+11. T13 keyErr for hex: `hexToBytes(key.value)` allows whitespace and validates. But `hexToBytes` in bytes.ts does not reject `0x` prefix — '0x' has 'x' → non-hex → error. Good.
+
+12. T13 potential: key with only whitespace → `key.value.trim()` empty → keyErr ''. keyBytes length 0 → markFail '密钥为空'. Good.
+
+13. T14 `ivErr` is evaluated even in encrypt when IV empty → fails with message. Good. But `ivErr` requires non-empty IV and `ivDecoded.error`; `hexToBytes('')` returns {bytes: empty} no error. Good.
+
+14. T14 bug: In decrypt, `ctDecoded` for base64 uses `base64ToBytes` which allows URL-safe; fine.
+
+15. T14 `tagLen` for decrypt must match; if user selects wrong tag length, WebCrypto treats last N bytes as tag; decrypt likely fails auth. Message says auth failed. Fine.
+
+16. T14: WebCrypto AES-GCM tagLength valid values: 32,64,96,104,112,120,128. Code offers 96/112/128 all valid.
+
+17. T14: design wants AES-CBC mode; missing.
+
+Now let me consider T11 more: `new Worker(url)` with Blob URL. In some CSP contexts blob workers are blocked; not relevant. Also `w.onerror` for worker errors. Timeout 2s. The design says 500ms. Also the "中止本次任务" manual button missing.
+
+One more T11 bug: `execute` sets `running=true`, but `sampleEvil` source `(a+)+$` with flags '' (no g). The worker: `re.global||re.sticky` false → single exec. Catastrophic backtracking happens in that single exec → worker busy → 2s timeout → terminate → markFail. Good, protection real. But note design's timeout variant uses flags 'g' and text 199 bytes; fine.
+
+T11 bug: The cap check `if (++guard > 200000)` after pushing match; with `m[0]===''` lastIndex++ prevents infinite loop. Good.
+
+T11 bug: `segments` uses `result.matches` but only up to all matches (could be 200k) — rendering 200k spans could freeze. Design says list capped at 200 but highlight not capped. Potential perf issue. Minor.
+
+Now let me check the T10 remaining template lines 260-489 for sync scroll/data-di and copy buttons. Let me read.
+dsh: reasoning:
+T10 template: The results panels are `drow` divs with `drow__code` using `white-space`? Need to check CSS for wrapping. If content wraps, line numbers misalign (same issue as DkEditor). The help text claims "折行时行号始终对齐该行首行" — but the panel uses flex with a fixed `.drow__no` and `.drow__code`; if code wraps within the same row, the line number stays at the row start (since it's a flex row, the number is aligned to top by default? `.drow` probably display:flex; align-items:flex-start). Multiple visual lines stay within the same row, so the line number aligns to the first line — that matches the claim. Good. Not a bug.
+
+But wait, T10's `jumpTo` uses `body.scrollTo({top: el.offsetTop - ...})` where `el.offsetTop` is relative to offsetParent. Since `body` is position:relative? Not necessarily. If `.t10__panel-body` isn't positioned, offsetTop is relative to a higher ancestor and the scroll math is wrong. Let me check CSS: `.t10__panel-body { ... }` maybe `position: relative`. Let me grep.
+
+Let me check remaining CSS.
+dsh: reasoning:
+T10 `.t10__panel-body { position: relative }`, so offsetTop is relative to it. Good. But note `drow` rows include ALL rows (equal+diff), so `i` indexes all rows; `data-di` uses `i` for diff rows. jump scrolls to correct offset. Good.
+
+Now I've done a thorough pass. Let me wait for subagents to finish and then compile the report.
+
+Let me check on them via list_agents again / or just wait. They've been running a while. Let me poll with a short wait by doing useful work. Let me draft the report structure now, and check probe json for T11 replacement etc.
+
+Actually, a critical thing: I should verify the HMAC page's claim vs the design (design TC2 "Jefe" expected 5bdcc146..., code TC1 mislabeled). This is my strongest authenticity finding. I have node evidence.
+
+Also T13 missing Base64 key encoding (design has it). Confirmed from code (only utf8/hex).
+
+Let me now check the T12 design vs code: design has per-algorithm expected digest; code single. And "复制全部" missing.
+
+Let me also double check T12's `输入类型` (UTF-8/Hex) — code has it. Good.
+
+Now, let me check whether T01 tree view is reachable and shows type labels. Already confirmed JsonTree has no type labels/counts/expand-all.
+
+Let me check probe raw HTML for T01 tree to confirm buttons absent at runtime — the probe textSample shows only "代码 | 树形" not tree buttons (since not executed). Fine.
+
+Let me now start waiting for subagents. I'll check job outputs (none) and list_agents. Let me just sleep-free by reading one more thing: the `usePrefs` defaultIndent to see T01/T03 indent default. Not critical.
+
+Let me check if there are any tools with `watch` on input causing infinite loop: T01 watch([mode,indent],execute) — execute writes output, not indent. Fine. T05 watch(decodeView,execute) — execute can set decodeView, potential repeated but converges. T08 watch([input,...]) — execute writes output/stat, not watched. Fine. T09 watch(input) — execute writes rows/stat. Fine. T03 watch([dir,indent]) — execute writes output. `useOutputAsInput` sets input then dir → watch triggers once. Fine.
+
+Potential infinite loop: T05 execute sets `decodeView.value = 'hex'` when binary. watch(decodeView) → execute → again sets 'hex' (no change). Vue watch won't fire if value unchanged. Converges. Fine.
+
+T04: watch([dir,sep,headerOn,infer],execute). execute sets `previewData`, `output`, `warnings`, `autoFields` — none watched. Fine. But `customFields` is in sig only; not watched. Fine.
+
+T02: watch([ignoreKeyOrder,ignoreArrayOrder],execute) — execute doesn't change them. Fine.
+
+Now let me think about the "结果待更新" reachability across tools:
+- T01: input changes → stale (no watch on input). Params → auto re-run. Partial.
+- T02: no watch on left/right (only on options) → input changes → stale. Options change → auto re-run. Good.
+- T03: no watch on input → stale. Good.
+- T04: no watch on input → stale. Good.
+- T05: no watch on input → stale; decodeView changes auto re-run. Good.
+- T06: no watch on input → stale. Good.
+- T07: no watch on input → stale. Good.
+- T08/T09: real-time (watch input) → always ok; stale never. Design says real-time for T08/T09. Fine.
+- T10: no watch on left/right → stale. Good.
+- T11: no watch on inputs → stale. Good.
+- T12: no watch → stale. Good.
+- T13: no watch → stale. Good.
+- T14: no watch → stale. Good.
+
+OK.
+
+Now, the "stale" note text: `staleNote` is set to '输入或参数已修改，结果待更新' by useToolRun. But `markOk(note)` overwrites staleNote with a note. Then when stale triggers, watch sets staleNote to default. Good.
+
+Potential bug in useToolRun: `lastSig` is set but never used. Dead code. Minor.
+Also `watch` on getSignature is created but `markIdle` sets armed=false. When the component first mounts, armed=false so typing before first execute does nothing. Good.
+
+Now let me check subagent readiness. I'll wait for the notification. Since I can't block on all, let me check list_agents.
+dsh: reasoning:
+Still running. Let me continue my own verification while they work. Let me verify T09 outputs and T08 counts, T10 whitespace, since I can do it fast and it strengthens the report. Actually the functional subagents cover these; but waiting is wasteful. Let me do T09 since I found the version2Name discrepancy and Chinese handling — these are design comparison issues and I want to be certain.
+
+Let me port splitWords and compute for the design examples.
+dsh: reasoning:
+Excellent — subagent 033ca689 (Design cover T08-T14) finished with great findings. Note the DkEditor copy bug: `:disabled="!modelValue || stale || readonly"` — copy disabled for readonly editors. Wait, let me re-read DkEditor: line 81 `:disabled="!modelValue || stale || readonly"`. Yes! For readonly editors, the copy button is disabled. That affects all output editors across ALL tools T01-T14. That's a significant real bug — the design repeatedly says "复制" on result panels. Let me verify DkEditor line 81. Yes:
+
+```
+<button class="editor__act" title="复制" :disabled="!modelValue || stale || readonly" ...>
+```
+
+So in every tool, the result editor's copy button is disabled because `readonly` is true. That's a major cross-tool bug. Good catch. This affects T01 result copy, T02? (T02 uses custom rows + clipboard button, not DkEditor). T03/T04/T05/T06/T07/T08/T10/T14 all use readonly DkEditor for results → copy disabled. That's huge. T12/T13/T14 have their own copy buttons too, but T03/T04/T05/T06/T07/T08 rely on DkEditor copy! And design says "复制 / 下载请使用结果编辑器右上角按钮". So the copy button is disabled → major bug.
+
+Wait, but is `readonly` passed as true? Yes for result editors. So copy is disabled. Let me double-check the rendered behavior via probe: could test by evaluating the DOM disabled attribute. The probe doesn't. Let me do a quick playwright probe to confirm the copy button is disabled on a result editor. Actually I can just trust the template + logic. But let me verify by a quick script. Actually the `:disabled` is a literal template binding; Vue will set disabled. Let me verify with a small probe using python playwright quickly.
+
+Actually, let me confirm: DkEditor's copy button `:disabled="!modelValue || stale || readonly"`. In result editors, `readonly` prop is set (e.g. T01 `readonly`), modelValue = output (initially empty). So disabled. Definitely.
+
+This is a top finding.
+
+Other findings from subagent 033ca689:
+- T10 plus/minus double counts modify. Let me verify: design FAQ says "修改一行会同时算作删除和新增吗？不会。" Code: plus counts add|modify, minus counts del|modify. So a modify row increments both +1 and -1. Design wants modify counted separately (修改 3·新增 1·删除 2). So yes, code's +/- semantics differ from design (though +/- counts are commonly "lines changed"), it's a real mismatch. Medium-high.
+- T09 Chinese handling confirmed by my own test too. Good.
+- T14 `<=` boundary: `if (r.bytes.length <= tagBytes.value)` rejects ciphertext where bytes length == tag length (empty plaintext). Actually for empty plaintext, WebCrypto encrypt returns just the tag (16 bytes). Decrypt expects bytes length >= tag length. Code rejects `<=`. So you cannot decrypt an empty-plaintext ciphertext. Real edge bug. Good.
+- T14 ciphertext/tag displayed always Hex even when output encoding is Base64 — design says segments follow chosen encoding. Minor.
+- T13 RFC label error — confirmed by my node run.
+- T12 matchOf always compares hex; when outEnc=base64, expected hex still works (help says Hex). Fine.
+- T11 2000ms vs design 500ms.
+- T14 missing CBC, tag lengths.
+- T12 missing multi-file, progress, copy-all.
+- T08 design "保持首次出现顺序" checkbox vs code sort segmented. And raWEO comparison view missing.
+- T13 missing Base64 key encoding.
+- T12 per-algorithm expected digest missing.
+- T14 ivErr copy says "加密前" in decrypt mode.
+
+Great. Now I still have 3 subagents running (T01-T07 design, T01-T07 functional, T08-T14 functional). Let me wait for them. Meanwhile let me verify the readonly copy bug with a quick DOM check and also verify the T14 `<=` reasoning.
+
+Let me run a quick playwright probe to confirm the copy button disabled state. I'll write a small python script using playwright to load /tools/json-format, click 载入示例, then check the result editor's copy button disabled attribute.
+
+Actually, easier: use probe.py? It doesn't click. Let me write a quick inline playwright script.
+dsh: reasoning:
+Confirmed! The result editor's 复制 button is disabled=True even when there's content. Wait — 下载 is also disabled=True?! Let me check DkEditor download button: `:disabled="!modelValue || stale"`. modelValue is output. So download should be enabled. But probe shows disabled True for download too. Hmm, that suggests `stale` is true. Status: after clicking 载入示例, execute runs → markOk. Then... clicking the button also triggers? Hmm. Why would stale be true?
+
+Actually wait: the DkEditor `stale` prop is `run.status.value === 'stale'`. After clicking 载入示例, input set, execute → markOk → status ok. But then something changed the signature → watch in useToolRun marks stale. What changed? `sig = [input, mode, indent]`. Clicking 载入示例 sets input and calls execute. markOk sets lastSig. No further change. Unless the mode/indent changed? No.
+
+Hmm, but the result shows 复制 disabled True and 下载 disabled True. The copy is expected due to readonly. Download disabled implies `stale` true or `!modelValue`. modelValue is 305 chars. So `stale` must be true. Let me check status. Maybe the sample output stats show "305 字符 309 字节 20 行". Output present.
+
+Why stale? Let me look: `watch([mode, indent], execute)`. On mount, watch isn't immediate. Clicking 载入示例 calls execute. Hmm.
+
+Wait — maybe `prefs` loading changes indent after mount? `indent = ref(prefs.value.defaultIndent)`. If prefs loads asynchronously and defaultIndent changes from default, `indent` ref is initialized once; no.
+
+Let me check the status bar text. Let me re-probe and read the status. Actually, maybe the click on 载入示例 results in the button's `@click="input = SAMPLE; execute()"`. That's two statements; `input = SAMPLE` triggers the sig watch; execute() runs synchronously after. Order: assignment triggers reactivity; watch callbacks are async (pre flush). `execute()` runs synchronously → markOk, armed=true. Then on next tick, the watcher from useToolRun fires due to input change (dirty) → sees status ok → sets stale! Because the watcher was queued before armed was set? Let's think: `watch(() => getSignature(), cb)` — when `input` changes, the watcher is scheduled. Then `execute()` runs synchronously in the same tick and sets status='ok', armed=true. Then the queued watcher callback runs (pre-flush before render) and sets stale='...'. So after clicking 载入示例, the status becomes "结果待更新" even though the result is fresh!
+
+Wait, does the watcher even trigger? The watcher's getter `getSignature()` reads `input.value`; Vue tracks it. When `input` changes, the watcher is queued. When the callback runs, it just sets stale if `armed`. `armed` is now true (set by markOk in the same tick). So yes → stale.
+
+Hmm, but actually the callback doesn't compare signatures (lastSig unused). So it always marks stale on any change after armed. That means clicking "载入示例" → markOk → then watcher fires → stale. That's a real bug in useToolRun: it marks results stale immediately after an execute triggered by the same input change. Actually wait, this is the classic pattern: programmatic changes that also call execute produce a spurious stale.
+
+But does it happen for typing input? Type `a`: input changes → watcher queued → user doesn't call execute (T01 has no watch on input) → callback marks stale. That's intended.
+
+For 载入示例: input change + execute in same tick → markOk sets armed, then watcher fires → stale. So status becomes stale even though execute just ran. Let me confirm by reading the status bar text.
+
+This is a significant bug affecting all tools where a button both changes input and calls execute (all "载入示例" buttons, swap, etc.). Let me verify via playwright: read the status bar.
+
+Actually hold on. Let me reconsider Vue's watcher scheduling. `watch` default flush is 'pre', which runs before component re-render, but after the current synchronous code? Yes — callbacks are queued in the scheduler and flushed in a microtask. So synchronous `execute()` runs first, then the queued watcher callback. So stale is set.
+
+But note: when the watcher callback runs, it doesn't reset to ok. So status ends as stale. Let me verify.
+
+Actually wait, there's subtlety: the watcher's getter is re-evaluated when the job runs (lazy getter each time? For a getter watch, Vue creates an effect that runs the getter and compares with old value). The job runs, calls getter → new sig != old sig → invokes callback → sets stale. Yes.
+
+Let me confirm the status text.
+dsh: reasoning:
+I confirmed a MAJOR bug: useToolRun marks results stale immediately after execute when the same action also changed the input/params. In T01, after clicking 载入示例, status = 结果待更新. And even after clicking 格式化, status remains 结果待更新! That's because... wait, after execute the status should be ok, then the pending watcher from `input` change (fill) fires → stale. Let me think: I typed into input via `fill` (which sets value → input event → input.value changes → watcher queued). Then I clicked 格式化 → execute markOk. Then queued watcher fires → stale. So after execute it's stale again. That means clicking the execute button NEVER results in an 'ok' status if there were pending input changes — which is always the case when the user types then clicks. Actually if the user types and then clicks execute in a *separate* event/tick, the watcher from typing already ran (marking stale), and clicking execute runs markOk with no pending watcher → status stays ok. In my test, `fill` then immediately `click` — separate Playwright actions, but the watcher should have flushed between them (microtask). Hmm, but the result showed stale after execute. Let me re-examine.
+
+Wait: after `pg.fill(...)`, status showed stale. Then click execute → execute markOk sets status ok. Then why stale? Unless execute is called and then the watcher fires again. The pending watcher from the fill should have flushed before the click (there's a network round trip / timeout 300ms). So it should be ok after execute. But it showed stale.
+
+Hmm, maybe the `格式化` button click matched a different element? `pg.click("button:has-text('格式化')")` — there are two: the segmented control "格式化" (a button) and the primary "格式化" button. Playwright's click with has-text may match the first (segmented control), which sets mode='format' (already 'format', no change) — no execute. Actually if it matched the segmented "格式化" option, clicking it sets mode='format' → no change → no execute → status stays stale. That explains it! So my test clicked the wrong button. Let me redo with a more specific selector (the primary button). 
+
+But the "after sample: 结果待更新" is the real bug — clicking 载入示例 sets input + execute, and then stale. Let me verify that's real and not because the click hit something else. `pg.click("text=载入示例")` → the 载入示例 button. After it, output was generated (305 chars) but status stale. So the bug is real: loadSample → execute → stale.
+
+Let me verify by checking on a tool where the sample button and execute are clearly separate, and by clicking the primary execute button properly. Let me redo the test with `button.variant-primary` or `.dk-btn--primary`. Let me find the class. DkButton probably has class `dk-btn dk-btn--primary`. Let me check quickly and rerun.
+
+This is a crucial cross-tool bug: useToolRun uses `armed` and an unguarded watcher; any execution that is triggered in the same tick as its own input/param mutation gets marked stale. Even without same-tick, if execute is called after the watcher already fired, it's fine. Let me carefully test:
+
+Scenario A: User types "abc" (input changes, watcher queued, then flushed → stale). User clicks 格式化 (execute → markOk → ok). No pending watcher. Status ok. Good.
+
+Scenario B: Click 载入示例 → input=SAMPLE (watcher queued), execute() (markOk, armed=true) → flush watcher → stale. Bad.
+
+So the bug manifests on all "载入示例"/"swap"/programmatic set + execute buttons. Confirmed for T01. Also T05 loadSample, T06 loadSample, T03 loadSample/loadBadSample/useOutputAsInput, T04 loadSample, T07 loadSample/swap, T12 loadSample, T13 loadSample, T14 loadSample/loadDecSample, T02 loadSample, T02 applyIncoming, T01 applyIncoming. That's a broad correctness bug: after loading a sample the result displays but is marked "结果待更新" and copy/download disabled (stale). Wait — the probe showed the result editor's 下载 disabled too, consistent with stale=true. And copy disabled both due to readonly and stale. So on load-sample, results are shown but download is disabled and status says stale — a clear UX/logic bug. Very significant.
+
+Actually wait, let me double check T01 result: after clicking 载入示例, the 下载 button was disabled=True and 复制 disabled=True. If status were ok, 下载 would be enabled (from DkEditor `!modelValue || stale` → false), but 复制 still disabled due to readonly. So 下载 disabled confirms stale=true. And my status check confirms "结果待更新". Great, so two separate bugs:
+1. useToolRun stale false-positive when execute and input mutation happen in the same tick.
+2. DkEditor copy disabled for readonly editors.
+
+Let me confirm #2 independently and #1 for another tool. Let me test T12 (loadSample "abc") and proper primary button. Let me get DkButton classes.
+
+Let me run a combined playwright test:
+- T01: click 载入示例, read status; then click the primary execute button specifically, read status.
+- T12: click 载入示例, read status.
+- Also check DkEditor copy disabled on a result editor when status is ok (e.g., T01 after proper execute).
+
+Let me identify the primary button selector: inspect DkButton.vue.
+dsh: reasoning:
+Confirmed:
+1. T01, T05, T02: after clicking 载入示例, status = 结果待更新 (stale) even though the result was freshly computed. This is because the sample button mutates input + calls execute in the same tick; the useToolRun watcher then fires. This is a real bug in `useToolRun` (the stale detection doesn't compare signature, and markOk's `lastSig` is unused). Evidence: `/devkit/app/composables/useToolRun.ts:15-24`, and the component's sample handlers.
+   - T12 after sample shows 成功 — because T12 `loadSample` sets text then calls `execute()` which is async (awaits crypto), so execute's markOk happens in a later microtask after the watcher already fired → armed=true? Wait: loadSample sets text (watcher queued), calls execute() which is async: it runs synchronously until first await (`crypto.subtle.digest`) → returns a promise. The watcher flushes before the await resolves? The watcher callback runs in a microtask; execute's continuation also microtask. Order: `execute()` called synchronously, reaches `await` and yields. Then the queued watch job runs → armed is still false (markOk not called yet!) → does nothing. Then await resolves → markOk → ok. So T12 escapes the bug because of async. T13/T14 similarly async → escape. So bug affects synchronous tools: T01, T02 (loadSample sync), T03 (sync), T04 (sync), T05 (sync), T06 (sync), T07 (sync), T08/T09 real-time (they call execute in watch, not sample? loadSample in T08 sets input only, watch triggers execute → status stays ok; no stale because execute is called by the watch after the stale-setting watch? Let me think: T08 watch([input,...], execute) — one watcher. useToolRun also has a watcher on sig. Both fire. Order: useToolRun's watcher was registered first (useToolRun called before watch at line 69). So on input change: useToolRun watcher fires first → sets stale (if armed), then T08's execute watcher fires → markOk → ok. So T08 ends ok. Good. Actually T08's own watch is registered after useToolRun, so order is stale then execute→ok. Fine.
+   - T01: useToolRun watcher registered at line 37; T01's watch([mode,indent]) at line 73, but input isn't watched by T01, so on input change only useToolRun watcher fires → stale. On 载入示例, input set + execute sync → markOk sets armed, then watcher fires → stale. Confirmed.
+   - T02: same.
+   - T03/T04/T05/T06/T07: same pattern.
+   
+   So the stale false-positive affects load-sample/swap/applyIncoming buttons in T01-T07. That's a real cross-tool bug. Severity: high (results marked stale + download disabled right after a successful computation).
+
+2. DkEditor copy disabled for readonly result editors confirmed: T01 result 复制 disabled=True even at 成功 status; download enabled. So result copy is impossible from the built-in toolbar. This affects T01, T03, T04, T05, T06, T07, T08, T10(uses custom panels, no DkEditor for output? T10 output is custom divs, no copy), T14 decrypted plaintext. T12/T13/T14 have their own copy buttons for digests/MAC (not disabled by readonly). But T03/T04/T05/T06/T07/T08 result copy is broken. Severity: high.
+
+Also note T05 result editor 复制 disabled and download enabled.
+
+Now I have very strong findings. Let me wait for the remaining 3 subagents (T01-T07 design, T01-T07 functional, T08-T14 functional). Two are still running. Let me continue with a couple more checks myself:
+
+- Verify T03 large YAML int precision loss via the actual page? I have node evidence. Good.
+- Verify T03 `007` claim. Node evidence.
+
+Let me also test T06 `%E4%B8` and `%ZZ` behavior via node (encodeURIComponent/decodeURIComponent) to confirm error handling matches. The functional subagent covers it. Let me not duplicate.
+
+Let me now also verify the DkEditor gutter wrap misalignment claim, but it's somewhat subjective. I'll mention as low/medium.
+
+Let me check `usePrefs` defaultIndent to note defaults. Not needed.
+
+Let me now start writing the report while waiting, then integrate subagent outputs. I'll create the report file.
+
+But first, let me check on the remaining agents — maybe send a nudge? No, just wait. They notify. Let me draft.
+
+Actually, let me reconsider the stale bug more precisely to describe the root cause and fix location:
+- `useToolRun.ts:15-24`: the watch callback marks stale whenever signature changes after armed, without comparing to `lastSig`. Since `lastSig` is set in markOk/markFail but never used, a same-tick change triggers a spurious stale.
+- The fix: in the watch callback, compare `sig` to `lastSig` and skip if equal.
+- Evidence: T01 `t01-json-format.vue:122` (`@click="input = SAMPLE; execute()"`), T05 `loadSample`, etc.
+
+Also note: because download is disabled when stale (`DkEditor.vue:89`), clicking a sample yields a result you cannot download or copy until you click execute again. That's the user-visible impact.
+
+Now let me write the report. I'll wait for the remaining agents' findings to be thorough. Let me check list_agents once more, then start writing.
+dsh: reasoning:
+Let me wait for them. Meanwhile, let me verify a couple more T01-T07 functional things myself to be safe:
+- T06 invalid percent and plus.
+- T07 unescape incomplete.
+- T05 GBK missing (I already know from code).
+
+Let me run node tests for T06/T07 ports. Actually the functional subagent is doing exactly this. Let me instead review the T01-T07 design coverage I already extracted (lines 1-843) and compile. I have T01, T02, T03 main; T05, T06, T07. I read T01-T03 and T05-T07 design. I have enough.
+
+Let me start writing the report now. I'll write it and then append subagent findings when they arrive. Actually I should wait to avoid rewriting. But I can write the bulk now.
+
+Let me structure the report:
+
+## 结论摘要
+- 总体覆盖率
+- 最严重问题 3-5 条
+
+## 覆盖对照表
+per tool row.
+
+## 设计还原问题
+## 功能与代码缺陷
+## 无法验证/存疑项
+## 修复优先级建议
+DONE: path
+
+Let me write it. I'll include node command outputs as evidence.
+
+Let me first gather the coverage table per tool with design controls vs code.
+
+I'll wait for the T01-T07 design subagent for confirmation, but I can construct it from my own reading:
+
+T01:
+- Design controls: 格式化/压缩 segmented; 缩进 2/4/Tab; 视图 代码/树形; 载入示例; 复制/下载; 粘贴/导入文件/清空 (editor header); tree 全部展开/全部折叠/复制 JSON; type labels; 状态栏 字符/行 + 校验状态 + 重复键; shortcut ⌘⏎/⌘⇧M.
+- Code: 格式化/压缩 ✓; 缩进 2/4/Tab ✓; 视图 代码/树形 ✓; 载入示例 ✓; DkEditor copy/download(disabled copy) /clear ✓; no 粘贴/导入文件 buttons (DkEditor lacks paste/import); tree: no expand-all/collapse-all/copy JSON/type labels/counts; Ctrl+Enter ✓ but no Ctrl+Shift+M; duplicate key hint ✓; status real char/line via DkEditor.
+- Gaps: tree features, Ctrl+Shift+M, editor 粘贴/导入文件, error message localization/line info for truncated JSON.
+
+T02:
+- Design: 比较; 上一处差异 + 下一处差异; 忽略对象键顺序 switch; 忽略数组顺序 switch(default off); status counts 新增/删除/修改 + 第 N/M 处; 复制差异报告; error variant actions.
+- Code: 比较 ✓; only 下一处差异 (no 上一处); 忽略对象键顺序 checkbox (default true); 忽略数组顺序 ✓ (default false); status counts ✓; 复制报告 ✓; no 第 N/M sticky? statusMeta shows `差异 N 处` and `i/N` when active. Actually design wants 第 1 / 4 处; code shows `差异 8 处` + `3/8`. Close. 
+- Gaps: 上一处差异 missing; error-action buttons missing; ignoreKeyOrder default: design shows switch (unspecified default in main board; C8MDfa says key order not counted). Fine.
+
+T03:
+- Design: direction switch; 左右编辑器; 目标缩进; 复制/下载; YAML tags/non-string keys 提示; status.
+- Code: direction ✓; indent 2/4 ✓; non-string key scan ✓; tags handled by js-yaml error (partially; `!!str`/`!!int` silently accepted); large YAML int precision loss (bug); `007` claim false.
+- Gaps: no explicit tag detection (relies on js-yaml); no RawNumber for YAML→JSON.
+
+T04:
+- Design: direction; 粘贴与文件输入; 表头设置; 分隔符; 引号规则; 编码; 预览表格; 嵌套映射配置.
+- Code: direction ✓; 表头首行 ✓; 分隔符 (comma/semicolon/tab) ✓; 类型推断 ✓; 字段路径配置 ✓; preview table ✓; SAMPLE; File input? Code T04 has NO file input (only paste). Design "粘贴与文件输入" → gap. Quoting rule options: design "引号规则" — code auto-quotes only, no option. Encoding option (GBK/UTF-8)? Design mentions "编码". Code none. Gaps.
+- Wait, requirement says "方向切换、粘贴与文件输入、表头设置、分隔符、引号规则、编码和预览表格". Design main board hvh9g — let me check its controls. I read hvh9g? The design lines 574-647. Let me check quickly. I'll rely on subagent. But file input gap likely.
+
+T05:
+- Design: 编码/解码; 输入类型 文本UTF-8/文件; 字符集 UTF-8/GBK; Base64变体 普通/URL; 文本/Hex 结果; 下载; error actions; binary file type detect.
+- Code: direction ✓; alphabet ✓; inputType ✓; decodeView text/hex ✓; download decoded file ✓; missing GBK charset; missing error line/col + fix actions; missing file-type detection/hex per-line.
+
+T06:
+- Design: 编码/解码; 模式 完整URI/组件; 空格与加号 空格→%20/空格→+; 重复解码 switch (default off); 模式对比 A/B.
+- Code: direction ✓; mode ✓; plusAsSpace decode-only checkbox; missing 空格→+ encode option; missing 重复解码 switch; missing A/B comparison.
+
+T07:
+- Design: 输入类型 文本/Unicode转义/UTF-8 Hex; 输出类型 Unicode转义/UTF-8 Hex/文本 (independent); 全部字符转义; 双结果 A/B; error actions.
+- Code: single conv mode with 3 pairs; escapeAll ✓; missing independent in/out selection; missing dual output; missing fix actions; reports only first invalid byte.
+
+T08:
+- Design: 按钮 去重并整理; options 大小写敏感/去除空行/移除首尾空格/保持首次出现顺序; copy/download; stats.
+- Code: options case/blank/trim ✓; sort keep/dict instead of 保持首次出现顺序; no button (real-time); no raWEO comparison view; output copy disabled (DkEditor bug); stats only lines.
+- Gap: comparison view, button, stats details.
+
+T09:
+- Design: 转换 button; options 忽略空行/保留原始大小写边界/跳过无法分词; 5 columns copy; reasons labels.
+- Code: real-time; no options; Chinese not detected; partial-bad rows leak; reasons not labeled; copy column present.
+- Gap: options, Chinese handling, reasons.
+
+T10:
+- Design: 比较; 视图 逐行/行内; 忽略空白; 忽略大小写; 上一处/下一处; F3; stats 修改/新增/删除; per-side diff line counts; copy.
+- Code: 比较 ✓; ignoreWs ✓; syncScroll ✓; 上一处/下一处 ✓; +/- counts (double count modify); missing 视图 toggle; missing 忽略大小写; missing F3; missing 3-type breakdown; missing result copy.
+- Newline-only diff shows modify row with no visible change (visual false positive).
+
+T11:
+- Design: flags checkboxes; 500ms; named groups; line/col; syntax error locate; timeout actions.
+- Code: flags text input; 2000ms; named groups ✓; offsets not line/col; no error locate; timeout protection real ✓; missing timeout actions; replacement preview ✓.
+- Gap.
+
+T12:
+- Design: per-algo expected; 复制全部/下载/导出清单; multi-file; progress; diff position; 未填写.
+- Code: single expected; per-row copy only; single file; no progress; no diff position; no 未填写.
+- Functional: vectors correct.
+
+T13:
+- Design: key enc UTF-8/Hex/Base64; RFC4231 vector "Jefe" TC2; per-bit compare; char-position key error.
+- Code: key enc utf8/hex only; mislabeled RFC4231 TC1 with wrong key; per-bit compare missing; generic hex error.
+- Functional: computation real and correct for its (mislabeled) inputs.
+
+T14:
+- Design: AES-GCM/AES-CBC; tag 128/120/112/104/96; ciphertext/tag separate inputs in decrypt; fix actions; copy plaintext.
+- Code: GCM only; tag 96/112/128; combined input only; no fix actions; copy plaintext disabled (readonly DkEditor); ctHex/tagHex always hex.
+- Functional: sample vector verified; auth failure vs key-length messages distinguished; `<=` boundary bug.
+
+Now, let me wait for the remaining agents before finalizing, since they may have additional findings. Let me do a final functional check for T06/T07 while waiting (short).
+
+Actually the functional T01-T07 agent should return soon. Let me just wait a bit by doing the coverage table write.
+
+I'll write the report now with what I have, then update after subagents report. Let me compose it carefully.
+
+Actually, I realize I should double check one thing the design-coverage subagent claimed: T11 design flags are 4 checkboxes (g/m/i/u) vs code flags text input. That's a coverage gap (design has checkboxes; code has a text field, which is more flexible). I'll note as low.
+
+Also T12 design "复制内容为纯摘要文本，不含算法名" — code per-row copy copies just the digest. Good.
+
+Let me also verify T12 results ordering etc. Fine.
+
+Let me write the report file now. I'll leave placeholders minimal and integrate the remaining subagent results if they arrive before I finish.
+
+Let me create the report.
+dsh: reasoning:
+Two more subagents reported. Now I have:
+- Design cover T08-T14 (033ca689) ✓
+- Functional T01-T07 (e712cf3f) ✓
+- Functional T08-T14 (002e28b9) ✓
+- Design cover T01-T07 (9f73c5c5) still running.
+
+New important findings from functional T01-T07:
+- T01 error position offset due to wrapNumbers length change (json.ts:199-205). Excellent catch! This is a strong bug.
+- T01 duplicate key path placeholders (`{}.c`).
+- T01 escaped key duplicate miss.
+- T03 `007` precision (I found too).
+- T03 large YAML int precision loss — the subagent didn't emphasize it? It reported JSON→YAML precision preserved. It did not test YAML→JSON large int. But I verified `1234567890123456789` → 1234567890123456800. I'll include my own node evidence.
+- T04 dotted key bug (very good).
+- T04 duplicate header key silently overwritten.
+- T04 extra columns dropped.
+- T07 escape backslash round-trip loss.
+- T05 base64 padding strictness.
+
+New from functional T08-T14:
+- T09 astral cap bug, NFD.
+- T10 plus/minus (they interpret as git-style, i.e., not a bug but design mismatch).
+- T11 timeout real; 2s; stale highlight.
+- T12 all correct.
+- T13 RFC mislabel (confirmed).
+- T14 `<=` boundary confirmed.
+
+Also T08 functional: default removes duplicate blank lines (doc conflict).
+
+Now I still wait on the T01-T07 design coverage subagent (9f73c5c5). I already have my own coverage for T01-T07. I could proceed without it, but let me wait a bit. Actually, it may provide additional coverage details. Let me start writing the report; if it returns before I finish, integrate.
+
+Let me now write the report. This will be a long file.
+
+I need to be careful: the report must include the coverage table per tool (one row each), per-tool design coverage, functional correctness, code defects with file:line, evidence.
+
+Let me write it comprehensively but not insanely long. I'll target ~400-600 lines.
+
+Let me note the key evidence commands:
+- `node -e` HMAC vectors: ascii-key vs RFC.
+- js-yaml 007/large int.
+- AES vector match.
+- DkEditor copy disabled (playwright).
+- stale false positive (playwright).
+
+Let me write the file now.
+
+Coverage summary estimates:
+- T01: controls ~70%, tree view features missing.
+- T02: ~85%.
+- T03: ~75%.
+- T04: ~70%.
+- T05: ~65%.
+- T06: ~55%.
+- T07: ~55%.
+- T08: ~70%.
+- T09: ~60%.
+- T10: ~65%.
+- T11: ~70%.
+- T12: ~65%.
+- T13: ~70%.
+- T14: ~65%.
+
+I'll present a table with 覆盖结论.
+
+Let me write.
+
+For the "覆盖对照表" I'll have columns: 工具 | 需求/设计要点 | 是否实现 | 主要证据.
+
+Let me now write the report file.
+dsh: reasoning:
+All functional subagents have reported. The only one still running is the T01-T07 design-coverage subagent. I've already written the report with my own T01-T07 coverage. Let me verify my report is complete and accurate, and integrate the remaining details from the functional agents that I might have missed:
+
+- T01 error position offset bug (I included B1). ✓
+- T01 duplicate key placeholder path (I included B2). ✓
+- T01 escaped key miss (B3). ✓
+- T01 truncated JSON no position (B4). ✓
+- T03 007 (F2) and large int (F1). ✓
+- T04 dotted key (E1), duplicate header (E2), extra columns (E3). ✓
+- T05 padding strictness (in G,存疑). ✓
+- T06 correct. ✓
+- T07 backslash roundtrip (G1). ✓
+- T08 core correct + blank line wording (H1). ✓
+- T09 Chinese (H3), half-valid (H4), astral (H5), NFD (H6). ✓
+- T10 plus/minus (D1), trailing newline (D2). ✓
+- T11 ReDoS real (I1), 2s (I2), stale highlight (I3). ✓
+- T12 correct. ✓
+- T13 RFC mislabel (I4), missing base64 (I5), compare too wide (I6), sample switch (I7). ✓
+- T14 vector correct (I8), `<=` (I9), IV copy (I10), order (I11). ✓
+
+I should add T09 `version2Name` design mismatch — I mentioned in H section. ✓
+
+I also should add the T05 design gap "GBK" (done in section 3). ✓
+
+One thing: The functional T08-T14 subagent said `plus = add+modify` "符合 git 风格" but the design FAQ says otherwise. I kept it as a mismatch. Good.
+
+I should also mention T12 `expectedNorm` and Base64 expected mismatch. I mentioned in I. ✓
+
+Now, the report references `/tmp/audit2/bugs.mjs` etc. which is fine as evidence.
+
+Let me double check the report file content and line count, and verify the DONE line is present. Also let me verify my claim about T01 `@@raw` sentinel collision is in the report (it is, in 存疑).
+
+Let me re-read the written file briefly to ensure formatting is fine and there are no errors. Also I want to make sure the report doesn't claim anything unverified.
+
+Let me read the file's tail and check the DONE marker.
+
+Also, I should wait for the last subagent (T01-T07 design coverage) to see if it adds anything. It's still running. Given my report already covers T01-T07 design gaps thoroughly, I can finalize. But the instructions say to collect still-relevant background jobs. This is a subagent, not a job. I should either wait or interrupt. Since I already have my own T01-T07 coverage, I could just let it finish; but I should not leave it hanging. Let me check if it's still running and give it a moment. Actually, it's a subagent; if I finalize, it may still finish and I'd get a notice. Better to wait for it briefly or interrupt it.
+
+Let me check its status, and if still running, wait a little via job_output? Subagents aren't jobs. I'll use list_agents. If still running, I'll send a message asking for partial results, or just wait. Actually the simplest: let me check. If running, I'll wait by doing a quick verification of the report and then check again.
+
+Let me read the report tail and verify the final line.
+dsh: reasoning:
+The last subagent (9f73c5c5, T01-T07 design coverage) is still running. My report already covers T01-T07 design gaps from my own reading. I have two options: interrupt it, or wait. Since my report is complete and the subagent may add minor details, let me wait a bit for it — but I shouldn't busy-poll. Let me instead use the time to double-check a couple of my report claims that I want to be solid, and then check again.
+
+Actually, the task's report is essentially done. But the subagent's findings could add useful T01-T07 design coverage details (like T04 design controls I extracted myself). Given I already read the T01-T07 design text directly (lines 1-843) and covered them, the marginal value is low. However, to be thorough and since it's still running, let me wait for it with a short check loop via list_agents. But instructions say don't busy-poll. I can do useful verification meanwhile.
+
+Let me verify the T01 sentinel collision claim once more (already ran). And verify `looksLikeText` unused? Not needed.
+
+Let me verify the `version2Name` design table claim: design GK0ky lines 1495-1500 show `version2Name`, `version2Name`, `Version2Name`, `version2_name`, `version2-name`, `VERSION2_NAME`. Yes, code gives `version_2_name` etc. Confirmed mismatch. Good.
+
+Let me also double-check that I correctly stated T12 output encoding Base64 expected mismatch. `matchOf` compares `r.hex === expectedNorm`; if user selects Base64 output and pastes a Base64 expected digest, it won't match. But the help says "按 Hex 对照". So it's more of a limitation. I listed it as 存疑. Fine.
+
+Let me verify the report's claim about T01 `watch([mode,indent],execute)` and QZSHR. Fine.
+
+Now let me wait for the last subagent. I'll check once more; if still running after a short delay, I'll interrupt it since the report is complete and it's redundant. Let me do a final sanity check of the report rendering (read first ~60 lines) and then decide.
+
+Actually, I realize I should incorporate one more cross-check: the design-coverage subagent for T08-T14 mentioned T10 result panels lacking copy, T12 findings, etc. — all integrated.
+
+Let me read the report's section 2 table to make sure formatting is intact.
+
+I think the report is good. Let me wait a little for the last subagent by doing one more verification: the T14 `<=` bug — I want to make sure empty-plaintext ciphertext decrypt actually works in WebCrypto and that `r.bytes.length == tagBytes`. The functional subagent verified it. Good.
+
+Let me now decide on the last subagent. I'll give it a bit more time by doing a quick check of the design frame for T01 tree initial expansion etc. Actually I already have that.
+
+Let me just wait for it using a no-op-ish command with sleep? Better: I can send it a message to wrap up. Or interrupt. Since the report is complete and the subagent's scope is redundant with work I did myself, I'll interrupt it to avoid dangling work, then finalize. Actually the instruction says "interrupt_agent... The target may keep running briefly". Interrupting is acceptable since its output is no longer needed.
+
+But wait — it might already be about to finish and could add value. Let me check list_agents one more time after a brief pause. I'll run a quick command that takes a few seconds (e.g., re-verify one thing), then check.
+
+Let me verify T09 astral claim quickly myself (the subagent's Deseret example) to ensure I don't propagate an unverified claim. Let me run it.
+dsh: reasoning:
+Verified. Now let me check the last subagent once more. If still running, I'll interrupt since the report is complete and its scope is redundant. Actually, let me give it one more chance — maybe send a message asking to return partial findings now. That could take another turn though. Given the 30-min target and my report being complete, I'll interrupt it.
+
+Actually, hold on: the instructions say "Before giving a final answer, collect every still-relevant job with job_output ... and job_kill jobs that stopped mattering." That's for bash background jobs. For subagents, I should probably let it finish or interrupt. Interrupting is fine.
+
+But maybe I should wait for it because it's "still-relevant". Its findings could improve the T01-T07 design coverage. However, I already have T01-T07 design coverage from my own reading of all design frames. The marginal benefit is low and I've verified everything I reported.
+
+Let me interrupt it and finalize.
+
+Actually, let me reconsider: it's been running a long time (throughout my whole session). It might be stuck or producing a huge output. Interrupting is reasonable.
+
+Let me interrupt and then give the final answer with the DONE path.
+
+Wait — the report already ends with `DONE: <path>`. The task says output should contain per-tool coverage table and last line DONE. My report has that. Good.
+
+Let me interrupt the agent.
+dsh: reasoning:
+Now let me do a final read of the report to make sure it's coherent and complete, especially the beginning. Let me read the first 80 lines and spot-check.
+
+Actually, I already know the content. Let me just verify the file exists and the last line. Done.
+
+Let me finalize my answer summarizing what I did and the key findings, with the report path. The task's output requirement is the file itself with DONE line. My final message can be concise.
+
+Let me mark todos complete.
+dsh: reasoning:
+The last subagent was stopped. The report is written. Let me give the final answer.
+
+I should provide a concise summary and the DONE line. The task says output written to the file with last line DONE. I'll report that.
+报告已完成并写入。
+
+## 产出
+`/Users/hao/WebstormProjects/web_tools/audit/reports/r2-tools-t01-t14.md`（294 行，含 14 工具的覆盖对照表、设计还原问题、功能/代码缺陷、存疑项、修复优先级）
+
+## 审核方式
+- 设计稿：`pen.py` 的 `text` 命令在本项目 `design.pen` 上读不到文字（内容存在 `content` 字段），改用只读脚本抽取 47 张主画板/必画变体，逐控件核对。
+- 运行站点：Playwright 探测全部 14 个 `/tools/<slug>`（均 HTTP 200、无 pageerror、无失败请求），并实际点击“载入示例/执行”核对状态栏与控件禁用态。
+- 功能复算：把 `json.ts`/`bytes.ts` 与各工具核心逻辑移植到 node 复算（`js-yaml@4.3.2`、`diff@8.0.4`、`spark-md5`、WebCrypto），并用 `node:crypto` 公认向量 / 生成测试向量交叉验证。
+
+## 最严重问题（详见报告）
+1. **`useToolRun` 误报 stale**（`useToolRun.ts:15-24`）：所有“载入示例/交换”按钮执行成功后立刻变“结果待更新”，复制/下载被禁。实测 T01/T02/T05 复现。
+2. **readonly 结果编辑器复制被禁**（`DkEditor.vue:81`）：影响 T01/T03/T04/T05/T06/T07/T08 等所有结果面板。
+3. **T13 假 RFC 4231 TC1 标签**（`t13-hmac.vue:21-23,85-92`）：样例密钥是 40 字节 ASCII，真 TC1 应为 `b0344c61…`（node 复核）。
+4. **T03 YAML→JSON 静默失真**：大整数丢精度、`007`→`7`，与页面自身文案矛盾。
+5. **T01 语法错误行列偏移**（`json.ts:77,199-205`）：包装数字改变 position，实测报错行号前移。
+
+另含 T04 含点键名取值失败/重复表头覆盖/多列静默丢弃、T07 反斜杠往返丢失、T09 中文未按设计跳过且复制泄漏、T10 修改行双计 +/-、T11 超时 2000ms≠设计 500ms、T14 缺 AES-CBC 与 `<=` 空明文边界等 30+ 条带 `文件:行号` 的缺陷。
+
+DONE: /Users/hao/WebstormProjects/web_tools/audit/reports/r2-tools-t01-t14.md

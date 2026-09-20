@@ -1,0 +1,916 @@
+dsh: reasoning:
+Let me start by reading the audit reports and the target files.
+dsh: reasoning:
+Now let me read the relevant audit report sections. Let me grep for T13, T15, T33 in the reports.
+dsh: reasoning:
+Let me read the full evidence sections around those lines. Let me read r2 T13 section, r3 T15 sections, r4 T33 sections.
+dsh: reasoning:
+Now I have a clear picture. Let me look at helper functions available: `hexToBytes`, `bytesToHex`, `textToBytes`, `base64ToBytes`, `byteLength`, `bytesToBase64`, `hash` etc. Let me check `app/utils/bytes.ts` and any crypto utilities available.
+
+Let me check what utility functions exist.
+dsh: reasoning:
+Let me look at the sm-crypto sm2 source to understand its API, especially `doDecrypt` and whether there's a way to detect C3 failure.
+
+Let me examine the sm2 source.
+dsh: reasoning:
+Interesting! `doDecrypt` already has `verifyPublicKey` for C1 point. But `doEncrypt` does NOT verify the public key point. Let me look at `verifyPublicKey`.
+dsh: reasoning:
+`sm-crypto` exposes `sm3` from the main index. And it exports `sm2` object. Does `sm2` export `verifyPublicKey`? Let me check the sm2 index exports.
+dsh: reasoning:
+`sm2.verifyPublicKey(publicKey)` is exported! This directly verifies the point on curve. `require('sm-crypto').sm2.verifyPublicKey(publicKey)`.
+
+For the C3 verification distinguishing empty plaintext vs failure: `doDecrypt` with `output: 'array'` returns `[]` on failure but could also return `[]` for empty msg? Actually for empty msg, c2 = '' → `_.hexToArray('')` = []. Then on success, `output === 'array' ? msg : ...` returns `[]`. So empty R[] is ambiguous too. BUT: the difference is that on success with empty msg, the checkC3 matches. We can't distinguish from the return value alone.
+
+Best approach: implement our own C3 verification. We can use `sm2.doDecrypt(hex, priv, mode, {output:'array'})` to get the plaintext bytes. On failure it returns `[]`. To distinguish failure from empty plaintext, compute C3 ourselves.
+
+But to compute C3 we need x2, y2 = d * C1. sm-crypto exports `getPoint`? Let me check. `sm2.getPoint` and `sm2.getPublicKeyFromPrivateKey`. Actually `getPoint` signature? Let me check. Also, to compute the shared point, we need c1 * privateKey. sm-crypto doesn't directly export the curve operations, but `curve` is in utils. Hmm.
+
+Alternative simpler approach: Verify C3 by re-encrypting? No, encryption is randomized (uses random k), so we can't reproduce.
+
+Alternative: We can detect C3 match by checking whether `doDecrypt` with output array returns []. But both failure and empty plaintext return []. However, we can independently compute the expected C3 = SM3(x2 || M || y2) if we can get x2,y2.
+
+Options:
+1. Use sm2's `getPoint` — let me check its signature. Actually `getPoint` likely computes point from private key (d*G). Hmm.
+
+Let me check the sm2 index for `getPoint`.
+
+Actually, we could compute C1 * d ourselves using sm-crypto's internal curve via requiring the deep path, but that's fragile.
+
+Alternative clever approach: For the cipher, C1 is the ephemeral public key. We can extract C1 and use `sm2.doEncrypt`? No.
+
+Better: We can verify the C3 by a trick: The C3 = SM3(x2 || M || y2). We have C2 = M XOR KDF(x2||y2). So M = C2 XOR KDF(x2||y2). We need x2,y2.
+
+We can get x2,y2 by using the private key and C1 point: shared = C1 * d. sm-crypto's `getPoint` function — let me check what it does. Let me look.
+dsh: reasoning:
+`sm2.verifyPublicKey` is available. For C3 verification, I want to distinguish. The cleanest way: use the returned plaintext bytes from `doDecrypt(..., {output:'array'})`. If non-empty array → success. If empty array → ambiguous; then we need to determine whether it's really an empty plaintext with valid C3.
+
+To determine invalid C3 for empty plaintext, I can recompute C3. I need x2, y2. I can get the shared point via... `sm2.getPoint()` gives random keypair, not useful.
+
+Hmm, but I can compute C3 independently in a different way: Actually, I realize there might be a simpler trick. Since we have the correct plaintext M for the successful case, C3 = SM3(x2 || M || y2). If M is empty, C3 = SM3(x2 || y2). We still need x2,y2.
+
+Alternative: The library's `doDecrypt` returns `''` on failure and also for empty. But I can decrypt a modified ciphertext? No.
+
+Wait — maybe I can use the fact that for empty plaintext, C2 is empty. For a tampered empty-plaintext ciphertext, C3 is wrong. We want to distinguish. Approach: Compute the expected C3 using the SM2 key exchange. I could implement the scalar multiplication using the exported curve. But sm-crypto doesn't export the curve in `sm2` object. However `sm2.getPublicKeyFromPrivateKey` uses G. Hmm.
+
+Actually, there's another approach that avoids curve math entirely: **We can verify by re-deriving x2,y2 using a known relation.** Not possible without curve.
+
+Let me think about what's simplest and robust. I could import the internal `sm2/utils.js`? That's a deep import, fragile, and TS may not have types. But the project already imports 'sm-crypto' default. Deep import `sm-crypto/src/sm2/utils` would work at runtime via vite but is brittle.
+
+Better approach: Implement C3 verification by leveraging `sm2.doEncrypt`? No, random.
+
+Hmm, alternatively: Is there a way to make `doDecrypt` return distinguishable output? Looking at the code: on failure returns `output === 'array' ? [] : ''`. On success with empty msg returns `output === 'array' ? msg : ...` where msg = []. Both `[]`. Truly ambiguous.
+
+But wait — for a *valid empty-plaintext* ciphertext, the ciphertext structure is C1(64) || C3(32) (len 192 hex). For an invalid C3 with non-empty C2, len > 192. The original code handles `out === '' && hex.length === 192` → empty plaintext. For non-empty C2 with invalid C3, `out === ''` branch → failure. That is correct. The bug is only for length-192 tampered C3: it says "C3 passed" wrongly.
+
+So the ambiguity only matters when the plaintext is genuinely empty. To resolve, we must compute C3 = SM3(x2||y2). Need x2,y2 = C1 * d.
+
+Can I compute C1*d? sm-crypto exports `getPoint()` (random) and `getPublicKeyFromPrivateKey(privateKey)` = d*G. Not C1*d.
+
+Option: Use the curve's point multiply via a small independent SM2 private-key operation. Actually maybe I can compute x2,y2 by using the fact that `sm2.doDecrypt` internally computes it. But I can't access.
+
+Wait, there might be an even simpler robust method: **Verify C3 by checking the empty-plaintext ciphertext via re-encryption comparison is impossible (random k).** 
+
+Alternative: Use `output: 'array'` and, when it returns `[]`, independently confirm by checking whether the C3 matches SM3 of the shared secret. We need curve math.
+
+Actually, let me reconsider: maybe I can compute x2, y2 using sm2's own functions through a clever composition. The `comparePublicKeyHex` and `getPublicKeyFromPrivateKey` are available. Not enough.
+
+Let me check whether jsbn is available as a dependency and ec.js. The project has jsbn as transitive dep of sm-crypto. I can import `BigInteger` from 'jsbn' — but that's not a direct dependency, risky in strict pnpm, but node_modules has it (npm hoisting). Still, deep-importing crypto internals to reimplement ECC is a lot of code and against "minimal changes".
+
+Hmm, wait. Actually there IS a neat approach using only the public `sm2` API:
+
+To check whether C3 is valid for empty plaintext, I can use the fact that `sm2.doVerifySignature`? No.
+
+Let me reconsider. Another approach: We can perform the C3 check by using a **known-good** decrypt with the same private key and C1? No, C1 differs.
+
+OK here's another idea. We could compute C3 independently using the **encryption** API in a way that reveals x2,y2. Specifically, `sm2.doEncrypt` accepts an optional... no, it generates its own keypair. Actually `sm2.getPoint()` returns a keypair but doesn't let you pass it to doEncrypt.
+
+Hmm, `doEncrypt` uses `_.generateKeyPairHex()` with no args, so k is random and unexposed.
+
+Let me look for whether sm-crypto has a lower-level public API that computes shared point. Let me check the dist build maybe exposes more. Actually the npm main is src/index.js. 
+
+Given constraints, perhaps the cleanest approach: implement a small SM2 point validation + C3 check using the curve parameters and jsbn, but that duplicates a lot.
+
+Wait, actually, maybe I'm overcomplicating. Let me re-read the requirement:
+
+"3. 【T15】空明文解密时用 out==='' 且 hex.length===192 判定 C3 校验通过，而 sm-crypto 校验失败同样返回空串，导致伪造成功。请改为能区分「C3 校验失败」与「明文为空」的判定（例如自行校验 C3 = SM3(x2 || M || y2)），绝不能把失败当成功。"
+
+The suggested approach: self-verify C3 = SM3(x2 || M || y2). To get x2, y2 we need C1 * d.
+
+Hmm, but there's another elegant approach that avoids computing shared secret: **Use `sm2.doDecrypt` with output 'array' on the ciphertext, and if result is empty, append a sentinel byte to the plaintext? No — we can't, since C2 is XOR of msg and keystream; we don't have keystream.**
+
+Wait, actually we CAN get the keystream! KDF depends only on x2,y2 and ct, not on message. If we know the plaintext M (which we get from doDecrypt), then keystream = C2 XOR M. For a valid ciphertext with non-empty M, doDecrypt returns M. But for the ambiguous case (empty M), C2 is empty, no keystream available.
+
+Hmm.
+
+Alternative: XOR C2 with a known plaintext to get keystream, then use keystream to... not helpful for empty.
+
+OK, let me consider: we only need to distinguish for the 192-hex case. In that case C2 is empty. The valid ciphertext for empty message has C3 = SM3(x2 || y2). To verify we need x2,y2.
+
+Can we get x2,y2 from C1 and private key using only sm2 public API? There's `sm2.getPublicKeyFromPrivateKey(priv)` = d*G. And `sm2.doEncrypt` internally computes `publicKey.multiply(k)`. If we could pass a k... no.
+
+What about `sm2.comparePublicKeyHex`? no.
+
+Hmm, let me check if `sm2` exposes the internal `_` utils or `curve`. The module.exports lists only those functions. No curve.
+
+Let me check the `dist` build - maybe `sm-crypto` main points to src. Yes main: src/index.js.
+
+OK, what if we import the deep internal? Actually, a cleaner path: **Use `jsbn` plus implement point arithmetic?** That's heavy.
+
+Alternative pragmatic approach: We can distinguish by **round-trip re-encryption is impossible**, but we can verify the C3 by using the `sm2` `doDecrypt` with output array and check if result is empty; if empty, then independently verify using a **second library function that exposes x2,y2**. 
+
+Hold on — Actually there's a very simple trick! `sm2.doDecrypt` computes `p = c1.multiply(privateKey)`. The shared secret point (x2,y2) is deterministic given (C1, d). So if I take a valid ciphertext with empty plaintext and one with tampered C3, both give [].
+
+But here's the thing: I can construct a probe. Take the ciphertext C1 || C3 || C2. I can replace C2 with C2 XOR delta (i.e., encrypt a different message with same C1 and keystream). Then doDecrypt returns M' = M XOR keystream... but for empty M, C2 empty, keystream unknown.
+
+Hmm what if instead of relying on doDecrypt, I use the fact that decryption of a non-empty C2 always returns non-empty if C3 valid. For the 192-length case, I can **append** a dummy byte to C2 (making length 194) and adjust C3? No, C3 depends on M.
+
+Let me step back. The requirement says "例如自行校验 C3 = SM3(x2 || M || y2)" — "for example". Maybe a simpler correct approach: **Only treat as empty-plaintext success if the ciphertext was produced by encrypting empty string... impossible to know.**
+
+Alternatively: we can determine validity by checking whether `sm2.doDecrypt` of the ciphertext with the private key returns a non-empty result OR whether `hex.length === 192` AND the C3 check passes for the empty case. To do the C3 check, we can use `sm2.verifyPublicKey`? No.
+
+Actually wait — maybe I can compute C3 for empty plaintext by a clever use of `doEncrypt`. `doEncrypt` computes c3 = SM3(x2 || msg || y2), and returns c1+c3+c2. If I could force the same k... `doEncrypt` generates random keypair internally. But what if I call `doEncrypt` with the **C1 as the public key**? Then the shared point would be C1 * k' which is different. No.
+
+Hmm, what if I use the private key d as the "message" ... no.
+
+OK, let me check `sm2.getPoint()` more: it returns `{keypair, k, x1}` where keypair has publicKey = k*G. Still random.
+
+Let me consider deep import of the utils module which exports `verifyPublicKey`, `getGlobalCurve`, etc. `sm-crypto/src/sm2/utils` exports `getGlobalCurve`! With the curve object I can do `curve.decodePointHex('04'+c1)` then `.multiply(new BigInteger(d,16))` and get x2,y2. That requires jsbn BigInteger too. Deep import of `jsbn` is available.
+
+But is that within "minimal changes"? It's a fair amount. And TypeScript would complain about missing types unless we cast. We can use `// @ts-ignore`? Instructions say don't write comments. Hmm. Could use `createRequire`? In Nuxt/Vite, `require` isn't available in ESM browser code.
+
+Actually, we already import `smCrypto from 'sm-crypto'`. Deep import with vite would work: `import sm2utils from 'sm-crypto/src/sm2/utils'`. But that's not the documented API and could break. Also TS types missing.
+
+Let me reconsider. Maybe there's a simpler correct behavior that doesn't require solving the ambiguity perfectly: 
+
+For length-192 ciphertext: The plaintext would be empty if C3 is valid. We could just **report it as a distinct state**: "密文长度为 96 字节（C2 为空）。无法区分空明文与 C3 校验失败" — but the requirement explicitly says must distinguish and never report failure as success. Reporting "cannot determine" would not be a fake success, but the requirement says "请改为能区分...的判定". Better to actually distinguish.
+
+Hmm, but actually maybe sm-crypto exposes enough: `sm2.verifyPublicKey` verifies a public key. Not helpful.
+
+Wait, I just realized: we can verify C3 = SM3(x2||M||y2) by **re-implementing only the C3 portion using the plaintext and the shared point obtained via `doDecrypt` of a crafted ciphertext**? Let me think again...
+
+Actually here's a MUCH simpler trick to get the keystream for the empty case: The SM2 KDF depends on (x2, y2, ct). The C2 for the empty case is empty, so no keystream bytes needed. But C3 = SM3(x2 || y2). If I modify the ciphertext to include one byte of C2 (i.e., set C2='00'), then M' = '00' XOR keystreambyte. doDecrypt would compute C3' = SM3(x2 || M' || y2) and compare to original C3 → mismatch (unless coincidence). Not helpful.
+
+Hmm, what if instead I keep C3 but set C2 = some bytes, then doDecrypt checks C3 against M' derived. If I set C2 = keystreambytes, M' = 0. But I don't know keystream.
+
+I think the cleanest is to compute the shared point ourselves. Let me check if there's a simpler exported way. `sm2.getPublicKeyFromPrivateKey(priv)` = d*G. If I want C1*d, and C1 is a point... no direct function.
+
+BUT WAIT. There's another elegant approach: **Verify C3 by checking that a valid signature-like relation**... no.
+
+Let me just accept implementing the shared-secret computation using curve internals. Actually, let me reconsider the deep import and complexity. We can import the `utils` default? Let me check module.exports of utils.js - it's an object with getGlobalCurve, generateEcparam, etc. And ec.js exports ECCurveFp. Actually we need BigInteger from jsbn. Is jsbn a direct dependency? It's a dep of sm-crypto. npm hoists to node_modules/jsbn. Let me verify. 
+
+Actually, maybe I can avoid jsbn by using the curve object's methods? `ECCurveFp.prototype.multiply(point, k)` expects k as BigInteger. Hmm.
+
+Let me check if `jsbn` is present.
+
+Actually, let me reconsider the whole thing. There's a far simpler approach using only public sm-crypto API:
+
+`sm2.doDecrypt(encryptData, privateKey, cipherMode, {output:'array'})` returns `[]` for both. BUT `sm2.doDecrypt` with **output 'array'** on the empty case returns `msg` which is the array `[]` — same as failure. So no.
+
+However! We can distinguish by using a **different private key check**? No.
+
+Hmm, what about **checking C3 via `sm2.doEncrypt`'s deterministic relation for the SAME C1**? Since doEncrypt always uses fresh k, no.
+
+I'll implement C3 verification with curve math. Let me check the available pieces:
+
+- `sm-crypto/src/sm2/utils.js` exports `getGlobalCurve` (returns curve with `.decodePointHex`, points with `.getX()`, `.getY()`, `.multiply()`).
+- Need BigInteger for the private key scalar. jsbn.
+
+Let me verify jsbn is in node_modules and check its export.
+
+Actually, there might be a cleaner way to avoid importing curve internals and BigInteger: **Use `sm2.doSignature`/`doVerifySignature`?** no.
+
+Let me check: does the `_.generateKeyPairHex` accept args? `generateKeyPairHex(a,b,c)` where if `a` given uses `new BigInteger(a,b,c)`. But that's for keypair, not shared point.
+
+Hmm, OK. Alternatively, I could use a totally different, simpler and provably-correct criterion for the empty-ciphertext case:
+
+For a length-192 ciphertext (C1 || C3, no C2), the C3 should equal SM3(x2 || y2). I can compute x2,y2 via the **private key and C1**. Instead of doing EC math, I can exploit that `sm2.doDecrypt` internally computes it, and I can make it **reveal whether C3 matches** by checking... it already does but conflates.
+
+What if I create a ciphertext where C2 is non-empty and C3 is computed correctly for the empty plaintext? That's exactly the empty case. Circular.
+
+I think EC math is the way. But wait, maybe I can use JavaScript to access the already-imported sm2's internal `_`? No.
+
+Let me check the audit's suggestion again: "或调用带 output:'array' 的接口区分失败" — the audit suggested `output:'array'`. But as analyzed, it's still `[]` for both. Unless... let me actually verify with node. Maybe doDecrypt with output array returns something different for empty plaintext. Let me test with the actual tampered case.
+
+Let me run node tests. Also test `sm2.verifyPublicKey`.
+
+Let me now set up a test environment. Let me write a node script.
+
+Actually — I realize there might be a much simpler and fully robust way! For a 192-hex ciphertext, we can verify C3 by using the **public key derived from the private key** and checking... no, C3 depends on ephemeral C1.
+
+OK let me test things in node first.
+
+Let me check jsbn availability and test the deep import.
+dsh: reasoning:
+Confirmed: `output:'array'` doesn't distinguish. Deep import works, jsbn available.
+
+Now, how to compute shared point with just `sm2` public API without deep import? Actually I realize we can compute the shared point using `sm2.getPoint`? No.
+
+Wait — here's a clean approach using only the public API and `sm2.doVerifySignature`? No.
+
+Hmm, actually let me reconsider. There's an even simpler and 100% correct approach to verify C3 for the empty case: compute the shared secret via the **curve** exposed by deep import. But maybe we don't need deep import: We can compute x2,y2 ourselves using an independent SM2 implementation? That's heavy.
+
+Actually — hold on. I realize `sm2.doDecrypt` also validates C1 via verifyPublicKey. So for a 192-length ciphertext, doDecrypt computes C3 check. We need to know the outcome. What if we make the C2 non-empty in a way that lets us deduce x2,y2? 
+
+Actually, here's a cleverer idea using ONLY the public API: 
+
+The SM2 ciphertext C = C1 || C3 || C2. Consider ciphertext C' = C1 || C3' || C2' where we, using doEncrypt? No.
+
+OK, let me think about whether deep import is acceptable. The instruction says minimal changes and only modify the 3 files. A deep import inside t15-sm2.vue is within the allowed file. Risk: bundler resolution. Vite can resolve `sm-crypto/src/sm2/utils` since it's within node_modules. But package.json may not have "exports" restricting. Let me check sm-crypto package.json for "exports" field. It didn't show one in the head. Let me check.
+
+Actually, a cleaner approach: use the curve from `sm2.getPublicKeyFromPrivateKey`? no.
+
+Alternatively, maybe I can use `jsbn` + the curve via deep import to compute C1*d. Steps:
+```
+import sm2utils from 'sm-crypto/src/sm2/utils'
+import { BigInteger } from 'jsbn'
+const curve = sm2utils.getGlobalCurve()
+const c1 = curve.decodePointHex('04' + c1Hex)
+const p = c1.multiply(new BigInteger(privHex, 16))
+const x2 = leftPad(p.getX().toBigInteger().toString(16),64)
+const y2 = leftPad(p.getY().toBigInteger().toString(16),64)
+```
+Then M = C2 XOR KDF(x2||y2) ... or simpler: use `sm2.doDecrypt(...,{output:'array'})` to get M bytes (for validation of C3 we need M). Actually to verify C3 = SM3(x2||M||y2), we need M. But if out is 'array' and returns non-empty, we already know C3 passed. The only case we need this is when out is empty → M = [] → verify SM3(x2||[]||y2) === C3. So we only need x2,y2! Great — no XOR needed.
+
+So for the 192-length case with empty result: compute x2,y2 = C1*d, then check `sm3(sm3hex)`. We need the SM3 hash function. `sm-crypto` exports `sm3` from main index! `smCrypto.sm3`. The sm3 function accepts a hex string? Looking at sm3/index.js: `input = typeof input === 'string' ? utf8ToArray(input) : slice(input)`. So if given a string it treats it as UTF-8 text, NOT hex. Hmm. For byte array input we can pass an array of bytes. `sm3(byteArray)` returns hex string. So compute `sm3(bytes)` where bytes = x2bytes || y2bytes (empty M). `smCrypto.sm3` is exported. Let me verify.
+
+Actually main index exports `sm3: require('./sm3/index')`. So `smCrypto.sm3` is the function. Good.
+
+So the plan for C3 verification of empty plaintext:
+- Parse C1 = hex.slice(0,128), C3 = hex.slice(128,192) for mode 1 (C1C3C2). For C1C2C3 mode, C2 is between, and empty C2 gives C1 || C3 (since C2 empty) → same layout C1(128) + C3(64). Actually for C1C2C3 with empty C2: c1 (128) + c2 ('') + c3 (64) = 192, c3 = substr(128,64). Same. Good.
+- Decode C1 point, multiply by private key → x2,y2.
+- Compute expected C3 = sm3([...x2bytes, ...y2bytes]) — need M=[] so just x2||y2.
+- Compare to C3.
+
+But for non-empty cases, `doDecrypt` returning non-empty already means C3 passed. And returning '' with length > 192 means failure (genuinely, since empty plaintext would give length 192). Actually wait: for an empty plaintext ciphertext, length is exactly 192. For non-empty plaintext, length > 192. So the original logic is:
+- out === '' && len === 192 → claim empty success (ambiguous)
+- out === '' && len > 192 → failure (correct, because if plaintext were empty, len would be 192)
+- out !== '' → success
+
+So only fix needed: for len === 192 and out === '', verify C3 with our computation. If matches → empty success. Else → C3 failure.
+
+This requires x2,y2. Good.
+
+Now, can I get x2,y2 without deep import? Let me think once more... Actually, I realize there's a way to verify C3 for the empty case using only public API by exploiting the **KDF and a chosen C2**! Here's the trick:
+
+We want to know if C3 = SM3(x2 || y2). Consider constructing a new ciphertext with the same C1 but with C2 set to some value and C3 recomputed? We can't recompute C3 without x2,y2.
+
+No.
+
+Can we make `doDecrypt` reveal x2,y2 through the plaintext? If we set C2 = keystream, plaintext = 0. But we don't know keystream. However! We can use the **known valid empty ciphertext**? Not for arbitrary.
+
+OK, deep import it is. But let me double check package.json exports field for sm-crypto to ensure deep import works.
+
+Actually, alternatively, I could avoid deep import entirely by **reimplementing the shared point computation using jsbn only**, but I'd need the curve parameters (p, a, b) and point arithmetic (ec.js). That's more code than a deep import.
+
+Wait, actually there's yet another approach that uses `sm2` public API and is elegant: 
+
+`sm2.doEncrypt(msg, publicKey, mode)` computes (x2,y2) = publicKey * k where k is the ephemeral private key, and c1 = k*G. So if I pass **C1 as the publicKey** and call doEncrypt with the plaintext... then (x2',y2') = C1 * k. Not C1*d.
+
+Hmm, what if I pass the private key's public key P = d*G as the "publicKey"? Then x2,y2 = d*G*k. Not C1*d.
+
+No.
+
+OK here's another thought: perhaps we don't need x2,y2 explicitly. We can verify C3 for empty plaintext by a **round-trip using doDecrypt on a modified ciphertext with known relationship**? Let's see: If C3 is valid for M=[], then any ciphertext C1||C3||C2 with the same C1 and arbitrary C2 of length L will decrypt (per library) to M = C2 XOR keystream and check C3 = SM3(x2||M||y2). If I set C2 to all zeros of length 32, then M = keystream (unknown). The library recomputes C3 and compares to the original C3. It will return '' (mismatch) almost surely. No info.
+
+OK deep import. Actually, wait. Let me reconsider whether we even need the curve math. There's a much simpler **correct** behavior that the requirements might accept: For a 192-length ciphertext with `out === ''`, we could report "无法验证 C3" — but requirement says distinguish. Let me just do the math properly.
+
+Let me check whether Vite/nuxt can resolve the deep import. Let me check package.json of sm-crypto.
+dsh: reasoning:
+No "exports" field, so deep import `sm-crypto/src/sm2/utils` should resolve. `smCrypto.sm3` available.
+
+But TypeScript types: does sm-crypto ship types? It's plain JS, no .d.ts probably. The import `import smCrypto from 'sm-crypto'` currently works in the file, so there must be a type declaration or it's `any` via allowJs. Let me check if there's a shims file. Actually the existing code compiles, so likely there's `@types` or the tsconfig has `noImplicitAny` off / `skipLibCheck`. Deep import to `sm-crypto/src/sm2/utils` would have no type → TS error "Could not find a declaration file". But the existing `import smCrypto from 'sm-crypto'` also has no declaration... maybe there's a global d.ts. Let me check.
+
+Let me search for sm-crypto type declarations.
+dsh: reasoning:
+No type declaration for sm-crypto; it's implicitly `any` (probably `noImplicitAny` false or `moduleResolution` allows JS). Nuxt dev doesn't type-check by default during dev (vite transpiles, esbuild strips types without checking). So deep import would be fine at runtime, and type errors wouldn't block dev server. But `nuxt build` might run type check? Usually not unless configured. To be safe, I'll add `// @ts-ignore` — but instructions say no comments. Hmm. The instruction "不要写注释" likely means don't add explanatory comments in code. A `@ts-ignore` is a compiler directive; still a comment. Better avoid.
+
+Actually, maybe I can avoid deep import with a different, pure-public-API approach. Let me think harder.
+
+Idea: Use `sm2.getPoint()`? It returns a random keypair and `.k` and `.x1` from a random point. Not usable.
+
+Idea: We can compute C1*d using `sm2.doEncrypt`? Let's look again at doEncrypt: it takes publicKey, generates random keypair kp, computes c1=kp.publicKey, p = publicKey.multiply(k). If we call `doEncrypt('', C1_hex_as_publicKey, 1)`, it computes p = C1 * k for random k, and returns c1' = k*G, c3' = SM3(x2'||y2'), c2'=''. That reveals SM3(C1*k coords) for random k, not helpful.
+
+Idea: Actually we could verify C3 using **`sm2.doVerifySignature`**? no.
+
+OK, what about implementing the C3 for empty case by using the **encryption oracle with the same ephemeral key**? doEncrypt doesn't let us set k.
+
+Hmm. Let me reconsider whether the deep import is really needed, or whether I can use `jsbn` and a small EC multiply implementation. Actually the cleanest might be to deep-import just `getGlobalCurve` and `jsbn`'s BigInteger. Let me test that the deep import works in the actual Vite bundle. Since dev server is running, HMR will tell us.
+
+Actually, wait! Even simpler: I can compute C1*d WITHOUT curve internals by using `sm2.getPublicKeyFromPrivateKey` in a clever way? No.
+
+But actually, here's a thought: **`sm2.verifyPublicKey` can be used to verify the shared point?** We need the shared point value, which we can't get.
+
+Alright, let me check: maybe the sm2 `doDecrypt` in a newer version has a way... no, it's 0.3.14.
+
+Let me just go with the deep import + jsbn. But I want to minimize risk. Let me verify the exact import style works with Vite by testing after edit. Actually, I can test bundling with esbuild quickly. esbuild is used by Vite. Let me test:
+
+`npx esbuild --bundle` a small entry that imports `sm-crypto/src/sm2/utils`. But esbuild bundling CJS into browser should work.
+
+Actually, a cleaner alternative to deep importing utils: Since jsbn's `BigInteger` and the curve are needed, and the curve is in utils. Hmm.
+
+Wait, actually — maybe there's a MUCH better approach that avoids EC math completely and is fully correct:
+
+**Verify C3 by checking if the decrypted result is empty AND the ciphertext's C2 segment is genuinely empty, then verify C3 using an SM3 over the shared secret... still need shared secret.**
+
+Hmm what if we use the **private key's public key**? For a valid ciphertext created by encrypting to public key P with ephemeral C1=kG, shared = kP. Also shared = dC1. We only have d.
+
+OK here's yet another idea: **Use the SM2 signature verify to derive shared point?** No.
+
+Let me just consider an alternative that's arguably acceptable and simpler: For the 192-length `out===''` case, instead of claiming success, mark it as an **error with a clear message**: "密文长度为 96 字节（仅含 C1 与 C3，C2 为空）。空明文与 C3 校验失败在此长度下无法区分；请检查密文完整性/私钥，或使用加密空明文生成的密文。" But the requirement explicitly says "请改为能区分「C3 校验失败」与「明文为空」的判定". So we should distinguish.
+
+I'll implement the EC math. Let me decide the import strategy. Options:
+1. `import sm2utils from 'sm-crypto/src/sm2/utils'` + `import { BigInteger } from 'jsbn'` — but jsbn's module.exports? Let me check: jsbn index.js exports `{BigInteger, SecureRandom}`? Earlier `const {BigInteger}=require('jsbn')` worked. Yes.
+2. Instead of importing jsbn, note that `curve.decodePointHex` returns a point whose `.multiply(k)` needs BigInteger. Could we get a BigInteger from elsewhere? `sm2.getPoint()` returns `.k` which is a BigInteger. But we need a specific one for d. Not helpful.
+
+Hmm, actually maybe `curve.fromBigInteger`? No.
+
+Let me check jsbn package.json for module field / browser compatibility. jsbn is old CommonJS. Vite handles CJS deps via pre-bundling (esbuild optimizeDeps). Deep import from `sm-crypto/src/sm2/utils` — Vite might not pre-bundle deep paths well, but it can process CJS files directly. Let me test with a quick esbuild bundle to be more confident. Actually the running dev server + Playwright test will be the real proof.
+
+Actually, wait. Let me reconsider. There might be a way to avoid BigInteger import by using the `curve` object's prototype. The point returned by `decodePointHex` is an `ECPointFp` with methods `multiply(k)`, `add`, etc. Are there other methods to multiply by a scalar derived from a hex string? Let me inspect ECPointFp. Perhaps `multiply` can accept a BigInteger only.
+
+Hmm, what about `curve.decodePointHex` on the **result**? no.
+
+Alternatively, I could avoid BigInteger by using `sm2.getPoint()`'s `.k`? no.
+
+Let me check if `BigInteger` is exported from sm-crypto? No.
+
+OK. Actually, let me reconsider using jsbn deep import too. Perhaps simpler: use `sm2utils` and `jsbn`.
+
+Actually, hold on! I just thought of a much simpler pure-public-API method to compute the shared secret point x2||y2 for the empty case:
+
+`sm2.doDecrypt(encryptData, privateKey, cipherMode, {output:'array'})` — internally it does `p = c1.multiply(privateKey)`. What if we could get it to return the point? No.
+
+Hmm, what about `sm2.comparePublicKeyHex(C1, something)`? no.
+
+OK, let me look at this from a different angle: maybe I can verify C3 for empty plaintext **without the shared point** by using the fact that C3 is a deterministic function of (x2,y2) and (C1,d). We could check the relation using the **public key**: For a valid ciphertext, C3 = SM3(x2||y2). Also note that the SM2 encryption is consistent: shared point S = d*C1. Its x2,y2 are unknown. 
+
+No shortcut.
+
+Decision: deep import. Let me write it carefully. But there's the TS/type issue and "no comments". I could define a typed helper via `any`:
+
+```ts
+import sm2utils from 'sm-crypto/src/sm2/utils'
+```
+Since no types, TS treats module as `any` implicitly only if `noImplicitAny` allows. Nuxt's generated tsconfig likely has strict:true, so it'd error "Could not find a declaration file for module". But dev server uses Vite without type checking. `nuxt build` also doesn't typecheck by default. Still, I should try to keep types clean.
+
+Alternative: I can avoid the deep import type issue by using `// @ts-expect-error`... comment. Hmm.
+
+Actually, maybe I can import the utils through the sm-crypto package via a *relative* path that TS resolves? No, node_modules.
+
+Let me check if there's a global shim: `import smCrypto from 'sm-crypto'` currently — how is that typed? Let me check the .nuxt tsconfig for allowJs / noImplicitAny.
+dsh: reasoning:
+`strict: true` and `allowJs: true`. With allowJs, TS might resolve the JS module and infer types. `import smCrypto from 'sm-crypto'` — but sm-crypto has no `types`/`main` type. With allowJs, TS can follow `main` to `src/index.js` and infer. However `esModuleInterop`/`allowSyntheticDefaultImports`? Importing default from a CJS module works with esModuleInterop.
+
+Deep import `sm-crypto/src/sm2/utils` — TS with allowJs could resolve to the .js file and infer its shape. But the path might resolve because no exports field. It should. The utils.js uses `module.exports = {...}`, so default import might work but named import wouldn't. Similar to how `sm-crypto` is imported as default.
+
+But will `import sm2utils from 'sm-crypto/src/sm2/utils'` type-check? With allowJs and no explicit type declarations, TS treats it as an implicit any module; the error only occurs with `noImplicitAny` when there is NO declaration AND it's not a JS file. Since it IS a JS file resolved by TS (allowJs), it will infer types. Actually TS only includes .js files if `checkJs` or allowJs; allowJs allows importing. It should be fine.
+
+To be safe and minimal, I could avoid importing jsbn by deriving the scalar BigInteger from... hmm. Actually, can I pass a hex string to `.multiply()`? Let's check jsbn multiplication: `ECPointFp.prototype.multiply = function (k) { ... }` and it uses `k.testBit`, `k.bitLength`, etc. So must be BigInteger.
+
+Actually, alternatively — instead of computing C1*d via curve, I can get the shared point using **`sm2utils.getGlobalCurve()` + `jsbn`**. Let me just import jsbn as default? jsbn index.js — let me check its export style. `const {BigInteger}=require('jsbn')` worked. So `import { BigInteger } from 'jsbn'` should work with named import from CJS via Vite's interop.
+
+Hmm, actually Vite pre-bundles CJS to ESM and named exports are often statically detected. jsbn's index.js likely `module.exports = {BigInteger, SecureRandom, ...}`? Let me check.
+
+Actually, maybe I can avoid jsbn entirely! Here's a trick: The curve's point `.multiply(k)` expects a BigInteger. But `sm2.getPoint()` returns `.k` as a BigInteger but random. However, `curve.decodePointHex` ... hmm.
+
+Wait, is there a BigInteger constructor accessible via an existing object? E.g., `sm2.getPoint().k.constructor`? That's the BigInteger class! JS evaluation is dynamic; in TypeScript we'd need a type. We could do:
+
+```ts
+const BigInteger = (smCrypto.sm2.getPoint().k as any).constructor
+const d = new BigInteger(privHex, 16)
+```
+
+That's hacky and relies on runtime. Better to just import jsbn.
+
+Actually, hold on. Let me reconsider. `sm2utils.getGlobalCurve()` gives the curve. But `curve.decodePointHex` and point multiply. Is there maybe an exported helper to multiply a point by a scalar? No.
+
+Hmm, what about `sm2.getPublicKeyFromPrivateKey`? It returns d*G. Not C1*d.
+
+Let me look at doing it all with just jsbn's BigInteger and the curve. Actually, ECCurveFp has a `multiply`? The point has multiply.
+
+I'll import both deep modules. Let me verify the jsbn export style and test a full node script that does the C3 verification for empty ciphertext. Then I'll port to Vue.
+
+Let me write the algorithm and test it in node.
+dsh: reasoning:
+The C3 check works. Now I need to make sure this imports fine in the Vue/Vite context. Let me create a small test with esbuild to see if bundling works, or better, directly test HMR/page with Playwright later.
+
+Actually, I want to avoid deep import fragility. Let me reconsider: Could I compute the shared point using the curve obtained via `sm2.getPoint()`? No.
+
+Hmm, wait. There's actually another public-API way to get x2,y2! Look at `doDecrypt`: the share point p = c1*priv. And `utils` is not public. But `sm2.getPublicKeyFromPrivateKey(priv)` = priv*G. Not it.
+
+Let me test the deep import bundling with esbuild quickly.
+
+Actually, a much cleaner idea just occurred to me: **I can verify C3 for the empty case using only `sm2.doEncrypt` by encrypting the empty message with the ephemeral public key C1 as the public key and using the private key as...** no.
+
+OK let me just verify esbuild bundles the deep import + jsbn.
+dsh: reasoning:
+The test file is in /tmp so module resolution fails. Let me place the test inside the devkit dir.
+dsh: reasoning:
+Deep imports bundle fine with esbuild in the project context. Now let me handle each fix.
+
+Now let me also inspect the T33 issue and the `useToolRun` composable (I can't modify it). For T33's second issue, I can only clear `verifyResult` in `decode()` since I can modify t33. Good.
+
+Also I should check the design requirement for T13: the design board LmPW1 etc. The task says: change preset to real RFC 4231 vector. Let me re-read the exact task:
+
+"1. 【T13】内置预设被标为 RFC 4231 Test Case 1，但实际数值不是 RFC 4231 向量（真 TC1：key = 20 个 0x0b 字节、data = Hi There、HMAC-SHA256 = b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7）。请把预置示例改成真实的 RFC 4231 向量（密钥用 Hex 0b0b...0b，与页面密钥输入格式一致），标签与数值必须自洽；若保留现有示例，则不得再声称是 RFC 4231。用 node 复算并把输出写进报告。"
+
+So: change the preset to real RFC 4231 TC1 with key hex 0b repeated 20 times (40 hex chars), message "Hi There", expected hex = b0344c61... for SHA-256. Also need SHA-512 value for TC1:
+RFC 4231 TC1 HMAC-SHA-512 = 87aa7cdea5ef619d4ff0b4241a1d6cb02379f4e2ce4ec2787ad0b30545e17cdedaa833b7d6b8a702038b274eaea3f4e4be9d914eeb61f1702e696c203a126854
+
+Let me verify with node crypto.
+
+Also `loadSample` sets keyEnc='utf8' currently; need to set keyEnc='hex' and key='0b'.repeat(20). And expected value = TC1 SHA-256. Also update the collapse section text accordingly: key 0x0b × 20 (Hex 0b0b...), message "Hi There". Update the sample description and the UI button title, comments (no comments though—there are existing comments; I should update them to stay accurate? The instruction says don't write comments. Existing comments that are wrong should be corrected. I'll update the existing comment to be accurate since leaving a false comment violates truthfulness. Actually "不要写注释" = don't write (new) comments. I'll modify existing inaccurate ones minimally.)
+
+Let me compute values with node. Also note the page's placeholder for key when hex. Fine.
+
+Now also T13's `keyEnc` only has utf8|hex; the audit mentions missing Base64 but that's not in my assigned fix list. My list only includes the RFC 4231 issue for T13. I should limit scope to the assigned problems. But wait, the design board says 密钥用 Hex 0b0b...b. Good.
+
+Now T15 fix 2: add real curve point validation. Use `sm2.verifyPublicKey`. Where to apply:
+- `pubErr` computed: add a check for on-curve. For compressed keys (02/03), `verifyPublicKey` handles via decodePointHex? Let's test: sm2.verifyPublicKey on compressed key. `curve.decodePointHex` supports compressed (04/02/03). Let me test. Then y²=x³+ax+b. For compressed, decodePointHex computes y. So verifyPublicKey should work.
+
+Actually careful: `pubErr` is computed for whatever public key. For the encryption branch, add `if (!sm2.verifyPublicKey(k)) return '公钥不是有效曲线点：...'`. For verify branch, same (verify uses pubErr). Good.
+
+But `pubErr` is a computed that runs `sm2.verifyPublicKey`. It's fine. Wait, but `pubErr` is used for both encrypt and verify. Design says for encrypt it should report error. Adding to pubErr covers both. Good.
+
+However, one concern: for compressed keys, `cleanHex(pubKey)` might be e.g. '02...' 66 chars. `verifyPublicKey` should accept. Let me test.
+
+Also design board XXObg requires direct error. Our error appears in DkField and blocks execute. Good.
+
+Now T15 fix 3: C3 verification. Modify the decrypt branch:
+
+```ts
+if (out === '' && hex.length === 192) {
+  if (c3Valid(hex, cleanHex(privKey.value), mode)) {
+    decResult.value = { text: '（空字符串）', bytes: 0 }
+    encResult.value = null
+    run.markOk('SM2 解密成功：明文为空字符串（C2 为 0 字节），C3 校验通过')
+  } else {
+    decResult.value = null
+    run.markFail('解密失败：C3 校验未通过...')
+  }
+} else if (out === '') { ... } else { ... }
+```
+
+I'll write a helper `c3OfEmptyPlaintext(...)` using imports. Since we already import `sm-crypto` default as smCrypto and destructure `{ sm2 }`. `smCrypto.sm3` available.
+
+Wait, `const { sm2 } = smCrypto` — so we can use `smCrypto.sm3`. But is `sm3` in the default export? Yes, main index exports sm3. TypeScript: `smCrypto` is typed as... currently `import smCrypto from 'sm-crypto'` then `const { sm2 } = smCrypto`. If TS treats smCrypto as any, smCrypto.sm3 works. Let me check whether there's a type error currently. Since dev works, likely any.
+
+Hmm, but `pubErr` currently uses `cleanHex` which lowercases. Good.
+
+Now for the imports: add at top:
+```ts
+import sm2utils from 'sm-crypto/src/sm2/utils'
+import { BigInteger } from 'jsbn'
+```
+
+Let me double-check ts type resolution won't break the dev server. Vite does not typecheck. But `nuxt prepare` / IDE might complain. Since we can't add comments, and the project likely doesn't run vue-tsc in build, it's acceptable. Actually, let me check nuxt.config for typescript typeCheck.
+dsh: reasoning:
+No `typescript.typeCheck` in nuxt.config, so no build-time typecheck. Good.
+
+Now let me also check the T33 fix. I need a truly tampered token. Best: modify a character in the payload segment (middle of payload) so bytes differ. Let's construct:
+
+Valid token: 
+header = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
+payload = eyJzdWIiOiJkZXZraXQtZGVtbyIsIm5hbWUiOiLmnKzlnLDlt6XlhbfnrrEiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MTkwMDAwMDAwMH0
+sig = m-TEfec4PcwDypb1zPDKzu2fIUQiZ82QTW5cFIlXIXY
+
+Tampered: change payload's `sub` from "devkit-demo" to maybe "devkit-dem0" or add a char. Changing one char in the base64url of payload ensures decoded bytes differ (as long as we don't touch padding bits of a segment whose decoded length doesn't change...). Safer: change the payload JSON content and re-encode, or change a character in the middle of the payload base64. But changing a base64 char in the middle changes bytes unless it's the last char and padding bits. Let's properly construct: decode payload, modify JSON (e.g. sub: "devkit-demo" -> "devkit-demo!"), re-encode base64url, and keep signature as original → signature won't match. That's a genuine tamper. Also update the label "仅把上面签名段最后一个字符 Y 改为 Z" to describe payload tampering.
+
+Also `loadSample(true)` title text: "载入被篡改签名的示例（仅改签名段最后一个字符）" → update to accurate wording.
+
+And the "关于本工具" bullet: "「被篡改签名」示例仅将签名段最后一个字符 Y 改为 Z，Payload 不变" → update.
+
+Let me generate the tampered token with node. I'll modify payload `sub` to `devkit-tampered` (or change name). Let's do: change `"sub":"devkit-demo"` to `"sub":"devkit-evil"`. Re-encode.
+
+Actually to keep the demonstration clean ("Payload 被修改"), let's change `sub` value. Let me generate.
+
+Also the second T33 issue: clear verifyResult when token changes. In `decode()`, set `verifyResult.value = null` at start. But careful: `loadSample` calls `decode()` after setting verifyResult null and setting verifyKey. Clearing in decode is fine. But there's a subtlety: when user is in verify panel and types in the HMAC key, that doesn't trigger decode, so the result stays. That's fine (result corresponds to same token). The requirement: "改 token 后旧的通过结论仍显示" — clearing on token change fixes it. Also maybe clear when verifyAlgo changes? Not required. Just token.
+
+But wait: there's a subtle issue. `decode()` is triggered by `watch(token, decode)`. Also `verify()` uses token. If user changes token and `decode` clears verifyResult, good.
+
+Also should we clear when verifyKey changes? The stale mechanism `sigVerifyRun` handles that with staleNote. Fine.
+
+Now, one more consideration for T33: There's an existing `watch(token, decode)`. Also `loadSample` calls decode() explicitly after setting token (and also watch would fire). Fine.
+
+Let me now generate the tampered token. I'll update `SAMPLE_TAMPERED` to have a different payload and keep the original signature. Let me compute.
+
+Also I want to verify the decode still succeeds and verify fails. Let me construct.
+
+Let me also double check `base64ToBytes` handles base64url (with - and _). Let me check bytes.ts.
+dsh: reasoning:
+The tampered token with payload `sub: devkit-evil` and the original signature `m-TEfec4...`. Wait, in the output the tampered token ends with `CWjF3i_6...` which is the signature computed over the tampered payload. But that would be a *valid* signature for the tampered token! I need to keep the ORIGINAL signature with the modified payload, so verification fails.
+
+The requirement: "构造真正无效的示例（例如篡改 payload 段的一个字符，或改签名段的有效位），确保验签结论为不通过". So the token should be header.tamperedPayload.originalSignature. The original signature is `m-TEfec4PcwDypb1zPDKzu2fIUQiZ82QTW5cFIlXIXY`.
+
+So TAMPERED = h + '.' + p_tampered + '.' + origSig.
+
+Let me compute that exactly, and confirm signature differs.
+
+Also the tampered token's payload should still decode. `devkit-evil` is valid JSON. Good.
+
+Wait, but is changing "demo" to "evil" a good semantic? Maybe change `name` or `sub`. Let's make it clearly a tamper: change `"sub":"devkit-demo"` to `"sub":"devkit-admin"` — demonstrates privilege escalation. Nice for demo. Let's do that.
+
+Let me recompute.
+dsh: reasoning:
+Now let me set up a todo list and start making edits.
+
+Let me plan edits:
+
+### T13 (t13-hmac.vue)
+1. Update `RFC4231_TC1_SHA256` from `638d8064...` to `b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7`.
+2. Update `RFC4231_TC1_SHA512` from `90fbdf34...` to `87aa7cdea5ef619d4ff0b4241a1d6cb02379f4e2ce4ec2787ad0b30545e17cdedaa833b7d6b8a702038b274eaea3f4e4be9d914eeb61f1702e696c203a126854`.
+3. Update comment on line 21 to reflect true vector (or remove). I'll update to accurate.
+4. In `loadSample`: keyEnc = 'hex', key = '0b'.repeat(20). message = 'Hi There'. Keep algo SHA-256, outEnc hex.
+5. Update collapse section: key description to `0b`×20 (Hex), key code `0b0b...` (40 hex chars / 20 bytes).
+6. Update the "载入示例" button title stays "RFC 4231 Test Case 1" accurate now.
+7. Placeholder for hex key currently says like `0b0b0b0b` — already fine.
+
+Wait, the collapse text lines 204: "密钥：<code>0123...</code>（40 个 ASCII 字节，UTF-8 编码）". Change to `<code>0b0b...0b</code>（20 字节，Hex 编码）`.
+Line 209: "点击「载入示例」会填入该向量并现场重新计算；期望值即上述真实值，可切换算法验证 SHA-512 分支。" — Still accurate; maybe add "密钥编码为 Hex". Fine.
+
+### T15 (t15-sm2.vue)
+1. Add imports `sm2utils`, `BigInteger`.
+2. Add helper for C3 empty validation.
+3. Add curve point check in `pubErr`.
+4. Fix decrypt empty branch.
+
+### T33 (t33-jwt.vue)
+1. Update `SAMPLE_TAMPERED` value and comment.
+2. Clear `verifyResult` in `decode()`.
+3. Update toolbar title and "关于本工具" bullet.
+
+Let me start editing. First T13.
+dsh: reasoning:
+Now update the collapse section key description. Also the placeholder in the template for hex key says 'Hex 字节串，如 0b0b0b0b' — accurate. Let's update the collapse.
+dsh: reasoning:
+Also line 135 title "RFC 4231 Test Case 1：真实计算并自动对照" is now accurate. Good.
+
+Now let me check there are no other references to the old key in t13. The hex placeholder mentions `0b0b0b0b`. Fine.
+
+Now T15. Let me add imports and helper. First edit the import section.
+dsh: reasoning:
+Now add the helper function and curve check. Let me add after `cleanHex`. Also modify `pubErr`.
+
+For the pubErr, the existing checks only format. I'll add curve validation at the end, before `return ''`. Something like:
+
+```ts
+  const hex = cleanHex(pubKey.value)
+  if (!sm2.verifyPublicKey(hex)) return '公钥不是有效的 SM2 曲线点（不满足 y² = x³ + ax + b mod p）：无法用于加密/验签，请检查公钥是否完整、是否属于 SM2 曲线'
+  return ''
+```
+
+Wait, `verifyPublicKey` expects lowercase? `cleanHex` lowercases. decodePointHex parses hex probably case-insensitively, but lower is fine.
+
+But careful: `pubErr` currently returns format error for compressed keys with length. Then final curve check applies to both compressed and uncompressed. Good.
+
+Now, `sm2.verifyPublicKey` — is it typed? `sm2` is any-ish. Fine.
+
+Now add helper `emptyPlaintextC3Valid`. Let me place it near `cleanHex`.
+
+```ts
+const leftPad = (s: string, n: number) => (s.length >= n ? s : '0'.repeat(n - s.length) + s)
+
+/** 独立复核空明文（C2 为 0 字节）密文的 C3 = SM3(x2 || y2)，区分「C3 校验失败」与「明文为空」 */
+function emptyPlaintextC3Valid(ctHex: string, privHex: string, mode: number): boolean {
+  const c1hex = '04' + ctHex.slice(0, 128)
+  const c3 = mode === 0 ? ctHex.slice(ctHex.length - 64) : ctHex.slice(128, 192)
+  const curve = (sm2utils as any).getGlobalCurve()
+  const c1 = curve.decodePointHex(c1hex)
+  if (!c1) return false
+  const p = c1.multiply(new (BigInteger as any)(privHex, 16))
+  const x2 = leftPad(p.getX().toBigInteger().toString(16), 64)
+  const y2 = leftPad(p.getY().toBigInteger().toString(16), 64)
+  const bytes: number[] = []
+  for (let i = 0; i < x2.length; i += 2) bytes.push(parseInt(x2.substr(i, 2), 16))
+  for (let i = 0; i < y2.length; i += 2) bytes.push(parseInt(y2.substr(i, 2), 16))
+  const expect = (smCrypto as any).sm3(bytes)
+  return typeof expect === 'string' && expect === c3.toLowerCase()
+}
+```
+
+Hmm, `new (BigInteger as any)(...)` — `BigInteger` imported as a value. TypeScript: if `jsbn` types exist? `@types/jsbn`? Let me check. If no types, importing named `BigInteger` from 'jsbn' might be an implicit any module; TS with allowJs could infer. Let me just check whether `jsbn` has types.
+
+Actually `jsbn` package includes `index.d.ts`? Let me check. Earlier ls showed index.js, no .d.ts. There's `@types/jsbn`? Not in devDependencies. So TS will treat as untyped JS (allowJs → inferred). `BigInteger` would be a class value inferred. `new (BigInteger as any)` might be unnecessary but safe. Actually if BigInteger is `any`, `new BigInteger(...)` works. Let me write `new BigInteger(privHex, 16)` and see if TS complains. Since no typecheck at build, it doesn't matter. But to be clean, let me keep it simple and rely on inference.
+
+Hmm, wait. But I want to avoid `as any` clutter. However, `sm2utils` deep import: TS might error "Could not find a declaration file". With allowJs it might still resolve. But since no typecheck at build and dev uses esbuild, runtime is fine. Let me not over-engineer; I'll use straightforward code.
+
+Actually, to be safe about `smCrypto.sm3` typing: currently `const { sm2 } = smCrypto`. Does smCrypto have typed `sm3`? If smCrypto is inferred from JS, `sm3` exists in module.exports. Good. But if it's typed by some ambient declaration that only declares sm2... Let me check if there's an ambient module declaration somewhere. Earlier find found no .d.ts outside node_modules referencing sm-crypto. So likely `any`.
+
+Let me write the helper and curve validation.
+dsh: reasoning:
+Now fix the decrypt empty branch. Current code lines ~179-193 (shifted). Let me replace.
+dsh: reasoning:
+Now update `pubHelp` to reflect curve validation? Currently:
+```ts
+const pubHelp = computed(() =>
+  pubErr.value
+    ? '修正格式后才能执行'
+    : pubKey.value.trim()
+      ? `格式有效：...`
+      : '...'
+)
+```
+If pubErr is a curve error, help says "修正格式后才能执行" — slightly inaccurate ("格式"). Better: "修正后才能执行". Let me change to "先修正上方错误后才能执行". Minor but improves truthfulness. Also for valid key, it says "格式有效：" which now could mention curve valid. Let me update to "格式与曲线点均有效：...". Let me do that.
+
+Also the field help for compressed key: For compressed, verifyPublicKey handles. Good.
+
+Let me update pubHelp.
+dsh: reasoning:
+Now the template empty help text for decrypt says "解密会校验 C3 摘要，失败时说明私钥不匹配、密文被修改或密文顺序不一致。" — still accurate.
+
+Also the `DkCollapse` "示例数据与格式说明" could mention curve validation but not required.
+
+Now T33. Update the SAMPLE_TAMPERED constant and comment, clear verifyResult in decode, update UI texts.
+
+First the constants.
+dsh: reasoning:
+Wait — there's an ordering issue: `verifyResult` is declared later in the script (`const verifyResult = ref(...)` at line ~175), but `decode()` is a function that references it. Since `decode` is only called at runtime (watch / loadSample) after setup completes, the `const` will be initialized by then. But `watch(token, decode)` is registered after verifyResult? Let me check order. `decode` is defined before `verifyResult`, but function hoisting means `decode` can reference `verifyResult` as long as it's called after the const initialization. `watch(token, decode)` is at line ~166, before verifyResult declaration at ~175. The watch callback won't fire immediately (no immediate option), so it's fine. But wait, does `loadSample` call decode after setup? yes, on click. So fine.
+
+However, there's a subtle issue: `verifyResult` is declared with `const` AFTER `decode`. At module evaluation, `decode` is defined (function declaration hoisted) but doesn't execute. `watch(token, decode)` just registers. Then `verifyResult` const is initialized. Good.
+
+Actually, hold on: is `verifyResult` used in template before declaration? No issue.
+
+Now, another subtlety: `watch(token, decode)` — when token changes, decode clears verifyResult. Good. But `loadSample` explicitly sets `verifyResult.value = null` and then calls decode which also sets null. Fine.
+
+Now update the toolbar title and the "关于本工具" bullet.
+
+Toolbar line 276: `title="载入被篡改签名的示例（仅改签名段最后一个字符），演示验签失败"` → change to reflect payload tampering.
+
+"关于本工具" bullet line ~397: "「被篡改签名」示例仅将签名段最后一个字符 Y 改为 Z，Payload 不变——解码仍然成功，但验签必然失败。" → update.
+
+Also there might be a mention in the report only. Let me update.
+dsh: reasoning:
+Now let me verify the T15 file compiles (esbuild) and run node tests for the helper logic. Also let me check HMR status by fetching the page. But first, let me verify the whole t15 file's script by extracting it? Hard. Let me instead run the dev server check.
+
+Actually, first let me re-read the modified regions to catch issues.
+dsh: reasoning:
+Pages respond. Now I need to verify HMR didn't error. The dev server may have a log somewhere. Let me check if it's running in a job? It says dev server already running. Let me check process and logs. Actually I can check by fetching the page and looking for the module compile errors. Nuxt dev returns 200 even on errors sometimes. Let me use Playwright to actually test.
+
+First, is playwright available? Let me check. Also check if there's a Chrome/puppeteer. Let me look for the audit tooling.
+dsh: reasoning:
+Playwright Python is available (`/Users/hao/.version-fox/sdks/python/bin/playwright` and `npx playwright` version 1.56.1). Let me check if the node playwright package is runnable via npx and browsers installed. Let me check audit/tools for existing scripts.
+dsh: reasoning:
+Python playwright is available. Let me check the existing `probe.py` to reuse conventions (find element selectors etc.). Actually, let me write my own Python playwright script.
+
+First, let me understand the page structure. The tools pages: `/tools/hmac`, `/tools/sm2`, `/tools/jwt`. Let me check the routing. The components are auto-imported under pages? Let me check the pages directory.
+
+Actually, from audit reports, URLs were http://localhost:3000 with tool pages. Let me check.
+dsh: reasoning:
+Good, Playwright python works. Let me write a comprehensive test script that:
+
+1. T13: goto /tools/hmac, click "载入示例", check result equals `b0344c61...`, and badge "与期望一致". Also switch to SHA-512? The loadSample sets SHA-256. To test SHA-512, I'd click the SHA-512 segment then计算, and check it equals the RFC4231 TC1 SHA-512. But expected field still has SHA-256 → mismatch badge. So just verify SHA-256 matches expected. Could also check the collapse text. Main thing: result value.
+
+2. T15 on-curve: goto /tools/sm2, default cipher/enc. Set public key to off-curve valid-format key (04 + 128 hex). We can type into the input. Then check error text appears and result area not showing success. Also verify status. Need selectors. Let me inspect rendered DOM for inputs. The public key DkField has label "公钥（Hex）". We can locate by placeholder "04 开头 130 位非压缩，或 02/03 开头 66 位压缩". 
+
+   Alternatively use the sample pub and flip last nibble to make off-curve. Need to ensure off-curve. I'll generate an off-curve key in node and use it.
+
+   Also test valid pub encrypt still works (using 加密示例).
+
+3. T15 empty C3: switch to 解密, set private key = sample priv, ciphertext = valid empty-plaintext ciphertext (generate with node). Check "解密成功：明文为空字符串". Then tamper C3 → check it reports C3 校验未通过 (error) and not success. Need valid empty ct for SAMPLE_PUB. Let me generate in node.
+
+4. T33: goto /tools/jwt, click "示例：被篡改签名", open verify panel (loadSample sets verifyOpen=true and collapse default-open), click "验证签名", expect "签名不匹配" (bad). Also test valid sample → "签名验证通过". Then test stale clearing: after valid verify passes, change token (e.g., fill with tampered) and check verifyResult gone (no "签名验证通过" visible) without clicking verify.
+
+Let me figure out the DOM. Buttons have text. DkEditor likely renders a textarea. Let me write the script using text selectors and roles, and print diagnostics.
+
+For T33, the token editor: DkEditor with filename "token.txt". There's a textarea inside. I can locate by placeholder "粘贴 JWT（三段以 . 分隔）". 
+
+For the collapse, loadSample sets verifyOpen=true and collapseKey++ so it re-renders default-open. Good.
+
+Let me check DkCollapse behavior. Actually simpler: after clicking sample, the collapse should be open due to :default-open. Let me just query for the "验证签名" button.
+
+Let me write the script. I'll first generate needed values in node and save to a JSON. Then Python reads.
+
+Let me generate:
+- offcurve pub (valid format, off curve) based on SAMPLE_PUB.
+- valid empty plaintext ciphertext for SAMPLE_PUB (C1C3C2 hex).
+- tampered empty ct.
+
+Let me produce.
+dsh: reasoning:
+Now write the Playwright script. Let me first do a quick DOM discovery for /tools/sm2 and /tools/hmac to know selectors. Let me write a script that prints relevant inputs/buttons.
+
+Actually, let me just write a robust test script that uses text and placeholder. Let me first dump input placeholders for each page.
+dsh: reasoning:
+Good. No page errors. Now write the verification script.
+
+Notes:
+- T13: click "载入示例" then read result. The result value is in `.t13__row-val`. Also badge `.t13__row-badge`. But careful: there are two "Hex" buttons (output encoding and key encoding?). Actually buttons list: "UTF-8 文本", "Hex", "Hex", "Base64". The first "Hex" is 密钥编码, second "Hex" is 输出编码. Fine.
+- T15 valid curve check: fill pub input. The input has placeholder. Use `page.fill('input[placeholder^="04 开头 130 位"]', offcurve)`. Then read error text. DkField error likely in `.dk-field__error` or similar. Let me inspect DkField component class names.
+
+Let me check DkField.vue.
+dsh: reasoning:
+Note: DkCollapse uses `open = ref(props.defaultOpen)` initialized once. In t33, `loadSample` increments `collapseKey` to force re-mount and set default-open. Good.
+
+Now write the full test script.
+
+For T15 decryption:
+- click "解密（公钥）" wait "解密（私钥）" button.
+- Fill private key input. But when cOp==='dec', the template shows a DkField with secret → input type password, placeholder "64 位 Hex 私钥". There's only one visible private key field in dec mode.
+- Fill ciphertext editor textarea with EMPTY_CT or BAD_EMPTY_CT.
+- Click "解密" button.
+- Read status bar message and result.
+
+Note: there might be multiple "解密" buttons? The segmented "解密（私钥）" and the primary "解密". Use exact text.
+
+Also when running, the stale issue may mark result as stale. But that's a separate reported bug (shared composable) which I'm not allowed to fix. The audit says `useToolRun` bug causes "结果待更新" after sample buttons. But here we're not loading a sample via a button that sets inputs and executes; we're manually filling then clicking. The `execute` is triggered by button click and inputs already set → status ok. Should be fine.
+
+Wait, but for T15 fix on-curve, when I fill pub and click 加密, pubErr should block and show error. Good.
+
+Let me also test the off-curve in verify mode? Not necessary.
+
+For T33:
+- click "示例：被篡改签名", then click "验证签名". The collapse should be open (verifyOpen=true, collapseKey++). But the DkCollapse with :key re-mounts. Should be open.
+- Read `.t33__vres` text → expect "签名不匹配".
+- Then click "示例：有效签名" (this resets verifyResult null, loads valid, verifyOpen). Click "验证签名" → expect "签名验证通过".
+- Then simulate token change without clicking verify: fill token textarea with tampered token using `page.fill`. This triggers watch → decode → verifyResult null. Check `.t33__vres` count === 0 and no "签名验证通过" text.
+
+Wait, `loadSample` also sets verifyKey and verifyOpen. When I click "示例：有效签名" it sets token, verifyAlgo, verifyKey, verifyOpen, collapseKey++, verifyResult=null, decode(). Then the verify panel should be open and key filled.
+
+One concern: after clicking "示例：有效签名", the DkCollapse remounts and default-open. Good.
+
+Also the "验证签名" button may become disabled? No.
+
+Let me also test T13 SHA-512 branch maybe: click "HMAC-SHA-512" then compute and compare. But the expected field has TC1 SHA-256, so badge mismatch. To verify SHA-512 authentic, I'll just read result and compare to RFC value. Actually simpler: after loading sample (SHA-256) check result matches. Then click SHA-512 and compute manually, read result, compare with RFC4231 TC1 SHA-512. But clicking SHA-512 changes `algo` only, not expected, so result still computed. Good.
+
+Let me handle the "载入示例" T13: after click, key input becomes hex `0b...`. But note the audit's shared useToolRun stale bug: loadSample changes inputs and calls execute → status may be "stale". But result value should still be computed and displayed. The result row shows `display` computed from result.value, regardless of stale. So `.t13__row-val` should show the value. Good.
+
+Also the badge `matchState` computed requires result and expected. Should show "与期望一致".
+
+Let me write the script now.
+
+Let me also get off-curve pub key. I'll hardcode from generation: OFFCURVE=...eac (last char c). Let me use that.
+
+EMPTY_CT and BAD_EMPTY_CT hardcode.
+
+Let me write /tmp/verify_f1.py.
+dsh: reasoning:
+The DkSegmented options are probably not buttons with role button? They appeared as buttons in discovery. But after clicking 载入示例, maybe the button label changed? Actually the issue: `get_by_role("button", name="HMAC-SHA-512")` — exact matching may fail because the button has additional title or contains the text. Let me use `get_by_text` or locator with class. In discovery buttons list included "HMAC-SHA-512". Hmm, why timeout? Perhaps because DkSegmented renders as `<button>` but role is not button? It showed in button text list via querySelectorAll('button'). Role should be button. Maybe the name includes the title attribute? Let me check DkSegmented.
+
+Actually, maybe after clicking 载入示例, the toolbar's segmented for algo uses options labels 'HMAC-SHA-256' and 'HMAC-SHA-512'. These are buttons. get_by_role name exact-ish matching uses accessible name which is text content. Should work. Unless the click on "载入示例" caused something. Let me debug by listing buttons again after load sample. Actually, the earlier discover on /tools/hmac showed "HMAC-SHA-512" as a button. So it exists. Why timeout? Possibly strict mode: multiple matches? No, strict would error differently.
+
+Wait — perhaps the page navigated/reloaded after clicking 载入示例? No.
+
+Hmm, maybe the name matching is case-sensitive and the actual accessible name has different casing? It's "HMAC-SHA-512". Exactly.
+
+Could it be that `get_by_role("button", name="HMAC-SHA-512")` does substring matching by default and matches multiple? Actually default is substring, case-insensitive, whitespace-normalized. "HMAC-SHA-512" is substring of "HMAC-SHA-512" only. Should match one.
+
+Wait — maybe DkSegmented isn't rendered as buttons but as `<label><input type=radio>`? Let me check DkSegmented.vue. The discovery `document.querySelectorAll('button')` returned those labels, so they are buttons. Hmm.
+
+Actually, maybe after `载入示例`, algo is set to 'SHA-256' and the segmented re-renders; still button exists.
+
+Let me debug quickly with a small script that after loading sample lists role buttons.
+
+Actually maybe the issue is that the `载入示例` button click triggered `execute()` async and the page is fine. Let me just re-run a debug.
+
+Alternatively, use locator `.dk-segmented button:has-text("HMAC-SHA-512")` or `pg.locator('button', has_text='HMAC-SHA-512')`.
+
+Let me check DkSegmented to understand.
+dsh: reasoning:
+The buttons have `role="tab"`, so `get_by_role("button", ...)` doesn't match them (role overridden). I'll use `get_by_role("tab", name="HMAC-SHA-512")` or locator with text. Let me update the script to use a helper `click_seg(text)` via `pg.locator('.dk-seg button', has_text=...)` or `pg.get_by_role('tab', name=...)`.
+
+Also for sm2 segmented "解密（私钥）" — role=tab. And "加密（公钥）". And "加解密"/"签名验签". The primary action buttons like "加密", "解密", "加密示例" are real buttons role=button.
+
+Let me update: use `pg.locator('.dk-seg button', has_text="...")` for segmented. But `has_text` is substring; "加密" would match both "加密（公钥）" and maybe not. For segmented "解密（私钥）" unique. For "HMAC-SHA-512" unique.
+
+Let me revise the script.
+dsh: reasoning:
+Only the payload text extraction method failed. The `.t33__col` nth(1) inner_text doesn't include the editor's textarea content (since DkEditor uses a textarea with value, inner_text may not include). The verify tampered failed correctly, which confirms the sample is genuinely tampered. Let me fix the test to read the textarea value for the payload. But the payload editor is readonly and has `:model-value`. It likely renders a textarea with value. Let me select the second textarea. Actually the page has token textarea + header textarea + payload textarea. Let me query all textareas and read values.
+
+Let me just check payload decode separately and report. Let me patch the check to read textareas values.
+
+Also I want to confirm decode succeeded (not error) for tampered. Let me add reading `.statusbar__msg` and payload textarea.
+
+Let me rerun a focused T33 check.
+dsh: reasoning:
+macOS sed issue. Let me use python to patch.
+dsh: reasoning:
+All 17 pass. Now let me also verify the off-curve check works for the verify (signature) branch, and that compressed keys still work. And a regression: valid uncompressed sample encrypt/decrypt works (already tested). Let me also test compressed pub key encryption to make sure verifyPublicKey doesn't reject valid compressed keys. The audit said compressed keys supported. Let me add a quick test.
+
+Also I should verify that the C3 validation doesn't break non-empty decryption and that a normal non-empty tampered ct still fails.
+
+Let me run a small additional Playwright test:
+- T15: compressed valid pub key (from sample) → encrypt succeeds.
+- T15: decrypt sample non-empty ct (解密示例) → success.
+- T15: verify mode with off-curve pub → error.
+- T13: collapse text shows correct key.
+
+Let me get compressed pub for SAMPLE_PUB via node. Actually we can compute: sm2.compressPublicKeyHex(SAMPLE_PUB). Let me compute.
+
+Also test T15 in sign/verify with off-curve key.
+
+Let me run the extra tests.
+dsh: reasoning:
+A full-width paren snuck in. Fix.
+dsh: reasoning:
+All pass. Now let me do the node recomputation evidence for the report. I'll run node crypto for T13 and the sm-crypto script showing before/after behavior, plus JWT verification.
+
+Let me create a clean node evidence script and capture output.
+
+Also I should double check the T15 `emptyPlaintextC3Valid` works for mode 0 (C1C2C3). Earlier node prototype confirmed. The page test only tested mode 1. Let me also verify mode 0 through node (already did). Good enough.
+
+Now, one more consideration: The T15 `emptyPlaintextC3Valid` function imports deep modules. Let me make sure the production build (`nuxt build` / `nuxt generate`) works, not just dev. The project is statically deployable. esbuild bundling worked. But Nuxt/Vite build might treat `sm-crypto/src/sm2/utils` differently. Let me run `npm run build` to be safe — it could take a while. Actually the task says dev server already running; but verifying build is prudent. Let me check if there's a build already and run it in background maybe. It might take a couple minutes. Let me run `npx nuxt build` with a timeout in background.
+
+Actually, the instruction says "改动最小" and self-test with node or playwright. Build check is extra but valuable for the deep import risk. Let me run it in the background while I write the report.
+
+Let me start the build.
+dsh: reasoning:
+Now let me create node evidence outputs. Let me write a comprehensive node evidence script.
+
+For T13: node crypto compute HMAC TC1.
+For T15: 
+- show off-curve key accepted by doEncrypt (before) vs verifyPublicKey false.
+- show empty C3 ambiguity with doDecrypt vs our check.
+For T33:
+- show original vs tampered signature decode bytes differ; verify with WebCrypto/hmac.
+
+Let me run these.
+dsh: reasoning:
+Now T33 node evidence: show that old Y→Z decodes identically, and new tampered token verifies false. Let me run.
+dsh: reasoning:
+Good evidence. Note "NEW tamper sig bytes equal original? true" — that's expected: we kept the original signature. The payload changed, so recomputed HMAC != provided → verify fails. Good.
+
+Now let's check the build job.
+dsh: reasoning:
+Production build succeeds (EXIT=0). Deep imports bundle fine.
+
+Now, the build overwrote `.output` and possibly `.nuxt`. The dev server is still running; the build may have interfered with `.nuxt` causing HMR issues? The dev server might reload. Let me re-run the Playwright tests to make sure dev still works after build (Nuxt often shares .nuxt dir; running build while dev running can conflict). Let me re-run the main test suite quickly.
+
+Actually, running `nuxt build` while `nuxt dev` runs can clobber `.nuxt` and break the dev server. Let me verify dev still responds and tests pass.
+dsh: reasoning:
+All good. Now let me review the final diff of the three files to ensure minimal, no unintended changes, and no leftover comments issues. Let me run git diff.
+dsh: reasoning:
+Not a git repo (exit 129). Let me just re-read the changed regions to confirm. Let me view the T33 loadSample and decode area, and T15 decrypt area.
+dsh: reasoning:
+All good. Now let me consider one edge: In `decode()`, `verifyResult.value = null` references a `const` declared later. As discussed, function is only called after setup. But wait, `watch(token, decode)` — Vue's watch default is not immediate. However, is there any chance `decode` runs synchronously during setup? No. And `loadSample` is user-triggered. Good.
+
+But actually, there's a subtle issue: the `useToolRun` composable might call something? No.
+
+Also, I set `verifyResult.value = null` in decode, but there's also `sigVerifyRun` status. When token changes, `sigVerifyRun` is built with a signature function including token. Its watcher will mark stale (per the shared bug behavior) but that's separate. The verified result box is cleared now. Good.
+
+Now let me double check the T15 pubErr computed uses `sm2.verifyPublicKey` which is expensive-ish but fine.
+
+One potential issue: `sm2.verifyPublicKey(k)` for a compressed key that is valid — tested true. For a 04 key with all valid coordinates but point not on curve — returns false. Good.
+
+Another edge: What if public key is valid format but `decodePointHex` throws instead of returning null? `verifyPublicKey` calls `curve.decodePointHex` and checks `!point`. For an x coordinate >= p, decodePointHex might still return a point on the curve extension? Let's test a few edge cases: x = p (out of field), x = p+... Actually `verifyPublicKey` does y²=x³+ax+b check, so even if decode returns a point with x >= p, the curve equation is checked mod p implicitly via BigInteger arithmetic? y.square().equals(x³+ax+b) uses mod p? ECCurveFp point coordinates are mod p after decode. Should be fine.
+
+Let me test some malformed-but-format-valid keys to ensure no throw:
+- all zeros (04 + 128 zeros) → false.
+- x equal to sample x but y all zeros → false.
+Already zeros tested false. Good.
+
+Also what about `sm2.verifyPublicKey` throwing on valid-length but invalid hex? We already checked hex regex before. Good.
+
+Now, the requirement for T15 said "若保留现有示例..." no—that's T13. For T15 fix 1: "加入真实曲线点校验（验算 y^2 = x^3 + ax + b mod p），不在曲线上必须报错并保留输入（设计画板 XXObg 要求直接报错）". We use sm-crypto's own verifyPublicKey which does exactly that. Input preserved (we don't clear the field). Good.
+
+Now let me also double-check the T13 collapse still self-consistent: The `keyHelp` says "解码后密钥长度：20 字节". Good.
+
+Now the report. Let me write `/Users/hao/WebstormProjects/web_tools/audit/reports/fix-f1-crypto.md` with:
+- Problem -> change (file:line) -> verification command & output.
+
+Let me get the final line numbers for each change. I'll grep the files for the relevant lines.
+dsh: reasoning:
+Now let me write the report. I'll include the verification commands and outputs.
+
+I need to save the test scripts to a durable location? The report can reference /tmp scripts, but /tmp may be ephemeral. Better to save the test scripts under audit/ maybe. But I'm only allowed to modify the three files and write the report. Hmm, the instruction says "你只能修改下面明确列给你的文件" but also "完成后写报告到指定路径". Creating helper scripts in /tmp is fine. The report path is allowed. I should probably not add new files to the repo other than the report. I'll inline the test scripts in the report or reference /tmp paths. To be safe, I'll include the key commands inline in the report so they're reproducible, and mention the Playwright script contents. Actually the report can include the full node commands (short) and the Playwright test summary. I'll embed the essential test code snippets.
+
+Let me write the report now.
+
+Structure:
+# Fix F1 · 密码学工具真实性/假成功缺陷
+- 范围与结论
+- T13, T15 (2 issues), T33 (2 issues)
+- 自测总览
+- 未处理/说明
+
+Let me write it.
+dsh: reasoning:
+Let me verify the report's last line and that the file exists. Also double-check no other files changed unintentionally. I only edited the three .vue files and wrote the report. The build created `.output` and `.nuxt` artifacts — those are build outputs, not source changes. That's acceptable but might have modified `.nuxt` which is generated. Should be fine.
+
+Wait — the task says "禁止修改任何其他源码文件". Build artifacts are not source. Fine.
+
+Let me confirm the report last line and do a final sanity check of the file.
+dsh: reasoning:
+There are many files modified in the last 60 min, but those are from other parallel fix subagents (F2, F3...) working concurrently. I only touched my three. Let me verify by checking that my edits are limited to t13/t15/t33. Since there's no git, I can't diff. But I know I only called edit/write on those files plus the report. Good.
+
+Actually wait, `npm run build` created `.output`, and might have regenerated `.nuxt`, but not those source files. Other files changed by other agents.
+
+Let me do a final quick re-verification that my three files are syntactically valid by running the focused Playwright tests once more (already done after build). All 22 passed.
+
+I'm done. Let me give the final answer with the DONE line.
+
+Actually, the task says "最后一行输出：DONE: <绝对路径>". The final response should end with that line. Let me provide a summary and the DONE line.
+
+Let me update the todos to completed.
+All four assigned defects are fixed and verified. Summary:
+
+**T13 (`t13-hmac.vue`)** — Replaced the mislabeled fake vector with the real RFC 4231 Test Case 1: Hex key `0b`×20, `Hi There`, HMAC-SHA-256 `b0344c61…2cff7`, HMAC-SHA-512 `87aa7cde…126854` (node crypto confirmed). `loadSample` now switches key encoding to Hex; collapse text and comment are self-consistent.
+
+**T15 (`t15-sm2.vue`)** — 
+- Added real on-curve validation via `sm2.verifyPublicKey` (which verifies `y² = x³ + ax + b mod p`) in `pubErr`; off-curve keys are rejected for both encrypt and verify while input is preserved.
+- Added `emptyPlaintextC3Valid()` that recomputes the shared point `C1·d` and checks `C3 == SM3(x2‖y2)`, so a tampered 192-hex C3 is reported as C3 failure instead of "empty plaintext success".
+
+**T33 (`t33-jwt.vue`)** — Replaced the fake tamper (padding-bit-only `Y→Z`) with a genuine one: Payload `sub` changed `devkit-demo`→`devkit-admin` while keeping the original signature, so decoding still works but verification fails. Added `verifyResult.value = null` in `decode()` so stale "passed" verdicts clear when the token changes. UI/help text updated to match.
+
+**Evidence**: node recomputation for all crypto values, Playwright driven real pages at `localhost:3000` (22/22 assertions pass, no page errors), and `npm run build` succeeds (EXIT=0), confirming the `sm-crypto/src/sm2/utils` + `jsbn` deep imports bundle correctly. No shared files were touched.
+
+DONE: /Users/hao/WebstormProjects/web_tools/audit/reports/fix-f1-crypto.md

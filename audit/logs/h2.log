@@ -1,0 +1,2309 @@
+dsh: reasoning:
+Let me start by exploring the workspace to understand the current state.
+
+Let me create a todo list and start investigating.
+
+Let me look at the files I'm allowed to modify and the design references. Let me start with reconnaissance in parallel.
+dsh: reasoning:
+Let me look at the usePrefs composable and main.css, app.vue, and understand the prefs storage format.
+dsh: reasoning:
+Let me read usePrefs.ts and the rest of main.css. Also check design.pen S10 node. Let me look at audit/tools/pen.py and reports dir.
+dsh: reasoning:
+Let me find the S10 node in design.pen and look at the existing offline page design. Also let me look at the FIXES-ROUND2.md / design-fix.md and reports to understand context. Let me search for S10.
+
+Let me look at the main.css lines 121-300 too, to see how fonts are used.
+
+Let me also check whether there's a playwright setup already. Task says use Playwright. Let me check node_modules for playwright.
+dsh: reasoning:
+Playwright is available via python. Good. Let me check pen.py usage for S10 node. The `text` subcommand failed. Let me look at pen.py source.
+
+Also I need to check the design node for S10. Let me look at pen.py and maybe grep design for S10. Actually the design file is a .pen (JSON probably). Let me check pen.py usage.
+dsh: reasoning:
+Let me find the node IDs for S10 screens. Let me use pen.py find.
+dsh: reasoning:
+Let me get the S10b (首次未缓存) text too.
+dsh: reasoning:
+Now I understand the design. The design's S10 has real dynamic behavior: list cached tools vs uncached ones. But realistically with Workbox precache, ALL app pages are precached, so after SW takes over, essentially all tools should be available offline (they're all in the same JS bundle or precached). Hmm. But the design's distinction "已缓存/未缓存" is really about whether it's been visited/cached. With precache of all js/css/html, all routes would be available offline. Actually Nuxt SPA with static route chunks: precaching all `.js` and `.css` and html means all routes work offline. So the "uncached" state is really only relevant before the SW takes over (first visit) — S10b.
+
+The task says: update offline.vue to show real state:
+- SW 已接管 (controller non-null): list facts and scope that can be used offline
+- 未接管: clearly state "首次访问尚未缓存" and give retry (real detection)
+
+So we don't need the full two-column design necessarily, but we should align with design where possible. The design S10a/S10b show cached/uncached columns. But the real detection: we can check `navigator.serviceWorker.controller` and also use `caches` API to enumerate actual cached entries. That's real. We can list the actual tools whose route is in the precache (via cache.match of the route path). That's a genuine check! Workbox precache stores URLs. We can use `caches.open` and match each tool's URL. That gives a real "cached/uncached" split.
+
+That's a great approach: use Cache Storage API to verify each tool route actually has a cached response. Since Workbox precache precaches the HTML? Actually Nuxt SSR produces server-rendered HTML per route; those are dynamic routes and won't be precached as they're not static assets unless we use `nuxt generate`. In `nuxt build` (server mode), HTML is server-rendered at request time and NOT precached by workbox (only client assets are in the manifest). So offline navigation to /tools/base64 would... Hmm.
+
+Let me think about how @vite-pwa/nuxt works with Nuxt SSR. The typical setup: `@vite-pwa/nuxt` with `strategies: 'generateSW'` and a `navigateFallback: '/offline'` or an offline page. For SSR apps, the server-rendered HTML is not precached, but the client JS/CSS is. Navigating offline to a route that hasn't been visited fails because the server can't render HTML. Unless we add runtime caching with NetworkFirst for navigation requests, which caches HTML per visited route. Then previously-visited pages work offline.
+
+The task's validation says: "随后 context.set_offline(True) 再打开一个已访问过的页面（例如 /tools/base64）确认仍能渲染；最后访问一个从未访问过的页面确认给出可理解的提示/回退。"
+
+So: visited page works offline, unvisited page gives understandable fallback. This matches runtime caching of navigation requests (NetworkFirst with cache). Unvisited route: offline → navigation request fails → navigateFallback to /offline (which we must precache? Actually the offline page itself is server-rendered too). Hmm, navigateFallback needs a precached HTML file. 
+
+Approach options:
+1. Use `nuxi generate` (static) so all routes are prerendered to HTML and precached. Then ALL routes work offline → no "uncached" state. That contradicts design S10b and the requirement to show a fallback for never-visited pages. Actually the task validation explicitly requires never-visited page to give fallback. With full prerender+precache, it would just work. That might be even better, but the test expects a fallback. Hmm. Let's re-read:
+
+"最后访问一个从未访问过的页面确认给出可理解的提示/回退" — confirm it gives an understandable prompt/fallback. If it actually renders, that's not a fallback. But the requirement is to verify behavior. We should be honest about what happens.
+
+2. Use SSR build with:
+   - precache the static assets + a fallback offline HTML page (precached as `/offline.html`).
+   - runtime caching NetworkFirst for navigation requests.
+   
+But generating a static /offline.html is tricky in Nuxt SSR. We could add `public/offline.html` as a static fallback page. But then it wouldn't have the app styling. Alternatively set `navigateFallback` to a precached route... Workbox's navigateFallback requires a URL in the precache manifest. In Nuxt SSR, there's no static HTML for routes.
+
+Given the constraint and realism, maybe the cleanest robust approach: add a hand-written `public/offline.html` fallback that mirrors the design tokens (inline CSS, no external deps) and is precached. Then configure `navigateFallback: '/offline.html'`, exclude it from precache as the offline doc. And runtime cache navigations NetworkFirst so visited pages render offline. Unvisited pages → fallback offline.html (understandable). That satisfies validation.
+
+But wait — the task says update `app/pages/offline.vue`. The `/offline` route is the Vue page. The `public/offline.html` would be a separate static file. Is that allowed? public/** is allowed. But then two offline things could be confusing. Hmm.
+
+Actually, there's a subtlety: the design S10b is the "tool load failed" page, which in Nuxt could be an error page. But the task simplifies: offline.vue shows real SW state.
+
+Let me reconsider. For the validation "打开一个已访问过的页面时能渲染" — with SSR + NetworkFirst runtime caching, the first visit's HTML gets cached, so second visit offline works. Good. For "从未访问过的页面" — Workbox navigateFallback to precached `/offline.html`. Good.
+
+But could we just precache the fallback as the `/offline` route HTML? In SSR build we can't at build time. But we could add a Nitro route that... no.
+
+Simplest honest approach: create `public/offline.html` static fallback with a link back. And keep `/offline` as the Nuxt page (which, if visited, is cached and works offline). Actually if user navigates to /offline offline and hasn't visited it, fallback offline.html shows. That's fine and understandable.
+
+Hmm, but "说明页" should itself be available offline ideally. With runtime caching, after first visit /offline is cached.
+
+Now, does @vite-pwa/nuxt work with Nuxt 4? Let me check versions. We need to install. Let me check network access. Let me try npm install.
+
+Actually, let me think about whether to use `generateSW` (workbox-build) or `injectManifest`. `generateSW` with `workbox.navigateFallback` and `runtimeCaching`. @vite-pwa/nuxt exposes `workbox` options and `pwa` config.
+
+In @vite-pwa/nuxt, for SSR you typically need `strategies: 'generateSW'` and `registerType: 'autoUpdate'`. Also there's `client: { installPrompt: ... }`. For Nuxt, the module auto-registers the SW.
+
+One concern: @vite-pwa/nuxt in SSR mode may need `injectRegister: 'auto'` or a manual registration. It should work.
+
+Also `devOptions.enabled = false` default — dev server no SW. Good.
+
+Now fonts: @fontsource/noto-sans-sc and @fontsource/jetbrains-mono. Noto Sans SC full is huge. @fontsource packages split into subsets: `@fontsource/noto-sans-sc/400.css` imports all unicode-range subsets (chinese-simplified etc.). The font files... Let me check size after install. Fontsource's Noto Sans SC uses variable font? Actually `@fontsource/noto-sans-sc` v5 provides static weights and a `chinese-simplified` subset split into many small chunks. Let me check.
+
+The task says: if too large (e.g., Noto Sans SC full >8MB), report actual size and explain tradeoff; don't sacrifice offline visual effect. Fontsource Noto Sans SC v5 splits Chinese into ~100+ subsets with unicode-range, and @import loads them all in CSS but browser only downloads needed subsets. Total disk size could be ~10-20MB for all weights. Hmm that's large for the repo/build. Let's measure.
+
+Actually, maybe better: use variable font `@fontsource-variable/noto-sans-sc`? That's one variable file split by unicode ranges. Size still large.
+
+Alternatively, self-host only the needed weights and accept it, or use a reduced subset. But we can't easily subset without tools (no deps). Let's install and measure.
+
+Let me first check network and npm install. This could take a while. Let me kick off installations in background.
+
+Plan:
+1. npm install @fontsource/noto-sans-sc @fontsource/jetbrains-mono
+2. npm install -D @vite-pwa/nuxt (as dependency? It's a Nuxt module, should be devDependency or dependency. Typically dependency.)
+
+Let me check npm registry connectivity first.
+
+Let me set up todos.
+
+Actually let me also look at how prefs are keyed and check `usePrefs` usage across app — is it called on every page or in layout? The FOUC inline script must match usePrefs. Let me grep for usePrefs usage.
+
+Also check app/pages and layouts, DkButton/DkIcon components. Let me do a broad reconnaissance.
+dsh: reasoning:
+Network works. Let me install packages. @vite-pwa/nuxt 1.1.1 — check Nuxt 4 compatibility. Let me check peer deps. Also @fontsource versions.
+
+Let me kick off the install in background.
+
+Note: package-lock.json is in my allowed files, good.
+
+Let me start install.
+
+Also I should check how usePrefs is initialized — it's `useState` with loadPrefs, and onMounted re-loads. Note there are multiple callers of usePrefs (TopNav, settings, tools). Since `useState` is shared, that's fine. The inline script approach: set dark class before paint. Then usePrefs onMounted calls applyTheme which toggles to same value. No two truths as long as logic matches.
+
+Important: the inline script must compute isDark including `system` theme. If theme==='system', use matchMedia prefers-color-scheme. And reduce-motion, code-font-size. Also usePrefs applies `document.body.classList.toggle('reduce-motion')` — but body may not exist when inline script runs in head. The inline script in head runs before body exists. So setting body class requires document.body to exist. Hmm.
+
+Options: set `--reduce-motion` as a CSS variable on documentElement instead, plus add a class on html. But main.css uses `body.reduce-motion`. The task says: "setting --code-font-size and reduce-motion". It says "直接给 <html> 加 dark 类、设置 --code-font-size 与 reduce-motion". So maybe set `document.documentElement.classList.add('reduce-motion')` and update CSS to also handle `html.reduce-motion`? But main.css is mine to edit. And usePrefs sets body.reduce-motion. To keep single source of truth, I could change usePrefs... but usePrefs.ts is NOT in my allowed files! "尤其 app/utils/json.ts、app/composables/useToolRun.ts、usePrefs.ts..." — usePrefs.ts is explicitly forbidden to modify.
+
+Hmm. So I cannot modify usePrefs.ts. I can only modify main.css, nuxt.config, offline.vue, app.vue, package.json, public/**.
+
+So to avoid two truths, the inline script must produce the same DOM outcome as usePrefs:
+- `documentElement.classList.toggle('dark', isDark)`
+- `document.body.classList.toggle('reduce-motion', reduceMotion)` — body may not exist. But I can defer that part with a DOMContentLoaded or just also apply it via a small inline listener. Actually if the script is in head, `document.body` is null. But I can register `document.addEventListener('DOMContentLoaded', () => document.body.classList.add('reduce-motion'))` when reduceMotion true. That runs before first paint typically (DOMContentLoaded fires after parsing, before paint? Actually paint can happen before DOMContentLoaded). Hmm. But the CSS also has `@media (prefers-reduced-motion: reduce)` global rule. For user-set reduce motion, timing matters less (no flicker of animation-critical content in first frame, mostly).
+
+Better: apply class to documentElement too and have CSS match both: `html.reduce-motion *` and `body.reduce-motion *`. Since main.css is mine to edit, I can add `html.reduce-motion` selectors. But then usePrefs sets body only; inline sets html only. Two elements, but one outcome per element... "不要出现两套真相" means the state logic should be consistent, not that DOM class must be identical element. But to be safe, inline script can do both: set html class immediately, and on DOMContentLoaded set body class too. Then usePrefs onMounted also sets body. Fine.
+
+Actually, simplest robust: inline script sets `document.documentElement.classList.toggle('dark', dark)`, `document.documentElement.style.setProperty('--code-font-size', size)`, and `document.documentElement.classList.toggle('reduce-motion', rm)`. And add CSS selectors for `html.reduce-motion`. Also set body class when body available. That's belt and suspenders. Since usePrefs will run onMounted and set body class appropriately anyway.
+
+Wait, but there's a subtle issue: `document.documentElement.style.setProperty('--code-font-size', ...)` sets inline style on html, same as usePrefs does (`document.documentElement.style.setProperty`). Same target, consistent. Good.
+
+For dark: usePrefs toggles html class. Inline same. Good.
+
+For reduce-motion: usePrefs toggles body class. Inline sets html class + optionally body. Add CSS for html.reduce-motion. Consistent outcome (motion reduced). Good.
+
+Now, the inline script needs to be an inline script in head that runs before styles. Nuxt `app.head.script` supports `innerHTML` and `tagPosition: 'head'`. Actually to guarantee before styles, use `{ innerHTML: '...', tagPosition: 'head' }`. Nuxt injects head scripts; ordering with CSS link from the build... `app.head.link` styles are usually in head. Inline script with tagPosition 'head' should be before or after. To be safe, we can use `tagPriority: 'critical'` or negative number. In unhead, `tagPriority: -1` or 'critical'. Let me use `tagPriority: 'critical'` maybe. Hmm, unhead supports `tagPriority` number. Lower = earlier? In unhead, tags with `tagPriority` lower run earlier; critical = -2 or so. Let me set `tagPriority: -1`.
+
+Actually I recall `tagPriority` in unhead: numbers, and 'critical' maps to a high priority (earlier). Let me verify by checking @unhead installed version. We can just test the generated HTML and confirm the script appears before the stylesheet link.
+
+Also CSP: inline script may be blocked by CSP if configured; there's no CSP here. Fine.
+
+Now Task B fonts: use @import in main.css. Nuxt/Vite processes CSS @import via postcss? Vite CSS handles @import from node_modules if prefixed. In CSS, `@import '@fontsource/noto-sans-sc/400.css';` — Vite resolves bare imports in CSS. Actually Vite supports `@import` with node_modules resolution. Yes, Vite's CSS plugin resolves `@import` using postcss-import-like behavior and supports bare specifiers. It should work. Alternatively, import in nuxt.config `css: [...]` array. That's cleaner: add to `css` array the fontsource css files. But those are in node_modules; Nuxt css array can take `'@fontsource/.../400.css'`? Nuxt resolves css via vite. Should work. But main.css @import is also fine and keeps it in one place. The task says "在 main.css 里 @import 或由 nuxt.config 引入其 css". I'll use main.css @import to keep fonts with font declarations. Actually careful: Vite requires @import statements at top of file, before other rules. main.css starts with a comment then :root. `@import` must precede all rules (except @charset/@layer). A leading comment is fine. So put @import lines at very top after the comment? @import must come before any style rules; comments ok. Let me put them right at top.
+
+But wait: fontsource v5 CSS files use `font-display: swap` and unicode-range subsets. The `@fontsource/noto-sans-sc/400.css` imports `@fontsource/noto-sans-sc/latin-400.css` etc? Actually v5 `400.css` contains all subsets via multiple @font-face with unicode-range, and references `./files/...woff2`. Vite will bundle those. Good.
+
+Size concern: Noto Sans SC 400.css includes ~100+ @font-face entries each with own woff2. Times 4 weights = hundreds of files, tens of MB. That will bloat build and take ages. Need to measure. Maybe restrict to `chinese-simplified` subset? But that's not split — fontsource splits by "unicode-range" chunks for CJK: e.g., `chinese-simplified-0.css` ... up to `chinese-simplified-119.css`. Actually in v5, CJK fonts are split into subsets like `chinese-simplified` plus `latin`, `cyrillic`, etc., and each CJK subset is huge... Hmm.
+
+Let me just install and measure sizes.
+
+Let me also consider using `@fontsource-variable/noto-sans-sc`. But task explicitly says `@fontsource/noto-sans-sc` and `@fontsource/jetbrains-mono` with specific weights. Stick to that.
+
+Let me start the installs now in background while I read more.
+
+Install commands:
+- npm install @fontsource/noto-sans-sc@5 @fontsource/jetbrains-mono@5
+- npm install -D @vite-pwa/nuxt
+
+Note: postinstall runs `nuxt prepare`, which might be slow but fine.
+
+Let me run both in one background job.
+
+Actually careful: adding @vite-pwa/nuxt to package.json before configuring might break `nuxt prepare` postinstall if config invalid. Since I'll configure nuxt.config after, the postinstall during install will run `nuxt prepare` with the module auto-detected. If I haven't configured it yet, @vite-pwa/nuxt is a module that is discovered? Nuxt auto-installs modules listed in package.json? No — Nuxt doesn't auto-add modules. You list them in `modules` array. So just installing won't affect prepare. Good.
+
+Let me kick off.
+dsh: reasoning:
+Now let me check the install progress and look at topnav/settings for prefs theme and offline link. Let me also check the layouts/default.vue and pages structure (routes). Let me wait for install to finish. Meanwhile, look at TopNav to understand theme toggle and how /offline is linked.
+
+Let me check the background job.
+dsh: reasoning:
+Let me check the install job status.
+dsh: reasoning:
+Install done. Let me check fontsource package structure and sizes, and vite-pwa version.
+dsh: reasoning:
+Noto Sans SC full package is 75MB. Using 400/500/600/700.css would load ALL subsets for each weight. The 400.css includes all unicode-range subsets (many). Total woff2 for 4 weights could be ~100MB? That's way too much. The task explicitly mentions "Noto Sans SC 全量子集 > 8MB" and says report actual size and explain tradeoff; don't sacrifice offline visual effect.
+
+Fontsource v5 for CJK: the package splits into numbered chunks (0..~119) that map to unicode ranges. To get Chinese coverage we need all chunks. There's `chinese-simplified.css` which likely imports all chinese-simplified-* chunks. And `400.css` imports latin+all? Let me check what 400.css actually contains — it references `noto-sans-sc-4-400-normal.woff2` etc. Need to count @font-face and total size for 4 weights.
+
+Let me measure: sum woff2/woff sizes referenced by 400/500/600/700.css. Also check if woff (non-woff2) is included — the src includes both woff2 and woff. Vite will bundle BOTH if referenced! That doubles size. Fontsource's `400.css` includes both woff2 and woff. That's bad. We could use `latin-400.css`? No.
+
+Hmm. Actually many fontsource v5 packages only ship woff2 in `files` and the css references woff2 and woff. Let me check files dir.
+
+Actually, better approach for CJK: There's no way around the size if we want full Glyph coverage self-hosted. Options:
+1. Use system CJK fonts for Chinese (PingFang SC / Microsoft YaHei) and self-host only Latin (Noto Sans SC latin subset) — but task says font-family must still be Noto Sans SC. Hmm, "probe 页面 font-family 仍是 Noto Sans SC（或明确说明回退）". And "中文字形正常显示". If we only self-host latin subset, Chinese falls back to system CJK, which displays fine. But then the font-family computed style is still "Noto Sans SC" (the declared family). Actually the first family in the stack is Noto Sans SC; if it lacks the glyph, browser falls back to next. That's acceptable and honest. But "字体自托管" expected full? The task says report tradeoff.
+
+2. Use a subset of Noto Sans SC that covers common Chinese (GB2312 ~6763 chars) — but we can't subset without tooling. Though maybe fontsource provides chinese-simplified chunk set; can't reduce.
+
+3. Accept the large size. 4 weights × all subsets. Let's measure actual build output.
+
+Actually a smarter approach: Fontsource CJK packages have a "chinese-simplified.css" that only includes the chinese-simplified chunks? Let me examine. And 400.css imports everything including latin, cyrillic, vietnamese etc. For our app we need latin + chinese. Could import `latin-400.css` and `chinese-simplified-400.css`. But chinese-simplified-400.css — is that a single file containing all chinese chunks, or one chunk? Let me check. In fontsource v5, for CJK, the file naming is `chinese-simplified-400.css` (all chinese-simplified subsets for weight 400) plus numbered `chinese-simplified-1-400.css`? Let me look. Actually there's only `chinese-simplified-400.css` and `chinese-simplified.css`. Let me inspect.
+
+Let me measure exact woff2 sizes.
+
+Plan: I'll examine the CSS and compute total size of files referenced by the 4 weights. Also count.
+
+Note there's also a bigger question: build time. Vite will process ~ hundreds of @font-face and copy font files. Could be slow but manageable.
+
+Let me check whether the `files` directory has both woff and woff2, and the total.
+
+Actually, an important optimization: Fontsource CJK woff2 for all chunks per weight is roughly: Noto Sans SC total woff2 is ~8-10MB per weight? 75MB package includes 9 weights × (woff2+woff) × subsets. Let me compute.
+
+Let me run a script.
+dsh: reasoning:
+So `400.css` contains 101 @font-face, each with woff2 + woff. Per weight: 101 woff2 + 101 woff. 4 weights = 808 files. Total size? Let me compute for weight 400 all referenced files. Roughly each chunk woff2 ~30-35KB × 101 ≈ 3.3MB, woff ~40KB × 101 ≈ 4MB. Per weight ~7.3MB. Four weights ~29MB. That's large but not insane. But Vite will bundle both woff and woff2 — 29MB.
+
+Better: The `chinese-simplified.css` has only 9 @font-face (one per weight) but each is a single huge file! `noto-sans-sc-chinese-simplified-400-normal.woff2` — likely ~50MB? Let me check. Actually no, a single full CJK font woff2 is ~5-10MB. 9 weights → huge. Not good.
+
+Wait, the numbered chunks (noto-sans-sc-N-400-normal) are the subsetted split. `400.css` = all 101 chunks for weight 400 (latin + chinese split). That's the right approach for unicode-range splitting, browser only downloads needed chunks. Per weight ~3.3MB woff2. 4 weights = ~13MB woff2 (plus woff duplicates if Vite bundles woff too).
+
+Problem: Fontsource CSS includes both woff2 and woff in `src`. Vite's CSS handling will copy both files into the build output (it rewrites url() and emits assets). That doubles to ~26MB. And the SW precache would include all of them → huge precache (task says precache fonts, but 26MB precache is a lot).
+
+Can we avoid woff? The fontsource build has separate files; the css references both. We can't easily strip woff from the package (node_modules shouldn't be edited... and it's not in allowed files, though node_modules isn't source). Better: write our own @font-face CSS referencing only woff2 files. But that's a lot (404 @font-face for 4 weights). We could generate it programmatically... but we shouldn't add a build script outside allowed files? We can create files in public/** and app/assets/css/main.css. We could generate the @font-face CSS into main.css, but 404 entries is huge and copying unicode-ranges is impractical manually.
+
+Alternative: Use Vite's `resolve` or postcss to drop woff. Hmm.
+
+Actually, does Vite bundle `woff` referenced in src when `woff2` is first? Vite's `css.url()` will emit all url() references it can resolve, regardless of format. So yes, both get emitted.
+
+Hmm, but maybe there's a way: only import the `.woff2`-only css if fontsource provides it. Fontsource v5 provides `.../400.css` with both. Some packages have `woff2` only? No.
+
+Alternative approach: use `@fontsource-variable/noto-sans-sc` variable font. It might also split. But task says specific weights and packages.
+
+Let me reconsider the requirement: "npm 安装 @fontsource/noto-sans-sc 与 @fontsource/jetbrains-mono（各取项目需要的字重：Noto 400/500/600/700，Mono 400/500/600），在 main.css 里 @import 或由 nuxt.config 引入其 css". So they expect importing `@fontsource/noto-sans-sc/400.css` etc. The size concern is explicitly acknowledged: "如体积过大（例如 Noto Sans SC 全量子集 > 8MB），报告实际体积并说明取舍；不要为此牺牲离线可视效果。"
+
+So we should measure actual output and report. If it's ~26MB, report and perhaps mitigate. Let's see actual build.
+
+But wait — build with 4 weights × 202 files = 808 font assets copied. Build time and output size. Let's estimate ~26MB. That's heavy but "不要为此牺牲离线可视效果" means keep offline works. We could reduce to fewer weights? The task says take those weights. Hmm.
+
+Potential mitigation: Noto Sans SC is only needed for Chinese UI text. We could use fewer weights in practice (400, 500, 600, 700 all used per design). Keep.
+
+Another mitigation: Exclude `.woff` from output to halve size. Could we do that with a Vite plugin in nuxt.config (which is allowed)? Yes! We can add a small Vite plugin in nuxt.config that, after CSS processing, removes `.woff` assets from the bundle/emit. But that's hacky and the task says don't add dependencies (but a small inline plugin is fine). However, removing woff files while CSS still references them → 404s for browsers that need woff (only ancient browsers). Modern browsers use woff2. But the CSS `src` list has woff2 first, so fine. But the build would still emit unless we remove. We can use `generateBundle` to delete `.woff` assets and also the precache would then not include them.
+
+Hmm, but is this over-engineering? The task explicitly wants us to report actual size and tradeoffs. Simpler is better and less risky. Let me first build with straightforward @import of the 4 + 3 css files and measure. Then decide.
+
+Actually, there's a subtle much better option: import only `latin-*.css` for Noto? No, Chinese needed.
+
+Let me compute exact size of woff2-only for 4 weights.
+
+Let me write a quick python to sum files referenced in 400/500/600/700.css grouped by extension.
+
+Then measure actual build.
+
+For JetBrains Mono: 2.5MB package; 400/500/600.css each includes latin, latin-ext, cyrillic, greek, vietnamese — small.
+
+Let me compute.
+dsh: reasoning:
+Noto Sans SC: woff2 9.8MB + woff 12.3MB = 22.1MB for 4 weights (woff2 alone 9.8MB). This exceeds the 8MB threshold mentioned. We should report and make a tradeoff.
+
+Options to reduce:
+1. Drop `.woff` (12.3MB) → 9.8MB woff2 only. Still >8MB but close. Modern browsers all support woff2 (since 2016). This halves. We can achieve by writing our own @font-face? Or via a Vite plugin that deletes woff from bundle and rewrites CSS references? The CSS would still reference woff in the src list, causing 404 attempts as fallback only if woff2 fails (rare). But wait, if we delete woff assets, the SW precache won't have them; browsers that loaded woff2 never request woff. Good.
+
+But actually simpler: we can use a postcss config or Vite plugin. Hmm, but "don't add deps".
+
+2. Reduce weights: Use variable font? Not per instructions.
+
+Actually, wait. Let me reconsider: Fontsource packages also often provide a "woff2-only" variant? Let me check if there is a `files` naming and whether there's a css with only woff2. No.
+
+3. Use `@fontsource-variable/noto-sans-sc` — variable font, single file per unicode chunk, covering all weights via `font-weight: 100 900`. That would be ~ 101 chunks × 1 woff2 × 2 files? Variable font chunk total maybe ~10MB for full range but it replaces 4 weights → roughly 1/4 the file count and same total as one weight (~3.3MB woff2? variable is bigger per chunk). Actually variable font woff2 for full CJK is large (~10MB). Hmm.
+
+The task explicitly names the non-variable packages and weights. I'll follow it, and mitigate by stripping woff.
+
+How to strip woff cleanly without a plugin? We could import the CSS in a way that only woff2 is used. Idea: Instead of importing fontsource CSS, generate our own font CSS that references only the `.woff2` files via a wildcard? CSS can't glob.
+
+Alternative: Vite's `build.assetsInlineLimit` no.
+
+Hmm, could we use a small custom Vite plugin in nuxt.config to strip `.woff` from @font-face `src` before URL processing? Actually better: a `vite` plugin with `transform` on `.css` files from fontsource, rewriting `src: url(...woff2) format('woff2'), url(...woff) format('woff')` → keep only woff2. Then Vite won't resolve/emit woff at all. This is clean and no new deps. The plugin operates on fontsource CSS only, leaving our app CSS untouched. It's honest.
+
+But wait — nuxt.config.ts is allowed. Adding a `vite: { plugins: [...] }` with an inline plugin is allowed. No comments allowed though (task says no comments). Fine.
+
+Let me think about whether this is worth the complexity/risk. The requirement: "如体积过大（例如 Noto Sans SC 全量子集 > 8MB），报告实际体积并说明取舍". It says report, not necessarily reduce. But 22MB is quite bad for a PWA precache. Also the validation requires precaching fonts. Precaching 22MB into cache is heavy but works. Also build output.
+
+I think stripping woff is a reasonable, justified tradeoff: modern browsers (all supporting Service Worker/woff2) use woff2. SW requires modern browser anyway. So woff fallback is dead weight. I'll implement the inline Vite plugin to drop woff from fontsource @font-face.
+
+Actually wait, even simpler and safer: use `@fontsource/noto-sans-sc/400.css` etc., and add a Vite plugin that filters out `.woff` assets in `generateBundle` AND rewrites CSS `url(...woff)` references to remove them. But rewriting in generateBundle for CSS assets is more complex. Transform is cleaner:
+
+```js
+{
+  name: 'devkit-fontsource-woff2-only',
+  enforce: 'pre',
+  transform(code, id) {
+    if (!id.includes('@fontsource')) return null
+    if (!id.endsWith('.css')) return null
+    return code.replace(/,\s*url\([^)]*\.woff\)\s*format\(['"]woff['"]\)/g, '')
+  }
+}
+```
+
+This runs before Vite's CSS plugin resolves urls. The `enforce: 'pre'` ensures it. Good.
+
+But careful: Vite CSS handling: `.css` files are processed; `transform` hooks are called. The `enforce: 'pre'` plugin transform should receive the CSS. Yes.
+
+Then output size ≈ 9.8MB woff2 (Noto) + 0.3MB (Mono, but Mono CSS also has woff; strip → 0.15MB). Total ~10MB.
+
+Still >8MB but much better. Report it.
+
+Hmm, can we do better? We could drop the `woff` and reduce to only the chunks actually needed... not feasible without subsetting.
+
+Another thought: We could import `latin-*.css` + `chinese-simplified-*.css`? The numbered `400.css` already contains latin + chinese + others. Let me check what subsets 400.css includes. 101 font-faces. The numbered files are "noto-sans-sc-N-400-normal" which are the full variable subset split. Hmm, actually v5 CJK uses `unicode-range` numbered splits across all scripts. Not separable.
+
+Actually there might be `latin-400.css` and `chinese-simplified-400.css`. chinese-simplified-400.css has just 1 font-face but it's the whole chinese set in one file (huge). So numbered is the split. 400.css includes 101 numbered chunks. We need all of them for Chinese. Fine.
+
+OK let me proceed.
+
+Now, do we need all 4 weights? Design uses 400, 500, 600, 700. Keep.
+
+Now let's think about sw precache for fonts: 9.8MB of Noto + 0.15MB Mono. Precaching ~10MB on first load is a lot but task explicitly says precache fonts. Hmm, but the browser will only actually download the chunks it needs? No — precache downloads ALL precache assets eagerly during install, regardless of use. 10MB download on first visit could be heavy. Also there are 404 chunks. That might be slow for the validation (offline test) but fine.
+
+Actually Workbox precache has a default max file size limit of 2MB (`maximumFileSizeToCacheInBytes`), and each font chunk is ~30KB, so all included. But 404 files × ~30KB = ~10MB. Precaching 10MB is within reason for an offline-first tool, but might take time. The task explicitly asks fonts be precached.
+
+However, there's a risk: Workbox precache manifest with ~800 entries (fonts) + js/css. That's fine but the SW file will be large-ish (manifest). Also build-time manifest generation.
+
+Hmm, 9.8MB woff2 / 404 chunks ≈ 24KB avg. Plus jetbrains. Fine.
+
+Wait, actually after stripping woff the count of Noto assets = 404 woff2 + Mono ~18 woff2. Total ~420 font files. Plus the SW precaches all JS/CSS. Let me be careful about Workbox's `maximumFileSizeToCacheInBytes` — individual files small, so no issue. But the glob patterns: by default vite-pwa's generateSW precaches build output (js, css, html, and also fonts? The default `globPatterns` is `**/*.{js,css,html}`. We need to add woff2, png, svg, ico). We'll set `globPatterns: ['**/*.{js,css,html,woff2,png,svg,ico,webmanifest}']`.
+
+Now PWA icons. Need 192 and 512 PNG. Generate with Python PIL. Check PIL availability.
+
+Also task says use `theme_color #F4F5F7`, name DevKit, short_name. Icons "DevKit 文字标识与简洁几何图形". The TopNav logo is a "W"-like path (actually looks like a stylized W/M). Let me generate a simple geometric icon: rounded square background #2563eb (accent) with white "D" or the DevKit mark. Let me create with PIL: dark/blue rounded square, white geometric "D" letterform or the zigzag mark. Use a font for "D"? PIL default font is tiny. We can draw the mark with polygons/paths. Simpler: draw the topnav mark (the W-like zigzag) in white on accent background. Actually the topnav svg path: `M4 17.5 9 4l3.2 8.4L15.4 4l5 13.5` — a "W" shape. We can draw that with lines of width ~2.4 scaled to 512. That's clean geometry. Plus maybe "DevKit" text? Task says "DevKit 文字标识与简洁几何图形" (text mark and simple geometric). We can generate a maskable icon with a "D" letterform drawn geometrically? Hmm.
+
+Actually, we could render text using a font available on macOS (e.g., /System/Library/Fonts/Helvetica.ttc) but portability of the generation script doesn't matter (generated PNGs are committed). But "不要引入前端绘图依赖" — using PIL is fine. We can use PIL ImageFont with DejaVuSans if available, or Helvetica on macOS. Let's check. But a purely geometric mark is safest and matches brand: the "W/M" zigzag. I'll draw the zigzag mark plus maybe a small square. Actually "DevKit 文字标识" suggests including text. But icon readability at 192: a bold "D" or "DK". Let me generate:
+- Background: rounded square, color #2563eb (accent) or dark #12161f. theme_color is #F4F5F7 (light bg) per task. Icon bg accent blue.
+- Mark: white "W"-zigzag (from topnav) centered.
+- For 512, optionally add "DevKit" text below? At 192 text would be unreadable. Keep just the mark. The manifest name/short_name provides the text identity. But task says use "DevKit 文字标识与简洁几何图形". Hmm. I'll include a bold "D" + geometric chevrons? 
+
+Let me do: accent-blue rounded square, white geometric "W" mark (three peaks) — matching in-app logo. That's a "简洁几何图形" and the app brand. The manifest carries the "DevKit" text. I think that satisfies. But to honor "文字标识", I can also create `apple-touch-icon` etc. Let me make the mark a stylized "D" combined with the W? Overthinking.
+
+Let me draw the exact topnav logo geometry scaled up, on accent bg. That's the DevKit mark. Good enough and truthful (it's the actual app mark).
+
+Hmm, but the task explicitly: "图标用简洁几何/文字标识，符合任务书『没有现成品牌稿时用 DevKit 文字标识与简洁几何图形』". So maybe: rounded square with a white "D" glyph. Let me draw a geometric "D": a vertical bar + a half-round. Easy: rounded rect + arc. Or use text "D" with a bold font.
+
+Let me check fonts available and PIL. If PIL available, I can use ImageFont.truetype with a system font (Arial/Helvetica Bold) to render "D" or "DK". That is a "文字标识". Let's do a design: blue rounded square, white bold "D" centered, with a small accent square/dot. Actually simpler and robust: use the zigzag mark which is definitely the DevKit logo. I'll combine both: zigzag mark on top, and "DevKit" wordmark? At 512 that works. At 192 wordmark small. 
+
+Decision: Generate icons with the actual app mark (zigzag "W") drawn geometrically, plus for 512 add "DevKit" text under it. For 192 just the mark. Use a bundled font if available. Let me check PIL and fonts.
+
+Actually, I realize I should be careful about time. Let me prioritize: Tasks A, B, C. Icons are needed for manifest validity. I'll generate a decent icon.
+
+Let me now check PIL availability and fonts.
+
+Also, I should verify @vite-pwa/nuxt works with Nuxt 4.1 and Vite version. Let me check installed vite version.
+
+Let me set up a todo list now.
+dsh: reasoning:
+PIL available, Arial Bold available. Vite 8.3.0, Nuxt 4.5.2. @vite-pwa/nuxt 1.1.1 — need to check Vite 8 compatibility. Let me check its package.json peer/deps and whether it supports Vite 8. vite-pwa uses `vite-plugin-pwa` which may have peer vite restrictions. Let me check.
+
+Actually let me just proceed and see if `nuxt build` works.
+
+Now let's write the changes.
+
+### Task B: fonts in main.css + strip woff plugin
+
+main.css top:
+```
+@import '@fontsource/noto-sans-sc/400.css';
+@import '@fontsource/noto-sans-sc/500.css';
+@import '@fontsource/noto-sans-sc/600.css';
+@import '@fontsource/noto-sans-sc/700.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+@import '@fontsource/jetbrains-mono/600.css';
+```
+
+Wait: Vite CSS @import with bare specifier. Vite docs: "@import in CSS is resolved by postcss-import... Vite pre-configures postcss-import with a resolver respecting Vite aliases and node module resolution." Actually Vite uses `postcss-import` internally? Vite has built-in CSS handling that supports `@import` with url rewriting and alias resolution. Bare imports should work. Let me just test with build.
+
+But there's a caveat: `@import` must precede all other statements. The file starts with a block comment then `:root`. Put imports after the comment.
+
+Actually, to be safe and explicit, I could add them to `nuxt.config.ts` `css: []` array instead: `css: ['@fontsource/noto-sans-sc/400.css', ..., '~/assets/css/main.css']`. Nuxt resolves these via Vite. This runs the same transform plugin. Either is fine. The task allows both. I'll use main.css @import because keeping fonts in the stylesheet is conventional and the plugin transform applies.
+
+Hmm, but one nuance: Vite's `@import` resolution for bare specifiers historically required the `.css` extension and works. Let's test.
+
+Strip woff plugin in nuxt.config:
+
+```ts
+vite: {
+  plugins: [
+    {
+      name: 'devkit-fontsource-woff2-only',
+      enforce: 'pre',
+      transform(code, id) {
+        if (!id.includes('@fontsource') || !id.endsWith('.css')) return null
+        const stripped = code.replace(/,\s*url\([^)]*\.woff\)\s*format\((['"])woff\1\)/g, '')
+        if (stripped === code) return null
+        return { code: stripped, map: null }
+      }
+    }
+  ]
+}
+```
+
+Wait — does the `transform` hook receive the raw CSS content for fontsource css files when imported from main.css? Vite processes CSS through the `vite:css` plugin. A custom plugin with `enforce:'pre'` runs before `vite:css` in `transform` phase? Plugin order: alias, enforce pre, normal, vite core (which includes vite:css?), build. Actually `vite:css` is a normal plugin? Vite internal plugins order. `enforce:'pre'` should run before core. The transform will get the `.css` file content (raw). Good.
+
+But `id` for a CSS file resolved from @fontsource will be an absolute path containing `@fontsource`. Good check. But careful: `id` may include query like `?used` or `?direct`. For fontsource imported via main.css, no query. I'll check `.includes('.css')` instead of endsWith to be safe. Let me use `/\.css(\?|$)/`.
+
+Actually `@fontsource` appears in path as node_modules/@fontsource/... good.
+
+Alternatively, filter woff in `generateBundle`: after build, CSS asset references were already rewritten to hashed woff urls. Removing assets would leave dangling refs. So transform-strip is the right place.
+
+Risk: if the transform doesn't run before url resolution, woff still emitted. I'll verify build output has no woff.
+
+### Task A: inline script
+
+In nuxt.config `app.head.script`:
+```ts
+script: [
+  {
+    tagPosition: 'head',
+    tagPriority: -1,
+    innerHTML: `(function(){try{var r=localStorage.getItem('devkit.prefs.v1');var p=r?JSON.parse(r):null;var t=p&&p.theme;var m=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;var d=t==='dark'||(t!=='light'&&m);var e=document.documentElement;e.classList.toggle('dark',d);var s=p&&p.codeFontSize;if(typeof s==='number'&&isFinite(s)&&s>0)e.style.setProperty('--code-font-size',s+'px');var rm=!!(p&&p.reduceMotion);e.classList.toggle('reduce-motion',rm);if(rm)document.addEventListener('DOMContentLoaded',function(){document.body&&document.body.classList.add('reduce-motion')});}catch(_){}})();`
+  }
+]
+```
+
+Wait, the default theme in usePrefs is 'system'. If no prefs stored, `t` undefined → dark = m (matchMedia dark). usePrefs: theme default 'system', systemDark from matchMedia → isDark = m. Consistent. Good.
+
+If localStorage unavailable → catch → no dark class. usePrefs would then also default to system (loadPrefs catches). But wait, the inline script can't know systemDark if localStorage throws. Actually if localStorage throws, `r` assignment throws inside try, catch swallows, so no class applied even if system is dark. To be robust, separate the try: compute matchMedia first outside. Let me restructure:
+
+```js
+(function(){var e=document.documentElement;var m=false;try{m=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches}catch(_){};var p=null;try{var r=localStorage.getItem('devkit.prefs.v1');if(r)p=JSON.parse(r)}catch(_){};try{var t=p&&p.theme;var d=t==='dark'||(t!=='light'&&m);e.classList.toggle('dark',d);var s=p&&p.codeFontSize;if(typeof s==='number'&&isFinite(s)&&s>0)e.style.setProperty('--code-font-size',s+'px');var rm=!!(p&&p.reduceMotion);e.classList.toggle('reduce-motion',rm);if(rm&&document.body)document.body.classList.add('reduce-motion');else if(rm)document.addEventListener('DOMContentLoaded',function(){if(document.body)document.body.classList.add('reduce-motion')})}catch(_){}})();
+```
+
+Note p could be non-object (e.g., JSON.parse returns a number). `p&&p.theme` fine.
+
+Also if p is corrupted JSON → JSON.parse throws → caught, p stays null. Good.
+
+Now `reduce-motion` CSS: add `html.reduce-motion` selectors to main.css. Currently `body.reduce-motion *`. Add:
+```
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after { ... }
+```
+I can just change selector to `body.reduce-motion *, body.reduce-motion *::before, ... , html.reduce-motion...`. Simpler: add a new rule. But since I'm editing main.css anyway, I'll extend the selector list.
+
+Now, does `tagPriority: -1` guarantee before the stylesheet? In unhead, `tagPriority` can be a number or a preset ('critical', 'high', 'low'). CSS link tags injected by Nuxt (from build) have their own priority. Inline script with tagPriority -1 should come very early. Actually in unhead, links with `rel=stylesheet` get priority 20? Scripts with `tagPriority` lower come first. Let me just build and inspect HTML order. If the script is after the stylesheet `<link>`, the FOUC window is a few ms (stylesheet load). The requirement is script before styles. Let's verify and adjust.
+
+Actually more robust: use `tagPosition: 'head'` and `tagPriority: 'critical'`? Let me check unhead docs quickly via node_modules. Search for tagPriority in unhead dist.
+
+Let me check what unhead supports.
+
+Also `innerHTML` script with Nuxt: `useHead` script entries with `innerHTML` render `<script>...</script>`.
+
+Alternatively, I can use `app.head.script` with `src` none and `innerHTML`. Fine.
+
+One concern: Nuxt's head script may be deduplicated/hydrated. Should be fine.
+
+### Task C: PWA
+
+nuxt.config:
+```ts
+modules: ['@vite-pwa/nuxt'],
+pwa: {
+  registerType: 'autoUpdate',
+  manifest: {
+    name: 'DevKit',
+    short_name: 'DevKit',
+    description: '...',
+    theme_color: '#F4F5F7',
+    background_color: '#F4F5F7',
+    display: 'standalone',
+    lang: 'zh-CN',
+    start_url: '/',
+    scope: '/',
+    icons: [
+      { src: '/pwa-192.png', sizes: '192x192', type: 'image/png' },
+      { src: '/pwa-512.png', sizes: '512x512', type: 'image/png' },
+      { src: '/pwa-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+    ]
+  },
+  workbox: {
+    globPatterns: ['**/*.{js,css,html,woff2,png,svg,ico,webmanifest}'],
+    navigateFallback: '/offline.html',  // ? 
+    runtimeCaching: [
+      {
+        urlPattern: ({ request }) => request.mode === 'navigate',
+        handler: 'NetworkFirst',
+        options: {
+          cacheName: 'devkit-pages',
+          networkTimeoutSeconds: 3,
+          expiration: { maxEntries: 64, maxAgeSeconds: 60*60*24*30 }
+        }
+      }
+    ]
+  },
+  devOptions: { enabled: false }
+}
+```
+
+Wait — navigateFallback with a static `/offline.html`. But `navigateFallback` in workbox requires the fallback URL to be in the precache manifest. `public/offline.html` will be copied to output root and matched by glob `**/*.html`, so precached. Good. Also need `navigateFallbackDenylist` for API routes maybe not needed (no API). And crucially `navigateFallback` only triggers when the navigation request fails and isn't handled by runtimeCaching. With NetworkFirst runtime cache for navigations, unvisited offline route: NetworkFirst tries network (fails/timeout), then cache miss → handler falls through? Actually Workbox's NetworkFirst on failure with no cache throws; then the router's navigation route fallback applies? The navigateFallback is applied by `registerRoute(new NavigationRoute(...))` created by generateSW when navigateFallback set. The runtimeCaching for navigations also creates routes. Route matching order matters: Workbox generateSW registers runtimeCaching routes and the NavigationRoute. The precache's navigation route... Hmm.
+
+Actually in vite-plugin-pwa generateSW, when `navigateFallback` is set, workbox-build creates a NavigationRoute with the fallback, registered after runtimeCaching? Let me think. Workbox `generateSW` (workbox-build) generates service worker with:
+- precacheAndRoute(manifest)
+- registerRoute for each runtimeCaching
+- if navigateFallback: registerRoute(new NavigationRoute(createHandlerBoundToURL(navigateFallback), {denylist}))
+
+Order in generated file: runtimeCaching routes are registered before the navigation route. Workbox routes are evaluated in registration order; first match wins. A NetworkFirst runtime route matching navigations would intercept ALL navigations before the NavigationRoute → NavigationRoute never used. Hmm. Actually `registerRoute` with a handler function: when the handler fails (no cache), the route's handler throws → the fetch fails → the navigation fails, no fallback. So navigateFallback wouldn't apply.
+
+But Workbox has special handling: The NavigationRoute with fallback is meant to handle navigation requests that aren't handled by other routes. If a runtime route already matches, fallback won't apply.
+
+Alternative: Instead of runtimeCaching for navigations, rely on a strategy that caches navigations AND falls back to offline.html. We can write a custom runtimeCaching entry with a `handler` that is NetworkFirst and add `options.cacheableResponse` etc, but fallback to offline.html isn't directly supported.
+
+Hmm. Actually Workbox's `NavigationRoute` + `createHandlerBoundToURL` is designed for exactly "app shell" — precache index.html and serve for all navigations. For SSR we don't have that.
+
+Different approach: Use `runtimeCaching` NetworkFirst with `precacheFallback` option? Workbox v7 strategies support `precacheFallback: { fallbackURL: '/offline.html' }` in the strategy options! Yes — Workbox 6.4+ added `precacheFallback` option to strategies. workbox-build `runtimeCaching` options are passed to the strategy, so we can set `precacheFallback: { fallbackURL: '/offline.html' }`. Let me confirm: `NetworkFirst({ precacheFallback: { fallbackURL } })`. Yes, `PrecacheFallbackPlugin`. And workbox-build's `runtimeCaching[].options` accepts `precacheFallback`.
+
+So:
+```js
+runtimeCaching: [
+  {
+    urlPattern: '/**',
+    handler: 'NetworkFirst',
+    options: {
+      cacheName: 'devkit-pages',
+      networkTimeoutSeconds: 3,
+      precacheFallback: { fallbackURL: '/offline.html' },
+      cacheableResponse: { statuses: [0, 200] },
+      expiration: { maxEntries: 100, maxAgeSeconds: 2592000 }
+    }
+  }
+]
+```
+But urlPattern '/**' would also match assets (which are precached). Precached assets are handled by precacheAndRoute first (registered before runtimeCaching), so they win. Actually precacheAndRoute is registered first and matches precached URLs, so runtime /** catches everything else. But it would also runtime-cache js/css chunks not precached? All build assets are precached. API requests? None. Images? precached. So runtime caching effectively only navigations and any uncached asset. That's fine — NetworkFirst with precacheFallback offline.html for uncached assets could return HTML for an asset request, which would be wrong (e.g., a JS chunk not precached). But all same-origin build assets are precached; only navigations and dynamic things remain. Nuxt has no API routes here except maybe payloads `_payload.json` for prerendered? With SSR build, Nuxt payload for client navigation: `/_nuxt/...` or route `_payload.json`? Nuxt 4 might generate `_payload.json` requests per route. Those are same-origin and not precached; NetworkFirst would cache them and precacheFallback offline.html would be returned as JSON → parse error. Hmm. But offline, client-side navigation to unvisited route would fail gracefully? Let me restrict runtimeCaching to navigation mode requests explicitly:
+
+```js
+urlPattern: ({ request }) => request.mode === 'navigate',
+```
+workbox-build supports `urlPattern` as a function? In workbox-build runtimeCaching, `urlPattern` can be a string, RegExp, or a function that returns a `RouteMatchCallback`? Actually workbox-build serializes options into generated code. It supports `urlPattern` as string/regexp, and if function, it's serialized via `stringify`? Let me check: workbox-build's `runtimeCaching` `urlPattern` "can be a string, a RegExp, or a function". Hmm, the docs: "urlPattern: string | RegExp | RouteMatchCallback". For function, workbox-build uses `stringifyWithoutComments`? I believe it only supports string/RegExp reliably; functions are supported if they're serializable. This is risky with arrow functions via nuxt.config (module config serialized at build time in Node, not in browser — workbox-build runs in Node and can call `stringify` to inject). Actually workbox-build accepts a `RouteMatchCallback` function and uses `stringify` to embed it in the generated SW. It should work. But @vite-pwa/nuxt uses `vite-plugin-pwa` which uses workbox-build's `generateSW` in Node during build. Functions in `runtimeCaching[].urlPattern` are serialized with `.toString()`. Arrow functions fine.
+
+Alternatively use a regex that matches HTML navigations: navigations request the route path without extension. A regex like `/^\/(?!_nuxt\/|_payload|api\/).*/`? Hmm.
+
+Simplest: use `urlPattern: ({ request }) => request.mode === 'navigate'`. I'll go with the function and verify in generated sw.js.
+
+Hmm wait, but the task validation checks: after SW control, `set_offline(True)`, open a visited page (e.g., /tools/base64) → renders. For this, the HTML navigation must be cached by NetworkFirst. On first visit to /tools/base64 (online, SW not yet controlling because controller is null on first load), the navigation request is NOT intercepted by SW (no controller), so nothing cached for that route. Then on reload (second visit) SW controls and intercepts navigation → NetworkFirst caches it. Then offline → served from cache. Good, as long as we visit the page once while SW controls.
+
+The validation says "打开首页两次确认 controller 非空" (open home twice). After first load, SW installs/activates; with `clients.claim` (autoUpdate sets `skipWaiting` and `clientsClaim` true), controller becomes non-null after activation even on first load possibly. Then we need to visit /tools/base64 at least once online (with SW controlling) to cache it. The validation script must do that. I'll write the test accordingly.
+
+For unvisited page offline → NetworkFirst network fail, cache miss → precacheFallback offline.html. Good.
+
+Now `/offline.html` static file: I need to create `devkit/public/offline.html`. It should be self-contained (inline CSS, no external fonts? It can use system fonts) and give understandable message + retry. Also it should be a real fallback page per design S10b. It should say "当前离线，该页面尚未缓存" and a retry (location.reload). And mention cached pages still work. Also link to /offline maybe.
+
+But wait: the task says "更新 devkit/app/pages/offline.vue：按真实状态显示". The fallback for unvisited pages could be this static offline.html. But is having both `/offline` (Vue) and `/offline.html` (static) confusing? The Vue /offline page is reachable online and if visited cached. The static fallback is what SW serves for uncached navigations. I think that's fine and I'll explain in the report.
+
+Hmm, actually could we set `navigateFallback: '/offline'`? Then createHandlerBoundToURL('/offline') would look for precached '/offline' URL, which doesn't exist in manifest (SSR), causing a build error: "workbox: cannot create handler bound to URL /offline because it's not in the precache manifest". So no. Could we prerender /offline at build via routeRules? `routeRules: { '/offline': { prerender: true } }` would produce a static HTML at output for /offline, and then?? It's still not necessarily in the precache manifest (the manifest is over build assets; Nitro output HTML isn't a Vite build asset). Hmm, with vite-pwa and Nitro, the precache manifest is generated from `.output/public`? Actually vite-pwa for Nuxt does include Nitro public assets? The module supports `injectManifest`/`generateSW`, and it scans the client build output. Nitro prerendered HTML lives in `.output/public`. vite-plugin-pwa's `globPatterns` are evaluated against the build output directory, which for Nuxt SSR is `.output/public`? Let me check. The module likely uses `outDir: '.output/public'` for generateSW glob. If so, prerendered /offline/index.html would be included and we could use navigateFallback '/offline'. That'd let us reuse the Vue page and avoid a separate static file!
+
+That's elegant: `routeRules: { '/offline': { prerender: true } }` makes `.output/public/offline/index.html`? Hmm, Nuxt/Nitro prerender of a route with `ssr: true` produces `offline/index.html` perhaps, or `offline.html`. Then navigateFallback URL would need to match the precache manifest entry (e.g., '/offline' or '/offline/index.html'). Complex and version-dependent. The static `public/offline.html` is simpler and guaranteed.
+
+I'll go with `public/offline.html`. It's allowed (public/**). And it's genuinely static & self-contained, ideal for offline fallback (no JS needed).
+
+Now, does the Vue `/offline` page need a way to be reached offline? It'll work after first online visit (NetworkFirst caches it).
+
+Let me also think: Workbox `navigateFallbackDenylist` — not needed.
+
+Now, `@vite-pwa/nuxt` also injects a `manifest.webmanifest` and registration script. The module by default registers SW client-side. In SSR, it uses `@vite-pwa/nuxt` runtime plugin. Good.
+
+Also, we should add PWA icons and maybe `apple-touch-icon`. And theme-color already present.
+
+Now, one big concern: the font files (404 woff2, ~10MB) will all be precached → first load downloads ~10MB. Also `npm run build` will copy 404 files. Fine.
+
+Actually, hmm: 10MB precache may make the "offline test" slow at install time, but Playwright waits. Might take a while, especially NetworkFirst. Let me consider reducing precache scope: Task says "workbox 预缓存 js/css/html/字体与图标". So fonts included. OK.
+
+Wait, but the fonts are in `_nuxt/*.woff2`. `globPatterns` includes woff2. Good.
+
+Potential issue: Workbox default `maximumFileSizeToCacheInBytes` is 2MB (2097152). Individual font chunks are ~35KB, the biggest asset might be a JS chunk > 2MB? Let's check build. If a JS chunk exceeds 2MB, we must raise the limit. The `sm-crypto` etc. maybe. I'll set `maximumFileSizeToCacheInBytes: 5 * 1024 * 1024` to be safe. Actually better to check output. I'll set 4MB.
+
+Now let me also handle: `navigateFallback` not used; instead runtimeCaching with precacheFallback.
+
+But careful: `precacheFallback.fallbackURL` requires that URL to be precached, otherwise runtime error. `public/offline.html` → output `/offline.html`, precached via `**/*.html`. Good.
+
+Let me now check the module's default behavior and options. Let me read the @vite-pwa/nuxt README/types quickly.
+
+Also need to confirm `devOptions.enabled=false` default. Yes default false.
+
+Let me check the module's exports and types.
+
+Let me now write the files. Start with nuxt.config.ts (full rewrite), main.css imports + reduce-motion rule, offline.vue rewrite, public/offline.html, generate icons.
+
+Let me first read the rest of main.css? Already read all relevant. I'll edit main.css.
+
+Let me now write nuxt.config.ts.
+
+Actually, I want to double check `tagPriority` support in unhead and how to ensure script before styles. Let me quickly grep unhead.
+
+Let me look at installed @unhead version and its tagPriority handling.
+
+Actually simpler: I'll build and inspect the HTML. If order is wrong, I'll set tagPriority appropriately. Let me check unhead quickly.
+dsh: reasoning:
+The README says requires Vite 5 (v0.4.0+). We have Vite 8.3.0. There may be a peer mismatch or it might still work. Let me check `vite-plugin-pwa` peer deps.
+
+Let me check the module's types for pwa options.
+dsh: reasoning:
+`vite-plugin-pwa@1.3.0` supports vite ^8.0.0. Good. `@vite-pwa/nuxt@1.1.1` depends on vite-plugin-pwa. Let me check the module's own peer deps.
+
+Actually node -e for @vite-pwa/nuxt peer deps earlier showed only `@vite-pwa/assets-generator` as peer (optional). So it's fine.
+
+Now let me check ModuleOptions to confirm option names (`pwa` config keys), and `client`/`injectRegister`. Let me grep the module.d.ts.
+dsh: reasoning:
+Good. `PwaModuleOptions extends Partial<VitePWAOptions>`. So full vite-plugin-pwa options available: `strategies`, `registerType`, `manifest`, `workbox`, `devOptions`, `injectRegister`, `srcDir`, `filename`, `base`, `scope`, `includeAssets`, etc.
+
+Now let's write the config. Note: for `generateSW` (default strategy), `injectRegister: 'auto'` default. Good.
+
+One important detail: with Nuxt SSR, Vite build output only includes client assets in `.output/public/_nuxt`. The service worker is generated into `.output/public`. The precache manifest globs over the build output. `public/offline.html` and `pwa-*.png` will be in `.output/public` root. Good.
+
+Let me now write everything.
+
+First nuxt.config.ts. I'll include:
+- app.head with inline script + manifest link? vite-pwa injects manifest link automatically.
+- keep theme-color meta.
+- remove Google Fonts link.
+- modules: ['@vite-pwa/nuxt']
+- pwa config
+- vite plugin to strip woff
+
+Let me write it.
+
+Note "不要写注释" - no comments. So config without comments.
+
+Inline script string: I must be careful with quotes inside nuxt.config.ts. Use backticks.
+
+Let me write the script as a JS string.
+
+```
+const themeScript = `(function(){var e=document.documentElement;var m=false;try{m=!!(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)}catch(_){}var p=null;try{var r=localStorage.getItem('devkit.prefs.v1');if(r)p=JSON.parse(r)}catch(_){}try{if(!p||typeof p!=='object')p=null;var t=p&&p.theme;e.classList.toggle('dark',t==='dark'||(t!=='light'&&m));var s=p&&p.codeFontSize;if(typeof s==='number'&&isFinite(s)&&s>0)e.style.setProperty('--code-font-size',s+'px');var rm=!!(p&&p.reduceMotion);e.classList.toggle('reduce-motion',rm);if(rm){if(document.body)document.body.classList.add('reduce-motion');else document.addEventListener('DOMContentLoaded',function(){if(document.body)document.body.classList.add('reduce-motion')})}}catch(_){}})();`
+```
+
+Wait: `p=JSON.parse(r)` could throw → caught by the same try. Then p stays null. Good. But if `r` is e.g. `"null"`, JSON.parse → null; then `!p` → p=null. Good. If r is a string `"abc"` (invalid JSON) → throw. If r is valid JSON string like `"\"x\""` p = "x" not object → p=null. Good.
+
+Now, does `document.body` exist in head? No. So add listener. Good.
+
+Now for the script tag ordering: I'll set `tagPriority: 'critical'`. In unhead, `tagPriority` accepts string presets: 'critical' | 'high' | 'low'? Let me check unhead constants. The type is `string | number`. Presets might be 'critical', 'high', 'low'. Let me grep in unhead dist for 'critical'.
+
+Let me grep node_modules/unhead for tagPriority presets.
+dsh: reasoning:
+`TagPriorityAliases = { critical: -8, high: -1, low: 2 }` and `tagWeight` = number ? number : 100 + offset. So numbers below 100 sort before default tags. 'critical' → 92. Hmm, `tagWeight` for alias returns `100 + offset` = 92 for critical. Stylesheets injected by Nuxt via app.head link would also have weight ~100 (default). But Nuxt's build-injected `<link rel=stylesheet>` for CSS isn't in unhead; it's rendered by the template directly. Let me check the SSR HTML template order. Nuxt's default template renders `headTags` from unhead in `<head>`, and Vite's CSS link is injected into `headTags`? Actually Nuxt injects CSS links via unhead too (from `css` config) or via `renderResourceHints`. Hmm.
+
+Simplest: build and inspect. Use `tagPriority: 'critical'` (weight 92). Even if not guaranteed first, inline script in head executes synchronously during parse; if it comes before the stylesheet link or after doesn't matter for the `dark` class since CSS applies to whatever the class is at paint time — both script and stylesheet are parsed before first paint as long as they're in `<head>` and script is inline (render-blocking) and stylesheet is render-blocking. The only FOUC risk is if the stylesheet loads and paints before the inline script executes — impossible if script is before the stylesheet in head, or if script is after the stylesheet link it might still execute before paint (stylesheets block rendering until loaded, but scripts also block). Actually if stylesheet comes first and is slow to load, the parser continues to the inline script and executes it before paint. So order is not critical, but the task explicitly says "在样式之前执行". I'll aim for script before the stylesheet.
+
+Let me now write the files.
+
+Let me write nuxt.config.ts.
+dsh: reasoning:
+Now main.css: add @import fontsource at top and add html.reduce-motion rule.
+
+Let me edit.
+dsh: reasoning:
+Now generate PWA icons with PIL, and create public/offline.html.
+
+Icon design: rounded square background accent blue #2563EB, white geometric mark from topnav: path M4 17.5 9 4l3.2 8.4L15.4 4l5 13.5 (stroke). Scale from 24 to icon size. Draw with line width. Add a "D"? Let's do mark only for maskable (extra padding for safe zone). Maskable icons need content within 80% safe area. So for maskable, draw the mark smaller and background fills entire (no rounded corners, full bleed).
+
+Design:
+- `pwa-192.png`: rounded square (radius ~22%) filled #2563EB, white W mark centered scaled to ~52% of size.
+- `pwa-512.png`: same.
+- `pwa-maskable-192/512.png`: full-bleed #2563EB square, white W mark at ~50% (within safe zone).
+
+Actually, to include a "文字标识"/geometric: the W mark is geometric. Fine.
+
+Let me write a Python script to generate. It will live... I can run inline via heredoc without creating a file, or create a script under audit/? I should not create files outside allowed dirs except the report. audit/** is not explicitly forbidden except docs/** and design.pen. But "只允许修改下面列给你的文件；其它文件一律不要动". So generating a script file in audit/ would be modifying a file not listed. Better run inline heredoc. The PNGs go to devkit/public/** which is allowed.
+
+Let me draw the polyline. Coordinates: P0=(4,17.5), P1=(9,4), P2=(12.2,12.4), P3=(15.4,4), P4=(20,17.5). Use `ImageDraw.line(..., joint='curve')` with width. For nice round caps, draw circles at endpoints. PIL line with joint='curve' handles joins. Add round caps by drawing ellipses at P0 and P4.
+
+Scale: map 24-unit space to target box. For regular icon, content box = size*0.62 centered. For maskable, content box = size*0.5 centered.
+
+Let me write it. Background rounded rectangle: `ImageDraw.rounded_rectangle([0,0,size-1,size-1], radius=size*0.22, fill=accent)`.
+
+Antialias: render at 4x then downscale with LANCZOS.
+
+Let me generate 192, 512, maskable 192, 512. Also generate favicon? There's a favicon referenced in offline.vue retry ( `/favicon.ico`). Does public/favicon.ico exist? public/ is empty currently! Let me check what favicon the app uses. `grep favicon`. The offline.vue retry fetches /favicon.ico. If it doesn't exist, HEAD returns 404 but `fetch` resolves (reachable=true). Actually fetch resolves for 404, so reachable=true. Fine.
+
+But Nuxt default favicon? public is empty, so no favicon. Not my task. But PWA icon could double as favicon. I could add `link: [{ rel:'icon', href:'/pwa-192.png' }]` in head. That's a reasonable addition and improves things. But maybe there's already an icon link elsewhere. Let me grep.
+
+Actually the app head has no favicon link. Adding one is within scope (nuxt.config). I'll add `<link rel="icon" href="/pwa-192.png">` maybe. And `apple-touch-icon`. Fine.
+
+Let me generate icons.
+
+Also, task says "图标可用 python3 + PIL 生成 192/512 png". Good.
+
+Let me write inline python.
+dsh: reasoning:
+Let me view the icon to verify it looks right.
+dsh: reasoning:
+Icons look good. Now create `public/offline.html` — the static fallback for uncached navigations. It should be self-contained, styled to match design tokens, no external resources, understandable, with a retry button (location.reload) and a note.
+
+Design S10b content:
+- 标题: 无法加载该工具
+- 说明: 当前处于离线状态，且这个工具尚未缓存到本机。
+- 横幅: 首次访问需要网络，当前无法加载 / 页面脚本必须至少加载一次才能离线使用。
+- 按钮: 重试加载
+- 文案: 离线并不代表所有工具都不可用：已缓存页面仍可在本地处理。
+
+I'll write a self-contained HTML with inline CSS using design tokens (light+dark via prefers-color-scheme), and a button that reloads. Also detect online status and show appropriate text. Add a small inline script (allowed for a static file, not "import"). Keep Chinese.
+
+This fallback is served for any uncached navigation. Good.
+
+Let me write it carefully with no comments? The "不要写注释" applies to code. I'll avoid comments in code files. HTML comments are fine to avoid.
+
+Let me create public/offline.html.
+dsh: reasoning:
+Now rewrite `offline.vue` for real SW state. Requirements:
+- If SW controlling (navigator.serviceWorker.controller non-null): list facts and scope that can be used offline.
+- If not controlling: clearly state "首次访问尚未缓存" and give retry (real detection).
+- Text must match real capability; don't promise "all tools offline".
+
+Also design S10 has two columns 已缓存/未缓存. I can implement a real detection using the Cache Storage API: enumerate `devkit-pages` cache keys (navigations cached) and check which tool routes are present. That's real! And precached assets presence via `caches.match`.
+
+Let me design the new offline.vue:
+
+State:
+- `online` = navigator.onLine
+- `swSupported` = 'serviceWorker' in navigator
+- `controller` = !!navigator.serviceWorker.controller
+- `registration` = registration object (for state/update)
+- `cachedRoutes` = Set of pathnames found in Cache Storage (devkit-pages cache) — real
+- `precacheCount` = number of precached entries (workbox precache cache name like `workbox-precache-v2-...`) — real
+- `checking`, `lastChecked`, `lastProbe`
+
+Functions:
+- `refresh()`: async, gathers all real state:
+  - navigator.onLine
+  - navigator.serviceWorker.controller
+  - navigator.serviceWorker.getRegistration()
+  - caches.keys() → list cache names
+  - for the pages cache, `cache.keys()` → extract URL pathnames
+  - for precache cache, count keys
+- `retry()`: real detection: call refresh(), plus fetch HEAD to /favicon.ico? Actually better fetch current page with cache: 'reload'? Hmm. The "重新检测" should re-probe. Let me do: if controller, send message to SW? Simpler: `registration.update()` to check for updates, then refresh. And a network probe fetch to `${location.origin}/?_=${Date.now()}` with `cache: 'no-store'`. Real.
+
+Cached tools computed: tools whose `/tools/${slug}` pathname is in cachedRoutes. Uncached remainder.
+
+Facts to list when controlled:
+- Service Worker 已接管，页面脚本、样式、字体与图标已预缓存（precacheCount 项），可离线打开已缓存资源。
+- 已缓存页面（本机 Cache Storage 中实际存在）：list.
+- 未缓存页面需要联网。
+
+When not controlled:
+- 首次访问尚未缓存 / 或 Service Worker 未就绪。明确说明。
+- 重试按钮 does registration.update() / refresh real.
+
+Also handle dev environment: SW not registered in dev, so offline.vue shows the not-controlled state with truthful text "当前环境未启用 Service Worker（开发模式默认关闭）或尚未完成首次缓存". Hmm, how to distinguish dev vs prod? We can't easily. But we can state facts: `'serviceWorker' in navigator` false → no support; registration absent → not registered (可能是开发模式); controller null but registration active → 首次访问尚未接管.
+
+Let me include three states:
+1. swSupported false: 浏览器不支持 Service Worker → 无法离线预缓存。
+2. registration exists but controller null: SW 已注册但尚未接管当前页面（首次访问尚未缓存）。提供重试。
+3. controller non-null: SW 已接管。
+4. registration null: 尚未注册 Service Worker（开发服务器默认禁用，或生产环境注册失败）。Provide retry.
+
+Text must be honest. Also `workbox` precache count.
+
+Let me also implement a real cache listing. Cache Storage access requires secure context (https or localhost). localhost is secure. Good.
+
+Note SSR: offline.vue script runs on server too during build/render. Guard with import.meta.client / onMounted. Use `onMounted` for all browser access.
+
+Let me also handle the design S10 visual: two columns with counts, banner, retry, links. I'll follow existing page styles and add columns.
+
+Let me write the new offline.vue.
+
+I need to be careful: `tools` import from '~/data/tools'. Each tool has slug, name, cat, icon, desc.
+
+Let me define:
+
+```ts
+<script setup lang="ts">
+import { tools } from '~/data/tools'
+
+useSeoMeta({ title: '离线与缓存状态 · DevKit' })
+
+const online = ref(true)
+const swSupported = ref(false)
+const swRegistered = ref(false)
+const swControlled = ref(false)
+const swState = ref('')
+const cacheNames = ref<string[]>([])
+const cachedRoutes = ref<string[]>([])
+const precacheCount = ref(0)
+const checking = ref(false)
+const lastProbe = ref('')
+const lastChecked = ref('')
+
+const PAGE_CACHE = 'devkit-pages'
+const PRECACHE_PREFIX = 'workbox-precache'
+
+const toolPath = (slug: string) => `/tools/${slug}`
+
+const cachedTools = computed(() => tools.filter((t) => cachedRoutes.value.includes(toolPath(t.slug))))
+const uncachedTools = computed(() => tools.filter((t) => !cachedRoutes.value.includes(toolPath(t.slug))))
+```
+
+Wait, `cachedRoutes` from cache keys gives full URLs like `http://localhost:3200/tools/base64`. Convert to pathname.
+
+`refresh()`:
+```ts
+async function refresh(probe = false) {
+  if (import.meta.server) return
+  const nav = navigator
+  swSupported.value = 'serviceWorker' in nav
+  online.value = nav.onLine
+  let registration: ServiceWorkerRegistration | null = null
+  try {
+    registration = swSupported.value ? (await nav.serviceWorker.getRegistration()) ?? null : null
+  } catch { registration = null }
+  swRegistered.value = !!registration
+  swControlled.value = !!(nav.serviceWorker && nav.serviceWorker.controller)
+  swState.value = registration?.active?.state ?? registration?.installing?.state ?? registration?.waiting?.state ?? ''
+  ...
+}
+```
+
+Reading caches:
+```ts
+let names: string[] = []
+try { names = await caches.keys() } catch { names = [] }
+cacheNames.value = names
+let routes: string[] = []
+let precache = 0
+for (const name of names) {
+  if (name === PAGE_CACHE) {
+    try {
+      const c = await caches.open(name)
+      const keys = await c.keys()
+      routes = keys.map((r) => new URL(r.url).pathname)
+    } catch {}
+  }
+  if (name.startsWith(PRECACHE_PREFIX)) {
+    try {
+      const c = await caches.open(name)
+      precache += (await c.keys()).length
+    } catch {}
+  }
+}
+cachedRoutes.value = routes
+precacheCount.value = precache
+```
+
+Note workbox precache cache name in workbox 7 is `workbox-precache-v2-<scope>`.
+
+`retry()`: real:
+```ts
+async function retry() {
+  if (checking.value) return
+  checking.value = true
+  lastProbe.value = ''
+  let probeText = ''
+  try {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration()
+      if (reg) await reg.update()
+    }
+  } catch (e) { probeText = `Service Worker 更新检查失败：${errMessage(e)}` }
+  let reachable = false
+  try {
+    const res = await fetch(`${location.origin}/pwa-192.png?_=${Date.now()}`, { method: 'HEAD', cache: 'no-store' })
+    reachable = res.ok || res.type === 'opaque' ? true : res.status < 500
+    ...
+  }
+  await refresh()
+  ...
+}
+```
+
+Hmm, `errMessage` — is there a global helper in app/utils? `useToolRun.ts` maybe. But I can't modify those; can I use an existing util? Let me check if `errMessage` is auto-imported globally. grep.
+
+Actually offline.vue currently uses `errMessage(e)` — so it must be auto-imported from somewhere (app/utils). Let me check.
+
+Let me grep for errMessage definition.
+dsh: reasoning:
+`errMessage` is exported from useToolRun.ts, which is auto-imported as a composable? Nuxt auto-imports composables exported functions from app/composables. So `errMessage` is available. Good.
+
+Let me check available icon names in DkIcon to use valid ones. Let me list the icon keys.
+dsh: reasoning:
+Available icons: `wifi-off`, `shield-check`, `refresh`, `check`, `alert-triangle`, `database`? No database. `folder` exists. `file-code`, `info`. Good.
+
+Now write offline.vue. I'll keep the existing styles and extend with columns.
+
+Structure:
+- Page header (title + desc) based on state.
+- State card: icon, title, desc, facts list, actions (retry + maybe "打开离线说明"?).
+- Two columns: 已缓存（可离线打开） / 未缓存（需要联网）— only when controlled; otherwise show a single note.
+- Explanatory section: 缓存状态如何决定.
+
+Let me write clean code with real detection. Chinese UI, no comments (except maybe none). Avoid comments.
+
+Let me be careful with TypeScript in Vue SFC and `import.meta.client`.
+
+Design: The current page uses `DkIcon` and `DkButton`. Keep.
+
+Let me write it.
+
+Key computed states:
+```
+type SwState = 'unsupported' | 'unregistered' | 'installing' | 'uncached' | 'controlled'
+```
+- unsupported: !swSupported
+- unregistered: supported && !swRegistered (dev server not registering, or registration failed)
+- uncached: registered && !controller (首次访问尚未接管)
+- controlled: controller
+
+Display:
+- unsupported: title '当前浏览器不支持离线缓存'; desc honest.
+- unregistered: title '离线缓存尚未注册'; desc: 当前页面没有检测到 Service Worker 注册（开发服务器默认不注册；生产构建首次加载时会在页面加载后注册，刷新一次即可接管）。重试（真实检测）。
+- uncached: title '首次访问尚未缓存'; desc: Service Worker 已注册但尚未接管本页面；页面脚本必须至少在线加载一次才能离线使用。刷新/重试。
+- controlled: title '离线缓存已接管'; desc: 已预缓存 N 项资源；已缓存页面可离线打开。
+
+`facts` list (when controlled): 
+- Service Worker 已接管当前页面，静态资源（脚本、样式、字体、图标）已预缓存。
+- 已缓存的页面导航会在本机保存，可在离线时打开。
+- 未缓存的页面需要联网一次；离线打开会显示离线回退页。
+Only claim what we can verify: precacheCount from actual Cache Storage. If precacheCount>0 → "已预缓存 N 项资源". Good.
+
+Cached/uncached tool columns: based on cachedRoutes. But note: the root page and non-tool pages also cached. Show tools only as design does.
+
+Also indicate that "已缓存" means navigation HTML present in `devkit-pages` cache. If controller but no pages cached yet, cachedTools empty.
+
+Let me also list lastChecked and probe.
+
+Now `refresh` reads caches; when uncontrolled, dev server: caches empty.
+
+Implementation detail: `navigator.serviceWorker.controller` — in Playwright after two visits should be non-null.
+
+Also add `navigator.serviceWorker.addEventListener('controllerchange', ...)` to refresh.
+
+Let me write.
+
+For the retry, I'll implement:
+```
+async function retry() {
+  if (checking.value) return
+  checking.value = true
+  lastProbe.value = ''
+  let note = ''
+  try {
+    if (swSupported.value) {
+      const reg = await navigator.serviceWorker.getRegistration()
+      if (reg) { await reg.update(); note = '已触发 Service Worker 更新检查' }
+      else note = '未找到 Service Worker 注册'
+    } else note = '浏览器不支持 Service Worker'
+  } catch (e) { note = `更新检查失败：${errMessage(e)}` }
+  let reachable = false
+  let failure = ''
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 4000)
+  try {
+    await fetch(`${location.origin}/pwa-192.png?_=${Date.now()}`, { method: 'HEAD', cache: 'no-store', signal: controller.signal })
+    reachable = true
+  } catch (e) { failure = errMessage(e) } finally { clearTimeout(timer) }
+  await refresh()
+  lastProbe.value = `${reachable ? '可访问本站静态资源' : `无法访问本站静态资源（${failure}）`}；${note}`
+  lastChecked.value = new Date().toLocaleTimeString()
+  checking.value = false
+}
+```
+
+Note `refresh()` inside sets checking? No, refresh doesn't touch checking. Good.
+
+`online` used for banner. But when controlled and offline, page can still render. Show banner accordingly.
+
+Let me now write the file.
+
+One thing: `swState` display of registration state: `registration.active?.state`.
+
+Also for `unregistered` state when dev server: the page returns 200 and there's no SW. Since dev server is at localhost:3000 and this task's offline.vue will be viewed in dev too. The text must be honest: "当前页面没有检测到已注册的 Service Worker。开发服务器默认关闭离线缓存；生产构建首次加载后会自动注册，刷新一次即可生效。" Good.
+
+Let me write it. I'll use a `state` computed and helper text.
+
+Now regarding SSR: refs default values should be neutral so server-rendered HTML isn't misleading. Initially swSupported=false, swControlled=false. On server render it will show "尚未注册/检测中". That's fine; hydration updates. Actually it'd flash "unsupported"? state computed: if !swSupported → unsupported. On server that shows '当前浏览器不支持离线缓存' briefly, then client onMounted sets swSupported true → correct. That's a misleading first frame. Better: add `ready` ref false; until ready, show a neutral "正在检测离线缓存状态…". Then hydrate. Let me do that.
+
+Let me write.
+
+For the two columns, design uses counts and per-item name+desc+status. I'll show tool name, desc (t.desc truncated?), and status badge. Keep it simpler: name + a short status. Use existing `.offline__item` style but not links when uncached (can't open offline). Actually cached items can be links; uncached should not be links (clicking offline fails → offline fallback). Make uncached items non-clickable.
+
+I'll create a list rather than columns on narrow screens: grid with two columns minmax(260px,1fr).
+
+Let me write the full file now.
+dsh: reasoning:
+Now add favicon/apple-touch-icon links to nuxt.config head? Let's add icons link. Since public/pwa-192.png exists. Also apple-touch-icon. Let me add `link` array.
+
+Let me edit nuxt.config to add link array.
+
+Actually is it necessary? Not strictly. But nice and no harm. PWA manifest injected by module. Favicon: currently none → browser shows default. Adding `<link rel="icon" href="/pwa-192.png">` is a small improvement. I'll add it.
+
+Let me add to nuxt.config head.
+dsh: reasoning:
+Now let's run the build and see if it works. This may take a while. Let me run in background.
+
+But first, `npm install` changed package.json/lock. Let me check package.json.
+
+Also potential issue: `@vite-pwa/nuxt` module requires `@vite-pwa/assets-generator` as optional peer — likely not needed for manifest. It might warn.
+
+Let me run build in background with a long timeout.
+dsh: reasoning:
+Build is running. While waiting, let me prepare the Playwright verification script. But I shouldn't create extra files outside allowed... Actually I can create the test script in /tmp. Let me write to /tmp/verify_h2.py (outside workspace, allowed? file sandbox workspace-write allows workspace writes; /tmp might be writable per "Some platform temporary areas may also be writable"). Let me test. Alternatively I can run inline python heredoc. Heredoc is cleaner (no file creation).
+
+I'll plan the Playwright script:
+1. Launch chromium.
+2. FOUC test: create context, add_init_script? No — we need to write localStorage before load. Approach: goto a page (about:blank won't have origin). Use context.add_cookies? localStorage needs origin. Use `page.goto(base+'/')` then `page.evaluate` to set localStorage, then `page.reload()`. But to check "first frame", we need to check right after navigation response. 
+
+The task: "先写入 theme=dark 的 prefs，再 goto 首页并在首帧（例如 response 之后立刻 evaluate）检查 documentElement 是否已带 dark".
+
+Better: use `context.add_init_script`? That runs before page scripts but we need localStorage set. We can set localStorage via an init script itself: `context.add_init_script("localStorage.setItem('devkit.prefs.v1', JSON.stringify({theme:'dark'}))")`. But add_init_script runs on every page/frame before scripts; localStorage available at document_start? Yes, on same-origin pages, localStorage is accessible in init scripts (document_start). Then goto home. Then evaluate immediately after navigation to check classList. But "document_start" init script setting localStorage before the inline head script — inline head script runs after init script (init scripts run before any page script). Good.
+
+However, to truly check "first frame", checking `document.documentElement.classList.contains('dark')` right after `page.goto` returns (load event) is already after first paint potentially. To be more rigorous: intercept and check at `domcontentloaded` or use a `page.evaluate` immediately. The inline script runs synchronously in head, so by DOMContentLoaded the class is set. We can register `page.on('domcontentloaded')` and evaluate. Or better: block rendering isn't testable easily. A reasonable test: after `page.goto(url, wait_until='domcontentloaded')`, evaluate documentElement.className. If dark present, FOUC prevented. Also verify the inline script appears before the stylesheet link in the HTML source. And verify usePrefs consistency: after hydration, still dark.
+
+Even stronger: use CDP to capture screenshot at first paint? Overkill. We'll also assert computed background color is dark right after DCL.
+
+Additional FOUC check: add_init_script that patches `document.documentElement` to record classList at first `requestAnimationFrame`? We could inject a script that, at document_start, sets a MutationObserver... Actually simplest reliable proof: inline script runs before stylesheet. We can assert in the HTML that the inline script tag precedes the first `<link rel=stylesheet>`. And assert that evaluating immediately after `page.goto(wait_until='commit')`? After commit the document is empty. Hmm.
+
+Better approach: record the class at the moment of the first paint using `page.evaluate` inside a `requestAnimationFrame` scheduled by an init script:
+```
+context.add_init_script("""
+window.__firstFrameDark = null;
+requestAnimationFrame(() => { window.__firstFrameDark = document.documentElement.classList.contains('dark'); });
+""")
+```
+But rAF is scheduled only after script executes; the callback runs at first animation frame (first paint). We set localStorage in the same init script BEFORE. Then after load, read `window.__firstFrameDark`. That captures the class at first frame. That's a solid test of "first frame". But note: rAF callback scheduled at document_start will run at the first repaint; the dark class should already be set by the head inline script. If inline script were absent/after, firstFrameDark would be false (and later true after onMounted). Good test.
+
+But careful: add_init_script runs in all frames and before the inline script; localStorage set works. Also `requestAnimationFrame` at document_start — should work.
+
+Let me use:
+```
+init = "try{localStorage.setItem('devkit.prefs.v1', JSON.stringify({theme:'dark',codeFontSize:15,reduceMotion:true}))}catch(e){};window.__ff=null;requestAnimationFrame(function(){window.__ff={dark:document.documentElement.classList.contains('dark'),size:getComputedStyle(document.documentElement).getPropertyValue('--code-font-size').trim(),rm:document.documentElement.classList.contains('reduce-motion')}});"
+```
+Then goto, wait load, read `window.__ff`. Expect dark true, size '15px', rm true. Also check body class after mount.
+
+But wait: usePrefs onMounted calls `applyTheme` which sets body reduce-motion and html --code-font-size. Consistent.
+
+For light user test: set theme='light', expect `window.__ff.dark === false` and after load still false. Also default system: with colorScheme light, expect false.
+
+2. Font test: assert HTML source has no fonts.googleapis/gstatic. Assert `getComputedStyle(document.body).fontFamily` includes "Noto Sans SC". Check a Chinese glyph renders with Noto by using `document.fonts.check('16px "Noto Sans SC"', '中文')`? `document.fonts.check` returns whether the font is loaded and can render. Since we self-host with unicode-range subsets, check should return true for Chinese if the needed subset is loaded. Actually `document.fonts.check` may return false if font not yet loaded; unicode-range fonts load lazily. We can call `document.fonts.load('16px "Noto Sans SC"', '中')` then check. Let me do:
+```
+await page.evaluate("document.fonts.load('16px \"Noto Sans SC\"','中文测试')")
+const ok = await page.evaluate("document.fonts.check('16px \"Noto Sans SC\"','中')")
+```
+Also confirm the network loaded woff2 files from same origin (not google). Playwright can collect response URLs and assert none match googleapis/gstatic.
+
+3. PWA/offline test:
+- Use a fresh context (user data dir) so SW installs.
+- goto base URL twice to ensure controller non-null.
+- Wait for SW ready and controller.
+- Then goto /tools/base64 (online) and wait for load so it's cached by NetworkFirst. Wait a bit; maybe ensure cache contains it via evaluate caches.
+- set_offline(True)
+- goto /tools/base64 → should render. Check some selector/text specific to base64 page. Need to know a stable selector. Let me check the base64 tool page content. It likely has h1 "Base64 编解码". We can assert body text contains "Base64".
+- goto a never-visited page, e.g. /tools/sm2 → offline → should show fallback offline.html with "无法加载该页面". Assert body contains that text.
+- Also check navigator.serviceWorker.controller non-null.
+
+Also verify /offline page shows "离线缓存已接管" and lists tools.
+
+Let me get base64 page title/selector. Let me check app/pages/tools/[slug].vue and t05 component. Actually the page route likely `/tools/[slug].vue` rendering component by slug. Let me check.
+
+Let me wait for build and meanwhile inspect pages/tools.
+
+Let me check the build job output periodically. Let me look at tools page.
+dsh: reasoning:
+Let me check the build status.
+dsh: reasoning:
+Build succeeded. Now let me inspect the output:
+- Is there a service worker in `.output/public`?
+- Do woff files exist? (should be none, only woff2)
+- Count woff2 and size.
+- Check generated HTML for the inline script order and no google fonts.
+- Check manifest.webmanifest.
+
+Let me check.
+dsh: reasoning:
+Hmm, there are 407 `.woff` files still! Even though my plugin was supposed to strip them. Let me check. 404 woff2 and 407 woff. My transform plugin didn't work. Let me investigate.
+
+Wait, `.output/public/_nuxt` contains 407 woff files. So the plugin transform didn't strip. Why?
+
+Possible reason: Vite 8 processes CSS with lightningcss or postcss, and the `@import` handling by Vite (postcss-import) may inline the CSS before my plugin's transform sees the fontsource file? Actually, my plugin has `enforce: 'pre'` and checks `id.includes('@fontsource')`. But maybe the fontsource CSS is imported via `@import` inside main.css and Vite resolves/inlines it without calling transform hooks on the imported file? Vite's CSS `@import` inlining happens in `vite:css` plugin which reads the file via `fs` directly (`postcss-import` style) rather than going through the module graph transform. So my transform hook never sees those CSS files. That explains it.
+
+Options:
+1. Import each fontsource CSS from nuxt.config `css` array (as separate Vite module entries) instead of `@import` in main.css. Then each is a module, transform hooks run. Let me test that. But the plugin would need to run before `vite:css` resolves url(). With `enforce:'pre'`, yes.
+
+Actually wait, even as a separate entry, Vite processes CSS via `vite:css` transform. `enforce:'pre'` plugin transform runs before `vite:css`. Should strip then.
+
+2. Alternatively, strip at `generateBundle` for `.woff` assets: Since Vite emits woff with hashed names and CSS references them, deleting emitted assets leaves dangling `url()` in CSS. But browsers only fetch woff if woff2 fails (unlikely). But better to remove references too.
+
+Let me switch to importing fontsource CSS via the `css` array in nuxt.config (also allowed). Actually the task says "在 main.css 里 @import 或由 nuxt.config 引入其 css". So use nuxt.config css array. Good.
+
+But will the plugin transform receive them? Let me verify. Vite's `css` entries become virtual imports? Nuxt adds them to the client build as imports. They are real module ids like `/path/node_modules/@fontsource/noto-sans-sc/400.css`. `enforce: 'pre'` transform should run.
+
+Let me change main.css to remove the @import lines and add css array entries in nuxt.config.
+
+But another concern: with `css: [...]` from nuxt.config, the order matters — fontsource CSS should come before main.css so that main.css font-family tokens are fine (order doesn't matter for @font-face). I'll put fonts first then main.css.
+
+Let me test quickly by rebuilding. But full build takes a few minutes. Alternatively, I could avoid the plugin entirely and accept 22MB. But 22MB is bad; let's try to make the plugin work. Actually there's a simpler more robust approach: postcss. Vite allows `css.postcss` config but adding postcss plugin inline. Hmm.
+
+Actually, wait. Even simpler: Instead of stripping from fontsource CSS, we can configure Vite `build.rollupOptions` to not emit woff. But the clean way: keep plugin but import via css array.
+
+Let me also consider: does the plugin's regex match? Fontsource CSS: `src: url(./files/noto-sans-sc-4-400-normal.woff2) format('woff2'), url(./files/noto-sans-sc-4-400-normal.woff) format('woff');`. Regex: `/,\s*url\([^)]*\.woff\)\s*format\((['"])woff\1\)/g`. This matches `, url(...woff) format('woff')`. Yes. Good.
+
+Let me first quickly test whether plugin transform runs by a tiny build? Full build is ~? It took maybe 2-3 min. Acceptable.
+
+Actually, let me check the build log for whether my plugin ran. I could add a console.log but "no comments" is fine, console is not comment. But rebuild cost. Let me just change approach and rebuild once, then check woff count.
+
+Let me edit main.css to remove imports, nuxt.config css array.
+
+Actually, hold on. There might be another issue: Vite 8 might use `lightningcss` for CSS minification but postcss for @import. Also Vite 8 might not call `transform` for CSS at all in the way I expect, instead using `load`/`transform` with plugin container. `enforce:'pre'` transform definitely runs for CSS modules (the `vite:css` plugin is a normal plugin, our pre plugin runs first). Let's verify empirically.
+
+Let me change to css array and rebuild. But first, let me also check the generated HTML for the inline script and no google fonts. The HTML is SSR-generated at runtime, so let me start the server and curl. Actually the built server renders at request. Let me start the preview server, then curl the home page.
+
+Let me do that now: start `node .output/server/index.mjs` on port 3200 in background.
+
+Then curl to check head order.
+
+Let me start server.
+dsh: reasoning:
+Let me see the exact ordering: the inline script with prefsBoot — is it before the stylesheet links? The output shows:
+1. `<script type="importmap">`
+2. `<script>` ← this is likely the prefsBoot script (or Nuxt's payload script)
+3. stylesheet links
+...
+
+Let me print the first ~10 script/link tags in order with content snippets to identify. Let me extract the inline script content.
+dsh: reasoning:
+The inline prefsBoot script is #2, before all stylesheet links. FOUC script placement correct.
+
+Now, let's fix the woff stripping. Switch to nuxt.config `css` array for fonts. Let me remove @import from main.css and add css entries.
+
+Actually wait — maybe the reason transform didn't run is different. Let me test whether Vite 8 calls transform on css imported via `@import`. Actually there's a known behavior: Vite's CSS `@import` inlining is done by `postcss-import` in `vite:css`, reading the file directly — so pre plugins don't see them. Confirmed likely.
+
+Let me switch. Edit main.css remove imports; edit nuxt.config css array.
+
+Let me do it.
+dsh: reasoning:
+Now rebuild. But before that, kill the running preview server since the output will be overwritten (port conflict is fine since it serves old files, but better kill). Let me kill job bash-3.
+
+Actually I can keep it and kill before starting new one. Rebuild will overwrite .output while server running — the server has loaded modules in memory, but static files read from disk. Could cause issues. Kill first.
+
+Let me kill and rebuild.
+dsh: reasoning:
+While building, let me prepare the verification script. Also check the sw.js content once built for runtimeCaching serialization and precache manifest.
+
+Let me wait for build. Meanwhile, think about potential issues:
+
+1. The `urlPattern` function serialization. Let me check generated sw.js after build.
+
+2. `offline.html` in precache manifest: globPatterns includes `html`. Good.
+
+3. NetworkFirst `precacheFallback`. Check sw.js.
+
+Let me also think about the FOUC test more. The inline script is in head. Good.
+
+Let me wait for build output.
+dsh: reasoning:
+Build succeeded. Check font counts again.
+dsh: reasoning:
+Excellent! Now:
+- woff: 0, woff2: 404, size 10MB.
+- public total 12MB.
+- sw.js includes precache manifest with all fonts and offline.html? Wait — I see `{url:"offline",revision:"61d99f82b582a111452a5892b118f1d3"}` but I don't see `offline.html`. Hmm! The precache manifest has `offline` (without .html). That's `offline.html` renamed? Let me check. Actually workbox-build may have... no. Wait, the `.output/public` has `offline.html`. But the manifest entry is `{url:"offline", revision:...}`. Interesting. Maybe Nitro/vite-pwa normalize `.html`? Actually maybe the glob matched `offline.html` but workbox-build trims `.html` extension (directoryIndex)? Hmm.
+
+Wait, there's no `offline` file in `.output/public` root — only `offline.html`. Let me check. Actually maybe there's also an `offline` directory? No. Let me re-list.
+
+Also note: `navigateFallback` was set to `/offline.html` in my config, but I didn't set `navigateFallback`; I set `precacheFallback.fallbackURL: '/offline.html'`. The generated SW has `precacheFallback: {fallbackURL:"/offline.html"}`. But the precache manifest contains `offline` not `offline.html`. That means at runtime, PrecacheFallbackPlugin will try to find `/offline.html` in precache and fail → error "non-precached-url". Hmm, actually PrecacheFallbackPlugin uses `getCacheKeyForURL(fallbackURL)` which resolves with the precache manifest; if not found, it throws. Let me check what workbox `createHandlerBoundToURL` / PrecacheFallbackPlugin expects.
+
+Wait, actually look: workbox-build's generateSW when it sees `precacheFallback` might rewrite the URL to the "directory index" form? Or the manifest entry `offline` corresponds to `offline.html` after `.html` stripping. Workbox's `precacheAndRoute` uses `revision` and the URL as-is. But the plugin's `getCacheKeyForURL` uses the manifest's `url` values. If manifest has `offline` and fallbackURL is `/offline.html`, there'd be a mismatch.
+
+Hmm, but why is the manifest entry `offline`? Let me investigate: maybe vite-pwa/nitro integration uses `modifyURLPrefix` or the Nitro build output for offline.html is actually at `.output/public/offline` (without extension) AND `.output/public/offline.html`? Let me list again precisely.
+
+Earlier `ls -la` showed `-rw------- 1 hao staff 4923 ... offline.html`. That's it. So manifest says `offline`. Odd.
+
+Wait — maybe workbox-build applies "directory index" transformation: by default `globPatterns` matching `offline.html`, workbox-build might strip `.html`? No, workbox-build does not strip. But `@vite-pwa/nuxt` might set `manifestTransforms`? Hmm.
+
+Actually, I recall vite-plugin-pwa has an option `includeManifestIcons`, and the Nuxt module adds `manifestTransforms`? Let me look at the generated sw.js around the manifest; entry `{url:"offline",revision:"61d99f82..."}`. The revision hash is of offline.html file content presumably.
+
+Maybe there is a transform that maps `offline.html` → `offline` because Nuxt route `/offline` corresponds. But navigating to `/offline` offline would then be served from precache? Actually precacheAndRoute registers route for URL `offline` — relative to scope, that's `/offline`. So navigating to `/offline` would match the precached `offline` entry and return the offline.html content! That's actually convenient: the Nuxt `/offline` page would be shadowed by the static offline.html when offline (since precache matches `/offline`). But online, precache route also intercepts `/offline`! precacheAndRoute serves from cache regardless of network. So `/offline` route would ALWAYS serve the static offline.html, never the Vue page. Hmm, that would make my offline.vue unreachable! Unless the navigation is handled before precache? precacheAndRoute is registered first, so `/offline` navigation always hits precache → static offline.html. That's a problem: the Vue app page /offline would never render.
+
+Wait, but does precacheAndRoute intercept navigations? Yes, precacheAndRoute registers routes for precached URLs; a navigation to `/offline` matches URL `/offline` and serves the cached response (offline.html content, content-type text/html). So the Vue /offline page is shadowed. That means the design S10 dynamic page can't be reached. Hmm.
+
+But hold on — is the manifest entry really `offline` from offline.html? Let me verify the revision matches offline.html hash. Actually the revision `61d99f82b582a111452a5892b118f1d3`. Let me compute workbox revision of offline.html. Hard. Let me instead check the source: search sw.js for "offline". We saw `{url:"offline",revision:...}` and fallbackURL `/offline.html`. There is no `offline.html` entry. Let me grep exactly.
+
+Actually let me check `@vite-pwa/nuxt`'s code for a transform that strips `.html`. Search module.mjs for `html` handling.
+
+Let me investigate more concretely: list .output/public, and grep sw.js for offline.
+
+Also, the runtimeCaching registration comes AFTER `precacheAndRoute`, and `NavigationRoute(createHandlerBoundToURL("/"))` is registered! Wait: `n.registerRoute(new n.NavigationRoute(n.createHandlerBoundToURL("/")))`. That's the default `navigateFallback` = "/" from vite-plugin-pwa defaults? Hmm! The generated SW includes a NavigationRoute bound to "/" — this is the default `navigateFallback` behavior? Actually vite-plugin-pwa's default for `generateSW` might set `navigateFallback: '/'`? Let me look.
+
+Order in generated sw.js:
+```
+precacheAndRoute([...], {}),
+cleanupOutdatedCaches(),
+registerRoute(new NavigationRoute(createHandlerBoundToURL("/"))),
+registerRoute(({request})=>"navigate"===request.mode, new NetworkFirst({...precacheFallback offline.html...}), "GET")
+```
+
+So the NavigationRoute for "/" is registered BEFORE my NetworkFirst navigation route. NavigationRoute matches all navigations. So ALL navigations will be served by `createHandlerBoundToURL("/")` — which reads the precached "/" URL. Is "/" in the precache manifest? I don't see a `{url:"/"}` entry. The manifest entries are files; root html not precached. So `createHandlerBoundToURL("/")` would throw at runtime: "non-precached-url: /". Hmm, that's a serious problem. Wait, maybe "/" is in the manifest? Let me search. The manifest list starts with pwa icons and `offline`, manifest.webmanifest, then _nuxt files. No "/" entry. Also `navigateFallback` default in vite-plugin-pwa is `'index.html'`? Hmm.
+
+Hold on — where did `NavigationRoute(createHandlerBoundToURL("/"))` come from? It must be `navigateFallback: '/'` default from vite-plugin-pwa. Actually vite-plugin-pwa's default `workbox.navigateFallback` is `'index.html'`? Let me check. The generated shows "/". For Nuxt SSR there's no index.html. Hmm.
+
+Wait, maybe that NavigationRoute is from `navigateFallback` that the Nuxt module sets to `'/'` by default? Or vite-plugin-pwa default. Regardless, having it before my NetworkFirst route means navigations won't be cached by NetworkFirst; instead they'll try `createHandlerBoundToURL("/")`, which will fail unless "/" is precached.
+
+Hmm, but maybe precacheAndRoute treats `url:"offline"` and there's a `directoryIndex: 'index.html'` option. And maybe `navigateFallback` got transformed. Let me look at the actual generated registration more carefully and check vite-plugin-pwa defaults.
+
+Actually, I bet the Nuxt module sets `navigateFallback: '/'`? Let me search module.mjs.
+
+This is getting complex. Let me directly inspect the options resolved. Perhaps the cleanest: set `navigateFallback: undefined` or explicitly set `navigateFallback: '/offline.html'` and rely on it, removing my runtimeCaching. Or better: set `navigateFallback: '/offline.html'` AND keep runtimeCaching, but ensure runtimeCaching route registered BEFORE the navigation fallback. Workbox-build registers navigateFallback route after runtimeCaching? The generated shows NavigationRoute first, then runtimeCaching, which contradicts my expectation. Hmm.
+
+Wait, actually let me re-read the generated code order:
+```
+n.precacheAndRoute([...],{}),
+n.cleanupOutdatedCaches(),
+n.registerRoute(new n.NavigationRoute(n.createHandlerBoundToURL("/"))),
+n.registerRoute(({request:n})=>"navigate"===n.mode, new n.NetworkFirst({cacheName:"devkit-pages",...}),"GET")
+```
+Yes NavigationRoute "/" first.
+
+Where did that come from? Possibly Nuxt module sets `navigateFallback: '/'` when `registerType: autoUpdate`? Or vite-plugin-pwa default `navigateFallback: 'index.html'`? The "/" suggests something. Let me check vite-plugin-pwa's default options.
+
+Let me grep node_modules/vite-plugin-pwa for navigateFallback default.
+
+I need to fix ordering so NetworkFirst handles navigations and falls back to offline.html. Options:
+- Set `navigateFallback: undefined` to remove the "/" route, and add runtimeCaching for navigations with precacheFallback.
+- Or set `navigateFallback: '/offline.html'` and not use runtimeCaching; but then no HTML caching for visited pages (navigateFallback serves offline.html for all navigations, including visited) → validation would fail (visited page must render).
+- Use `navigateFallback: null`? The type may not allow. Let me check the option name and default.
+
+Actually, in vite-plugin-pwa, the `workbox.navigateFallback` default is `'index.html'`? Let me check. Hmm.
+
+Alternatively, keep the NavigationRoute but make it match only non-cached navigations — impossible since it matches all.
+
+Better: Set `navigateFallback` to `/offline.html` AND use `runtimeCaching` with a custom `handler` that caches navigations. But ordering: NavigationRoute before runtimeCaching → NavigationRoute wins → all navigations get offline.html. Bad.
+
+So I need to prevent the NavigationRoute from being registered, or ensure runtimeCaching comes first.
+
+Let me check workbox-build behavior: In workbox-build `generateSW`, the order is:
+1. precacheAndRoute
+2. cleanupOutdatedCaches
+3. runtimeCaching routes
+4. navigateFallback route (if set)
+
+But the generated order here is precache, cleanup, NavigationRoute, runtimeCaching. That means vite-plugin-pwa might be injecting the navigateFallback route differently, or the Nuxt module post-processes. Hmm.
+
+Actually maybe the Nuxt module sets `navigateFallback: '/'` via its own runtime caching injection and appends runtimeCaching after. Let me inspect the module source.
+
+Let me grep.
+dsh: reasoning:
+Interesting. So the manifest has `url:"offline"` while the file is `offline.html`. And `offline.html` appears only as fallbackURL. Where does `url:"offline"` come from? Possibly `@vite-pwa/nuxt` adds it (Nuxt route rules). Let me check the module for "offline".
+
+Actually, the Nuxt module might process `public/offline.html` via Nitro: Nitro has `routeRules` / `prerender` and may serve `/offline`? Hmm.
+
+Wait: I set `precacheFallback.fallbackURL: '/offline.html'`. vite-plugin-pwa has logic: when `navigateFallback` (workbox) is undefined, but `precacheFallback`? Hmm no.
+
+Where does the manifest entry `offline` come from? Let me grep the Nuxt module for `'offline'`.
+
+Actually maybe workbox-build's `generateSW` uses `globPatterns` and for `.html` files applies `directoryIndex`? No.
+
+Hmm, but note: `@vite-pwa/nuxt` might add `additionalManifestEntries` or use Nitro's generated routes. Let me search module.mjs for "offline" and ".html".
+
+Actually, another thought: The Nuxt module integrates with Nitro to add a `/offline` route? No.
+
+Let me grep. Also, there's `node_modules/vite-plugin-pwa/dist/index.js:580` handling `workbox.navigateFallback` and adding `additionalManifestEntries` with revision. At line 594: `url: navigateFallback`. If navigateFallback is undefined, nothing. But we saw NavigationRoute "/" in output. So `options.workbox.navigateFallback` must be "/" — maybe the Nuxt module sets it. Let me grep module.mjs.
+
+Let me look at the module source around workbox config.
+dsh: reasoning:
+No output? module.mjs might be minified/different. Let me list dist and grep all.
+dsh: reasoning:
+There it is. The Nuxt module defaults `workbox.navigateFallback` to `nuxt.options.app.baseURL ?? "/"` = "/". So the generated SW has `NavigationRoute(createHandlerBoundToURL("/"))` FIRST. This is the root cause.
+
+To override, set `workbox.navigateFallback` explicitly. If I set it to `/offline.html`, then:
+- `additionalManifestEntries: [{ url: '/offline.html', revision: ... }]` gets added (line 593-594), plus the glob `offline.html`... but the manifest currently shows `offline` not `offline.html`. Hmm, so where did `offline` come from? Maybe workbox-build's `generateSW` normalizes `.html`? Actually no. Let me reconsider: The `url:"offline"` might be from `additionalManifestEntries`? At line 594 `url: navigateFallback` where navigateFallback = "/" would add `{url:"/", revision:...}` — but manifest shows `offline`, not "/". Hmm.
+
+Wait — maybe `offline` is a directory! Let me check if `.output/public/offline` exists (a directory containing index.html). Earlier `ls -la .output/public | grep -i offline` only showed offline.html. So no.
+
+Hmm, then where does `url:"offline"` come from? Let me search the globbing: workbox-build `generateSW` with `globPatterns` and `globDirectory`. For HTML files, workbox-build DOES apply a transform: it uses `glob` to find files, then for `.html` files it might strip the extension? Actually, I recall workbox-build's default behavior: `globPatterns` `**/*.{html,js,css}` and there's a `directoryIndex` option (default `'index.html'`). For a file named `offline.html`, workbox-build does NOT strip. Hmm.
+
+Wait, actually maybe vite-plugin-pwa rewrites `/offline.html` → `/offline`? Let me check line 580-600 of vite-plugin-pwa/dist/index.js to understand.
+
+Let me read that region.
+dsh: reasoning:
+That's the dev path. Let me find the build-time generation where `additionalManifestEntries` is set for navigateFallback. Search around line 838 default and the build code.
+
+Actually, the key facts:
+- Manifest entry `offline` with a revision — this likely comes from `additionalManifestEntries` where url = navigateFallback, but navigateFallback got... no, navigateFallback default is "/". Hmm, "/" would be `{url:"/"}`. But it's `offline`.
+
+Wait maybe the Nuxt module or Nitro rewrote it. Let me search the module shared file around line 31-40 and see if there's more. Let me read nuxt.9518178d.mjs.
+
+Actually, hold on: Maybe the `offline` entry comes from the Nuxt PWA module's handling of `public/offline.html`. Let me grep the shared file for "offline" (the earlier grep of module.mjs found nothing because code is in shared/). Let me grep shared dir.
+dsh: reasoning:
+So `navigateFallback` default is "/". This causes the NavigationRoute "/" and `additionalManifestEntries`? Wait, the Nuxt module's code doesn't add additionalManifestEntries; vite-plugin-pwa's build path does (similar to dev). Let me find where. But the manifest shows `offline`, not "/". Maybe workbox-build, for `additionalManifestEntries: [{url: "/", revision}]`, tries to resolve "/" ... no.
+
+Hmm wait, maybe the `offline` entry is unrelated to navigateFallback and comes from vite-plugin-pwa's `generateServiceWorker` with `manifestTransforms` that converts `/offline.html`? Let me check workbox-build's behavior with `directoryIndex`. 
+
+Actually! I bet workbox-build's `getFileManifestEntries` uses `globPatterns` and has `directoryIndex: 'index.html'` default. For a file `offline.html`, workbox-build might set url to `/offline.html`. That's not `offline`.
+
+Let me actually just look at the resolved manifest entries in sw.js more carefully: `{url:"offline",revision:"61d99f82b582a111452a5892b118f1d3"}`. Hmm, `offline` (no slash, no extension). 
+
+Could this `offline` be produced by the `additionalManifestEntries` where `navigateFallback` was set to `/offline.html`?? No.
+
+Hold on. Maybe there IS a Nitro route `/offline` static file generated by prerender? No.
+
+Let me test at runtime rather than speculate. The best approach: fix `navigateFallback` explicitly and re-examine.
+
+Plan:
+- Set `workbox.navigateFallback: false`? The type expects string; setting to `false` may cause the module's `if (!("navigateFallback" in options.workbox))` to skip (since key exists), and workbox-build with `navigateFallback: false`? Hmm, `false` might be treated as falsy and no additionalManifestEntries / no NavigationRoute. But then `createHandlerBoundToURL` not generated. Let's check workbox-build accepts `navigateFallback: null/undefined`. Actually the option type is string. Setting `navigateFallback: ''`? The module: `if (!("navigateFallback" in options.workbox))` — key exists, so it keeps ''. workbox-build: `if (navigateFallback) registerRoute(NavigationRoute(createHandlerBoundToURL(navigateFallback)))` — empty string falsy → no route. And additionalManifestEntries only if navigateFallback truthy. So `navigateFallback: ''` disables it. But TypeScript may complain. Cast as any.
+
+But then how do we get offline fallback? Via my runtimeCaching NetworkFirst with `precacheFallback: {fallbackURL: '/offline.html'}`. That requires `/offline.html` to be in the precache manifest. Currently the manifest entry is `offline`, so fallbackURL `/offline.html` wouldn't resolve. We need to ensure the precache manifest contains `/offline.html`.
+
+Why is it `offline`? Let me check workbox-build's `getFileManifestEntries`/manifest transform. Maybe `@vite-pwa/nuxt` passes `manifestTransforms` to strip `.html`. Let me grep shared for `manifestTransforms` or `modifyURLPrefix`.
+
+Actually, I found it: workbox-build's `generateSW` has option `directoryIndex` and it converts file paths to URLs. But maybe the glob matched `offline.html` and then `workbox-build`'s `normalizeUrl`? Let me search workbox-build for `.html` stripping.
+
+Alternatively: Maybe Nuxt's Nitro `publicAssets` renames? Let me check `.output/public` listing again — is there a file named `offline` AND `offline.html`? `ls -la | grep offline` showed only offline.html. Let me run `find .output/public -maxdepth 1 -name 'offline*'`.
+
+Let me also grep workbox-build for `manifestTransforms`.
+
+Actually — I recall now: `@vite-pwa/nuxt` sets `manifestTransforms` to handle Nuxt's `.output/public` and it may strip `.html`. Let me grep the shared file.
+
+Let me grep for 'Transform' in nuxt shared.
+dsh: reasoning:
+Found it. The Nuxt module's `createManifestTransform` strips `.html` from URLs: `offline.html` → `offline`. Let me read lines 95-125 to understand.
+
+So the precache manifest URL for public/offline.html becomes `offline`. That means:
+- Navigating to `/offline` will be served by precache (returns offline.html content). And my Vue `/offline` page is shadowed.
+- `precacheFallback.fallbackURL: '/offline.html'` won't resolve.
+
+Hmm. Let me read the transform to understand exactly, including index.html → "/".
+
+Lines 100-120.
+dsh: reasoning:
+So the module transforms `offline.html` → `offline`. That's designed so that Nuxt route `/offline` maps to the static HTML. So the intended design of @vite-pwa/nuxt is: put your offline fallback at `public/offline.html`, and it gets precached as URL `offline`, so navigating to `/offline` offline serves the static HTML. But it also means `/offline` online (when SW active) serves the static HTML from precache — shadowing the Vue page.
+
+Hmm, that actually conflicts with my Vue `/offline` page. Unless we name the static fallback differently, e.g. `public/offline-fallback.html` → precached as `offline-fallback`, and set `precacheFallback.fallbackURL: '/offline-fallback'`.
+
+Better plan:
+- Rename static file to `public/offline.html`? No. Let's name it `public/offline-fallback.html`, which transforms to `/offline-fallback`.
+- Set `precacheFallback.fallbackURL: '/offline-fallback'`.
+- The Vue `/offline` page remains reachable and gets cached via NetworkFirst runtime caching (navigation).
+
+But wait: `navigateFallback` default "/" still registers `NavigationRoute(createHandlerBoundToURL("/"))` and `additionalManifestEntries` with url "/". Is "/" in the precache manifest? The module transform maps `index.html` → base ("/"). But there's no `index.html` in `.output/public` (SSR). So "/" is NOT in manifest → `createHandlerBoundToURL("/")` will throw at runtime with "non-precached-url". That would break navigations entirely! Let me verify: In the sw.js we saw `createHandlerBoundToURL("/")` but no `{url:"/"}` entry. So any navigation matched by NavigationRoute would throw an error → network error → but then the browser falls back to network? Workbox handler throwing returns a rejected promise; the fetch fails. In tests maybe it still loads because... Actually the precacheAndRoute might have "/" not shown? Let me grep sw.js for `url:"/"`.
+
+Let me check. If "/" isn't there, then online navigation via SW would fail. But wait — maybe NavigationRoute for "/" is registered but the precache manifest DOES have an entry for "/" via additionalManifestEntries. Let me grep.
+
+Actually, the module's manifest transform is only applied to glob entries. `additionalManifestEntries` from vite-plugin-pwa (url "/" with random revision) are added separately and NOT passed through manifestTransforms? Actually manifestTransforms apply to all entries including additionalManifestEntries. For "/" it doesn't end with .html so unchanged.
+
+But I didn't see `{url:"/"...}` in the sw.js manifest. Let me grep precisely.
+
+Let me also decide the cleanest fix:
+
+Option 1: Set `workbox.navigateFallback: ''` (or false) to remove the default "/" NavigationRoute, and use runtimeCaching NavigationRoute with precacheFallback. Then set static fallback file name so its precache URL matches fallbackURL.
+
+But careful: `navigateFallback: ''` — module checks `if (!("navigateFallback" in options.workbox))`; since I provide the key, it won't override. workbox-build: `navigateFallback` empty → skip. Good. Type: `navigateFallback?: string`. '' is fine.
+
+Then runtimeCaching handles navigations. On cache miss offline → precacheFallback `/offline-fallback`. 
+
+But there's a subtlety: `precacheAndRoute` matches precached URLs. `/offline-fallback` is precached. So offline navigation to an unvisited route: runtimeCaching NetworkFirst → network fail → PrecacheFallbackPlugin serves `/offline-fallback`. Good.
+
+However, the module transform also affects `precacheFallback.fallbackURL`? No, it only transforms manifest entries. The fallbackURL `/offline-fallback` must exactly match the manifest entry URL `offline-fallback` (relative) or `/offline-fallback`. Workbox's `getCacheKeyForURL` normalizes with base? PrecacheFallbackPlugin uses `getCacheKeyForURL(fallbackURL)`. The precache controller's `getCacheKeyForURL` takes a URL and matches against `this._urlsToCacheKeys` which are absolute URLs (resolved against location). For a manifest entry `offline-fallback`, workbox resolves it to `new URL('offline-fallback', location).href` = `http://host/offline-fallback`. `getCacheKeyForURL('/offline-fallback')` → `new URL('/offline-fallback', location)` matches. Good.
+
+Option 2: Keep default navigateFallback "/" but that's broken for SSR. So set it to ''.
+
+Alternatively set `navigateFallback: '/offline'` — then precacheAndRoute already has `offline` URL (from transform) → works! And `NavigationRoute(createHandlerBoundToURL('/offline'))` would serve the static offline.html for ALL navigations (registered first), shadowing NetworkFirst. Not good.
+
+So Option 1 is best.
+
+Also we must rename static fallback so it doesn't collide with Vue `/offline`. Let me rename `public/offline.html` → `public/offline-fallback.html`. Then precache URL = `offline-fallback`.
+
+Hmm, but there's another consideration: The user might bookmark `/offline-fallback`? Unlikely. Fine.
+
+Actually wait — do we even want the Vue `/offline` page to be shadowed? With the collision removed, good.
+
+Now, about the SW registration with `registerType: autoUpdate` and `injectRegister`. The generated sw.js has `skipWaiting()` and `clientsClaim()`. Good — controller becomes non-null quickly.
+
+Also the `NavigationRoute` default currently might break online navigations. Let me verify by testing. But we'll remove it anyway.
+
+Another concern: `createHandlerBoundToURL("/")` with no "/" in manifest would throw only when a navigation matches. That would be every page load after SW controls. So this must be fixed. Let me confirm "/" absent.
+
+Let me also reconsider: could I avoid a separate static fallback file and instead precache a prerendered `/offline` Vue page? That would be nicer: `routeRules: { '/offline': { prerender: true } }`. Then `.output/public/offline/index.html`? The transform would map `offline/index.html` → `offline/` hmm (`parts = ['offline','index.html']`, last becomes 'index'? no: replace `.html` → `index`; parts.length>1 → 'offline'). So URL `offline`. That would serve the prerendered Vue offline page offline, but again shadow `/offline` route and the Vue page's JS would hydrate and then the SW could... complicated. Also the dynamic cache listing needs JS which is precached. This could actually work beautifully: `/offline` always served from precache (static prerendered HTML) even online, then hydrated by Vue to show live state. But `offline/index.html` is not `.output/public/offline.html`. The transform handles it. But the runtimeCaching wouldn't matter for /offline. Hmm, but prerendering /offline would run SSR at build; the page shows neutral "checking" then hydrates to real state. That's fine.
+
+But is `public/offline.html` simpler? It's static, no hydration, always available. It gives a clear fallback. I'll keep the static file but rename to avoid collision. Simpler.
+
+Actually, hmm, wait. If the static fallback is only reachable via precacheFallback (never by direct URL unless precached), that's fine.
+
+Let me now:
+1. Rename public/offline.html → public/offline-fallback.html.
+2. Set `workbox.navigateFallback: ''`.
+3. Set `precacheFallback.fallbackURL: '/offline-fallback'`.
+4. Rebuild.
+
+Also, I should double check whether `navigateFallback: ''` causes issues with `createHandlerBoundToURL` not generated. Good.
+
+Also the module might require `navigateFallback` for something else. No.
+
+Let me also verify "/" absence.
+
+Let me do the rename and config edits.
+
+Also, the `offline.html` link to `/offline` in the static fallback is good.
+
+Let me also update the static file's text? It links to `/offline`. Good.
+
+Let me edit.
+dsh: reasoning:
+The grep for `url:"/"` returned nothing (exit=0 from echo). Let me confirm: `grep -o 'url:"/"[,}]'` printed nothing, so no "/" entry. So createHandlerBoundToURL("/") would throw. We must disable navigateFallback.
+
+Now edit nuxt.config: add `navigateFallback: ''` and change fallbackURL.
+
+Let me update the workbox config.
+dsh: reasoning:
+Wait, I should verify that `navigateFallback: ''` type-checks and that the module doesn't choke. `navigateFallback?: string` so '' is valid.
+
+Now rebuild. But before, let me reconsider the offline.vue: it's a Vue page at `/offline`. With runtimeCaching NetworkFirst, online visit caches it. Offline it works if visited. Good.
+
+Also, the static fallback `offline-fallback.html` links to `/offline`; offline if /offline not cached, that link would go to fallback again. Fine.
+
+Now rebuild and check sw.js:
+- no createHandlerBoundToURL
+- precacheFallback fallbackURL "/offline-fallback"
+- manifest entry url "offline-fallback"
+- NetworkFirst route registered.
+
+Let me rebuild. Kill nothing (no server running). Run build background.
+
+Actually, let me also double check `navigateFallback: ''` won't produce `navigateFallback: ''` passed to workbox-build which might register `NavigationRoute` with empty string. workbox-build checks truthiness. Let me verify after build.
+
+Let me rebuild.
+dsh: reasoning:
+While building, let me write the Playwright verification script (inline heredoc later). Let me think it through.
+
+Playwright Python sync API:
+
+```python
+from playwright.sync_api import sync_playwright
+BASE='http://127.0.0.1:3200'
+
+with sync_playwright() as p:
+    browser = p.chromium.launch()
+    # --- FOUC dark ---
+    ctx = browser.new_context()
+    init = """
+    try{localStorage.setItem('devkit.prefs.v1', JSON.stringify({theme:'dark',codeFontSize:15,reduceMotion:true}))}catch(e){}
+    window.__ff=null;
+    requestAnimationFrame(function(){var e=document.documentElement;window.__ff={dark:e.classList.contains('dark'),size:getComputedStyle(e).getPropertyValue('--code-font-size').trim(),rm:e.classList.contains('reduce-motion')}});
+    """
+    ctx.add_init_script(init)
+    page = ctx.new_page()
+    resp = page.goto(BASE+'/', wait_until='domcontentloaded')
+    ff = page.evaluate('window.__ff')
+    print('dark first frame:', ff)
+    # after hydration
+    page.wait_for_timeout(500)
+    after = page.evaluate("({dark:document.documentElement.classList.contains('dark'), bodyRm:document.body.classList.contains('reduce-motion'), size:getComputedStyle(document.documentElement).getPropertyValue('--code-font-size').trim()})")
+    print('dark after:', after)
+    bg = page.evaluate("getComputedStyle(document.body).backgroundColor")
+    print('body bg:', bg)
+```
+
+Wait: add_init_script runs on every navigation and frame, so `window.__ff` gets reset each navigation. Also the init script itself sets localStorage each load (fine).
+
+`requestAnimationFrame` callback from document_start: when does it fire? rAF callbacks scheduled before first paint fire right before the first paint. Since the document is still parsing, rAF may fire at the first rendering opportunity, which should be after head parsed (CSS + inline script). Good. But there's a subtlety: rAF scheduled at document_start might be throttled or fire before body. The dark class is on documentElement so fine.
+
+Actually, will rAF fire at all if the page navigates quickly? It should within ~16ms.
+
+Better robustness: check class immediately (synchronously) right after `page.goto(..., wait_until='commit')`? After commit, DOM not parsed. Hmm.
+
+Alternative: use `page.goto(wait_until='domcontentloaded')` then evaluate window.__ff. If __ff is null because rAF hasn't fired, fall back to checking class directly. Let me wait for `window.__ff` up to 1s.
+
+Actually simpler and robust: Use CDP `Page.addScriptToEvaluateOnNewDocument` via context.add_init_script (same). The rAF approach is good. Let me also evaluate direct class right after DCL.
+
+Also to prove script-before-styles, I already have curl evidence.
+
+- Light user test: new context with theme='light', colorScheme='dark'? To prove light user doesn't flash dark: set browser color scheme dark but prefs theme='light'. Expect ff.dark False. Also default system with colorScheme dark → expect dark True (consistent with usePrefs system). And colorScheme light + no prefs → False.
+
+- Font test: on a page, evaluate:
+```
+await page.evaluate("document.fonts.load('16px \"Noto Sans SC\"','中文测试')")
+```
+Playwright Python: `page.evaluate("document.fonts.load('16px \\'Noto Sans SC\\'','中文测试')")` messy. Use `page.evaluate("() => document.fonts.load('16px \"Noto Sans SC\"', '中文测试')")` with JS function. Then `page.evaluate("() => document.fonts.check('16px \"Noto Sans SC\"', '中')")`.
+
+Also collect responses to assert no google fonts and that woff2 loaded from same origin. Use `page.on('response', ...)`.
+
+Also `getComputedStyle(document.body).fontFamily` should contain "Noto Sans SC".
+
+- PWA test:
+```
+ctx2 = browser.new_context()
+page2 = ctx2.new_page()
+page2.goto(BASE+'/')  # first
+page2.goto(BASE+'/')  # second, controller
+page2.wait_for_function("navigator.serviceWorker && navigator.serviceWorker.controller !== null", timeout=15000)
+print('controller:', page2.evaluate("navigator.serviceWorker.controller && navigator.serviceWorker.controller.scriptURL"))
+# wait for SW ready & precache
+page2.evaluate("navigator.serviceWorker.ready")
+# visit base64 online to cache navigation
+page2.goto(BASE+'/tools/base64', wait_until='networkidle')
+# ensure it's cached
+page2.wait_for_function("caches.open('devkit-pages').then(c=>c.match('/tools/base64')).then(Boolean)", timeout=15000)
+# also visit /offline to cache it
+page2.goto(BASE+'/offline', wait_until='networkidle')
+page2.wait_for_function("caches.open('devkit-pages').then(c=>c.match('/offline')).then(Boolean)", timeout=15000)
+# offline
+ctx2.set_offline(True)
+page2.goto(BASE+'/tools/base64', wait_until='load')
+print('offline base64 text:', page2.inner_text('body')[:200])
+# unvisited
+page2.goto(BASE+'/tools/sm2', wait_until='load')
+print('offline unvisited title:', page2.title(), page2.inner_text('body')[:200])
+```
+But careful: `c.match('/tools/base64')` — the cache key is the full URL request. NetworkFirst caches the request. The request URL would be `http://127.0.0.1:3200/tools/base64`. `c.match('/tools/base64')` resolves relative to the page origin, so it matches. Good.
+
+However, `page2.goto(BASE+'/tools/base64', wait_until='networkidle')` — networkidle may take time due to SW precaching many fonts in background? The SW install precaches ~400 files (10MB) which happens during first load and can take a while. `networkidle` could wait. Let me use 'load' and explicit waits.
+
+Also the first page load's SW install downloads 10MB of fonts; local server fast, fine.
+
+Potential issue: The precache install may fail if any asset 404s, causing SW to not activate. E.g., the precache manifest includes `_nuxt/builds/latest.json` etc. Should be fine. Also `maximumFileSizeToCacheInBytes` 4MB. The biggest JS chunk? `precomputed.mjs` is server. Client chunks maybe < 4MB. Let me check the largest client asset. If a JS chunk >4MB, precache install fails. Let me check after build.
+
+Also: Precache includes `offline-fallback` (static html) and `manifest.webmanifest`.
+
+Another subtlety: precaching 10MB means `navigator.serviceWorker.ready` takes a while. We'll wait.
+
+Offline test for visited page: NetworkFirst with networkTimeoutSeconds 4. When offline, fetch fails immediately (no network) → cache hit. Good.
+
+For unvisited `/tools/sm2`: NetworkFirst network fails → cache miss → PrecacheFallbackPlugin serves `/offline-fallback`. But wait: the page is a Vue SPA. `page.goto(BASE+'/tools/sm2')` offline with SW controlling → SW returns offline-fallback HTML. Then the fallback page loads. Its content should contain "无法加载该页面". Good.
+
+But hold on: Nuxt client-side router might intercept? No, direct navigation.
+
+Also: after `ctx2.set_offline(True)`, does Playwright's offline affect service worker network fetches? Yes, `setOffline` emulates offline; NetworkFirst's fetch fails. Good.
+
+Another concern: When offline and SW returns precached `/offline-fallback`, the response is HTML with inline script; it references `/offline` link but no external assets. Good.
+
+Let me also verify the `/offline` Vue page online after SW active: It should show "离线缓存已接管" and list cached tools. But note: when SW controls and we navigate to `/offline` online, NetworkFirst fetches from server (SSR) → fresh page. Good; precache `offline-fallback` doesn't collide now. Then the page's JS reads caches and shows state.
+
+Actually, one more: `/offline` navigation is handled by runtimeCaching NetworkFirst. Good.
+
+Now, the "已缓存工具" detection: cachedRoutes from `devkit-pages` cache. After visiting `/tools/base64` and `/offline`, cache has those two navigations. So cachedTools would list base64; uncachedTools all others. Good. I can assert the page shows "已缓存 · 可离线打开" and base64.
+
+Let me check the largest client JS asset size.
+
+Let me wait for build first.
+
+Also, I realize the inline FOUC script sets `localStorage` in init script on every navigation. When testing light, separate context so no interference.
+
+Let me also consider: `@vite-pwa/nuxt` registers the SW via a Nuxt plugin. In the generated HTML, is there a registration script? Let me check after build: the module injects `/_nuxt/...` plugin. It registers on load. Good.
+
+Let me wait for the build.
+dsh: reasoning:
+Now:
+- No `createHandlerBoundToURL` (empty).
+- fallbackURL "/offline-fallback", manifest url "offline-fallback".
+- NetworkFirst present.
+- woff 0.
+- Largest asset 437KB CSS (entry.css includes all font-face declarations) — under 4MB.
+
+Note: `entry.HWGnPjjJ.css` is 437KB because it contains 404 @font-face rules. Fine.
+
+Now start the preview server on 3200 and run Playwright verification.
+
+Let me start the server.
+dsh: reasoning:
+`/offline-fallback` returns 404 from the server (makes sense: the file is `/offline-fallback.html`, and Nitro serves static files at their exact path). But the precache entry URL is `offline-fallback` (without .html). Does that matter? For precaching, Workbox fetches the URL `offline-fallback` relative to the SW scope during install → `http://127.0.0.1:3200/offline-fallback` → 404! That would cause the precache install to fail (bad response). Hmm. That's a problem.
+
+Wait, how does workbox-build handle this? For manifest entries, the URL is `offline-fallback`, but the actual file is `offline-fallback.html`. Workbox's `precacheAndRoute` during install will `fetch('offline-fallback')` → 404 → precache fails → SW not activated. Unless the server (Nitro) serves `/offline-fallback` from `offline-fallback.html` (clean URLs). It returned 404, so no.
+
+Hmm. But the module's transform assumes `.html` stripping works because Nuxt/Nitro serves clean URLs (`/offline` from `offline.html`)? Actually Nitro by default has `router.options`? Let me check: Does `/offline.html` work? And does Nitro serve extensionless? We saw `/offline-fallback` → 404. Let me check `/offline-fallback.html` → 200.
+
+The transform is designed for the case where you have `public/offline.html` and the URL `/offline` should be served. But Nitro doesn't automatically serve `/offline` from `offline.html` for public assets... Actually wait, maybe it does for prerendered routes. Hmm.
+
+Wait, but the module's design: it's derived from the vite-pwa docs recommendation for Nuxt: create `public/offline.html` and set... hmm. Actually the transform `.html` → strip extension is to make `index.html` → `/` (SPA). For other html files, stripping means `/offline` — but the server must serve it. In Nuxt SSR, Nitro might serve `public/offline.html` at both `/offline.html` and `/offline`? We got 404 for extensionless. Let me test `/offline.html`.
+
+Hmm, actually maybe Nitro's `publicAssets` with `fallthrough` and the route `/offline` is handled by the Vue page (200), not the static file. And `/offline.html` might 404 too? Let me check.
+
+Let me test.
+
+The core issue: precache will fetch `offline-fallback` → 404 → install fails. Let me verify by checking the SW behavior in Playwright. But likely fails.
+
+Solution options:
+A. Name the static file without `.html`, e.g. `public/offline-fallback` (no extension). Then Nitro serves `/offline-fallback` as a static file with content-type... maybe octet-stream. And the module transform only strips `.html`, so manifest url stays `offline-fallback`. The precache fetch would get 200 with wrong content-type (application/octet-stream). Precaching a response with non-2xx? 200 is fine; workbox caches it. But when served as a navigation fallback, the response content-type would be octet-stream → browser would download rather than render! Bad.
+
+B. Keep `offline.html` and set `navigateFallback` properly. Since transform maps `offline.html` → `offline`, and Nuxt serves the Vue page at `/offline`, the precache fetch of URL `offline` → `/offline` returns the SSR Vue page (200, HTML). During install, Workbox fetches `/offline` and caches the server-rendered Vue offline page. Then `createHandlerBoundToURL('offline')` / precacheFallback fallbackURL `'/offline'` would serve that cached SSR HTML. That works! The fetched URL is the live route, so 200 HTML. 
+
+So: keep the static file named `offline.html`? But it won't be the thing cached — the precache fetch goes to `/offline` (the Vue route) and caches the SSR HTML. The static file `public/offline.html` is just an artifact that creates the manifest entry; Nitro also serves `/offline.html` directly (200) but Workbox never fetches that exact path because transform changed it to `offline`.
+
+Hmm, that's confusing but functional: the precached `offline` entry content = SSR HTML of `/offline` (fetched at SW install time), not the static file. Then offline fallback serves that HTML. But offline, the SSR HTML references `/_nuxt/*` assets which are precached → Vue hydrates → offline.vue runs, reads caches, and displays real state! That's actually better than a static fallback: the offline fallback is the real offline page. And `/offline` route offline: NetworkFirst → cache hit (since /offline visited? not necessarily) OR precacheAndRoute matches `/offline`? precacheAndRoute matches URL `offline` → yes `/offline` navigation matches precached `offline` → served from cache immediately (no network). So `/offline` always works offline and online? Online, precacheAndRoute also intercepts `/offline` and serves the cached SSR HTML (revision-based, may be stale but fine). Actually online it serves the precached version, not a fresh SSR. That's acceptable.
+
+But then the "retry/real state" offline.vue still works because hydration + cache API. Good.
+
+However, the extra `public/offline.html` static file is now redundant/confusing but required to create the precache entry. Actually, we could instead point `precacheFallback` at an existing precached asset. Hmm.
+
+Wait, but there's a subtlety: The precache manifest already has `offline` because of `public/offline.html`. If I remove the file, no `offline` entry and fallback breaks. So keep it.
+
+But the earlier issue: does Workbox install succeed with entry `offline` → fetch `/offline` → 200 (SSR page). Yes. Let me verify by test.
+
+Actually hold on, I renamed the file to `offline-fallback.html`, which transforms to `offline-fallback`, and precache fetch of `/offline-fallback` → 404 → install fails. So I should rename back to `offline.html` and set fallbackURL `/offline`. Let me do that.
+
+But then the static `offline.html` file content is irrelevant (never fetched). That's odd but harmless. Alternatively I could make the static file minimal. But it's fine; it's a fallback artifact for the transform. Hmm, but wait: is it truly never fetched? The transform changes the manifest entry URL, so Workbox fetches the transformed URL. The physical file `offline.html` in `.output/public` is served if someone requests `/offline.html`, but nobody does. So the static file content is dead weight. I could simplify it, but keeping a meaningful standalone fallback page is nice in case someone hits `/offline.html`. Actually, I could keep it as a genuine standalone fallback for direct access.
+
+Hmm, but there's a risk: `public/offline.html` will be served at `/offline.html`, and Nitro might also register `/offline` static route that conflicts with the Vue page? We saw `/offline` returns 200 and the rendered Vue page (we fetched earlier and it was the Vue page? Let me check: earlier `/offline` returned 200. Which one? The Vue SSR page or static offline.html? The static file is `offline.html`, and Nitro's public assets serve exact `/offline.html`, not `/offline`. So `/offline` = Vue page. Good.
+
+But the transform makes Workbox cache `/offline` (Vue SSR). Good.
+
+Let me reconsider: Does the SW `precacheAndRoute` intercept `/offline` navigation even online? Yes, URLs in precache are matched. The cached response is the SSR HTML captured at SW install (first load). If the user later visits `/offline`, they get the cached version (with the neutral "checking" state) and then hydration fetches no data (offline.vue reads caches client-side) → shows real state. Fine.
+
+Now, is serving a stale SSR shell for `/offline` a problem for the "真实状态" requirement? The page hydrates and reads live cache state. Good.
+
+Alternatively, to avoid precache shadowing `/offline`, name the static file such that the transformed URL is NOT a real route but IS fetchable. E.g., `public/offline.html` transforms to `offline` which is a real route. If I name it `public/offline-page.html` → `offline-page` (not a route) → fetch `/offline-page` → 404. Bad.
+
+What if the file is `public/offline/index.html`? transform: parts=['offline','index.html'] → last '.html' stripped → 'index'; parts.length>1 → join first n-1 → 'offline'. So URL `offline` again, and physical file `.output/public/offline/index.html`. Nitro would serve `/offline/` (and maybe `/offline`?). Hmm.
+
+The cleanest is `public/offline.html` → URL `offline`, fetched as the live route and cached. Let me go with that.
+
+But wait — there's a conceptual trap: The precache manifest's `offline` entry revision is the MD5 of `public/offline.html` content (Workbox computes revision from the file). The SW then fetches `/offline` and expects content matching revision? Workbox's `precacheAndRoute` uses the revision only as part of the cache key (`__WB_REVISION__` query param), not to verify content. It fetches `${url}?__WB_REVISION__=${revision}`. So GET `/offline?__WB_REVISION__=hash` → SSR page 200 → cached. Fine. The `__WB_REVISION__` query is ignored by the server.
+
+So SW install fetch: `/offline?__WB_REVISION__=...` returns 200. Good.
+
+Now `precacheFallback.fallbackURL` should be `/offline` to match the manifest entry `offline` (relative). `getCacheKeyForURL('/offline')` matches. Good.
+
+But careful: `precacheAndRoute` already handles `/offline` requests. The fallback path for an unvisited route `/tools/sm2`: NetworkFirst route matches all navigations. NetworkFirst fails → PrecacheFallbackPlugin serves `/offline`. Good.
+
+Let me rename back and update config.
+
+Also, I should double check the `/offline` page works when served from precache offline. Since `/offline` precached response is SSR HTML referencing hashed `_nuxt` assets which are precached → renders. The page's JS will show "离线缓存已接管". Good.
+
+Let me also make sure `offline.vue` doesn't break when offline: it fetches `/pwa-192.png` in retry (precached → works). It reads caches. Good.
+
+One more: `page.goto('/tools/sm2')` offline → fallback `/offline` HTML (SSR of offline page). Hydrates to show "首次访问尚未缓存"? Wait, the fallback is the offline page itself, which will show "离线缓存已接管" if SW controlled, and list cached/uncached. But the design S10b wants a message about the specific tool not cached. The validation asks "访问一个从未访问过的页面确认给出可理解的提示/回退". Serving the offline page (which shows state and lists uncached tools) is a reasonable, understandable fallback. But does the user know why they landed there? The offline page title is "离线模式 · 已缓存" and it lists uncached tools "需要联网". That's understandable enough. But it would be better if the fallback clearly said "该页面尚未缓存".
+
+Hmm. The static `public/offline.html` (S10b-like) was designed for that. But we can't precache it under a URL that's also fetchable and not colliding, because of the transform + Nitro 404 for extensionless.
+
+Alternative: Use `globPatterns` to include `.html` but disable the module's manifestTransform by providing our own `manifestTransforms`? The module only sets it if `!config.manifestTransforms`. If I provide my own transform that keeps `.html` as `.html`, then `offline.html` stays `offline.html` (fetchable, 200), and I can set `precacheFallback.fallbackURL: '/offline.html'`. Then precache fetch `/offline.html` → 200 static. That avoids shadowing `/offline` and serves the dedicated S10b fallback. That's the best of both!
+
+But wait — if I provide my own `manifestTransforms`, the module's `index.html`→base transform is skipped. We don't have index.html in SSR anyway. So fine. Also the revision for hashed assets: vite-plugin-pwa's `dontCacheBustURLsMatching` handles revisions for `_nuxt` assets. The module's transform also sets `revision=null` for app manifest JSON; not critical.
+
+So: provide `workbox.manifestTransforms: [async (entries) => ({ manifest: entries, warnings: [] })]` to keep URLs as-is. Then `offline.html` remains. Set `precacheFallback.fallbackURL: '/offline.html'`. Keep `navigateFallback: ''`.
+
+Let me double check the module condition: line 80 `if (!nuxt.options.dev && !config.manifestTransforms) config.manifestTransforms = [...]`. Since we set it, ours is used. Good.
+
+Then precache manifest should include `offline.html` (with .html) and fetch `/offline.html` → 200. 
+
+Also `manifest.webmanifest` etc unchanged.
+
+Hmm, but is a no-op `manifestTransforms` function serializable in nuxt.config? It runs at build time in Node (workbox-build gets it as JS function). vite-plugin-pwa passes it directly to workbox-build. It's a function in the resolved options; generateSW runs in Node. Should work. It's not serialized into the SW. Good.
+
+Actually wait — the check in the module is `config.manifestTransforms`. Let me set `manifestTransforms` in workbox. Workbox option type: `ManifestTransform` = `(manifestEntries) => Promise<{manifest, warnings?}>` or sync. Let me define:
+
+```ts
+manifestTransforms: [
+  async (entries: any[]) => ({ manifest: entries, warnings: [] })
+]
+```
+
+Type may complain but build ignores TS. Fine.
+
+But hold on: The module's transform also handles `appManifestFolder` revision nulling and `latest.json` hashing. If I override, I lose that. Those relate to Nuxt app manifest (`/_nuxt/builds/meta/...json`) used for build version. Losing it means those JSONs get revision null? Actually without the transform, workbox-build computes revision from file content for all globbed files including the meta json. That's fine (maybe slightly more cache churn). Not critical.
+
+Actually, simpler: I could merge by calling the original? Not accessible. It's fine.
+
+Let me implement: rename file back to `offline.html`, add manifestTransforms, set fallbackURL `/offline.html`.
+
+Wait, but does keeping `.html` cause `precacheAndRoute` to also match URL `offline.html` only (not `/offline`). Good, no shadowing.
+
+Also the static offline.html is a real standalone page. 
+
+Let me also double-check: Nitro serves `/offline.html` with content-type text/html. Earlier `/offline-fallback.html`? We didn't test, but `/offline.html` should be 200. Let me verify after rename/rebuild.
+
+Hmm, one concern: Nitro may serve public `offline.html` with `content-type: text/html`? Vite/Nitro public assets mime by extension → yes text/html.
+
+Let me proceed:
+1. mv public/offline-fallback.html public/offline.html
+2. nuxt.config: add manifestTransforms, fallbackURL '/offline.html'.
+
+Actually, wait. There's yet another subtlety with `navigateFallback: ''`: The module's vite-plugin-pwa might add `additionalManifestEntries` only if navigateFallback truthy. Good, none.
+
+Let me also reconsider whether precacheAndRoute intercepting `/offline.html` matters. No one navigates there.
+
+Let's edit.
+
+Also I want to double-check: will `manifestTransforms` interfere with `dontCacheBustURLsMatching`? vite-plugin-pwa's `generateServiceWorker` sets `dontCacheBustURLsMatching` (build assets dir). It passes our manifestTransforms alongside. Workbox applies `dontCacheBustURLsMatching`? Actually `dontCacheBustURLsMatching` is a workbox-build option that causes revision to be omitted for matching files. It's handled in workbox-build, independent of manifestTransforms. Our no-op transform just returns entries. Good.
+
+Let me make the changes.
+dsh: reasoning:
+Now rebuild. Kill the running preview server first (bash-6) to avoid serving stale. Actually rebuild overwrites .output while server running; kill.
+
+Let me kill and rebuild.
+dsh: reasoning:
+While building, let me draft the Playwright script fully. I'll write it as a heredoc when running. Let me also prepare the report skeleton later.
+
+Let me think about tricky parts:
+
+1. FOUC light test with colorScheme dark and prefs theme='light': init script sets localStorage theme light. Expect `__ff.dark === False`. Also `documentElement` should NOT have dark. And body background light.
+
+2. Default system dark: prefs absent, colorScheme dark → dark true. Good to include as extra evidence.
+
+3. Font: `document.fonts.check` after load. Also check computed font-family.
+
+4. Offline test details:
+   - Fresh context `ctx2`.
+   - `page2.goto(BASE+'/')`, wait load.
+   - Wait for SW registration/activation: `page2.wait_for_function("navigator.serviceWorker.controller !== null")`. But controller may become non-null after clientsClaim. On first load, SW installs (precaching ~10MB) then activates and claims. This may take several seconds. Use timeout 60000.
+   - Actually, precache of 400 files over localhost is fast (<5s). Fine.
+   - Then `page2.reload()` to ensure controlled.
+   - Visit `/tools/base64` online, wait until NetworkFirst cached it. We can poll `caches.open('devkit-pages').then(c=>c.match(new Request(location.origin+'/tools/base64')))`. Hmm, `c.match('/tools/base64')` should work. Use wait_for_function with async? Playwright wait_for_function supports async JS returning a Promise? It evaluates the expression; if it returns a Promise, Playwright awaits it. Yes.
+   - Visit `/offline` to verify the real page state online (assert "离线缓存已接管" or "已缓存").
+   - `ctx2.set_offline(True)`.
+   - `page2.goto(BASE+'/tools/base64', wait_until='load')` → assert body text contains "Base64".
+   - `page2.goto(BASE+'/tools/sm2', wait_until='load')` → assert body contains "无法加载该页面" (static fallback).
+   - Also check `navigator.serviceWorker.controller` non-null.
+
+   Potential issue: offline navigation to `/tools/base64`: NetworkFirst with cache hit. But the cached navigation was stored under the request URL with `?__WB_REVISION__`? No, runtime caching stores the plain URL. Workbox NetworkFirst caches the request as-is (no revision). The request for navigation is `http://127.0.0.1:3200/tools/base64`. So cache key matches. Good.
+
+   Potential issue: `page2.goto` while offline with SW: Playwright's `page.goto` might throw `net::ERR_INTERNET_DISCONNECTED` if SW doesn't handle. But SW should handle. Let's see.
+
+5. Collect network requests to assert no google fonts. Use page.on('request') and record URLs containing 'fonts.googleapis'/'fonts.gstatic'. Also record woff2 responses.
+
+Now, there's a concern about `navigator.onLine` inside offline context: `ctx2.set_offline(True)` makes navigator.onLine false. Good.
+
+Another concern: The offline.vue page's `onMounted` runs `refresh()` which calls `caches.keys()` etc. Should work offline.
+
+Let me also test `/offline` offline (should be cached since visited). Assert it shows real state and lists base64 as cached. Actually the precache also now has `offline.html` but not `/offline`. `/offline` was visited online → NetworkFirst cache. Offline → served from devkit-pages cache. Good.
+
+Wait, but there's a catch: when we visit `/offline` online with SW controlling, NetworkFirst fetches from network and updates cache. Good.
+
+Now, the `devkit-pages` cache might not have `/offline` if the navigation request was served from precache? No, precache only has `offline.html`, not `/offline`. So runtime caches it.
+
+Let me now also verify the FOUC test for light doesn't get contaminated by service worker from previous contexts. Each `browser.new_context()` has isolated storage/SW. Good.
+
+Let me write the script. I'll run it via python3 heredoc. Need to set PLAYWRIGHT_BROWSERS_PATH? The global playwright python should have chromium installed. Let me verify chromium is available: `python3 -c "from playwright.sync_api import sync_playwright; ..."`. We'll see.
+
+Let me wait for build.
+
+Let me check build job.
+dsh: reasoning:
+Now:
+- No createHandlerBoundToURL (empty grep).
+- fallbackURL "/offline.html".
+- manifest `url:"offline.html"`.
+- `grep -c url:"offline.html"` = 1.
+
+Start server and test `/offline.html` returns 200 text/html.
+
+Let me start server and run smoke curl.
+dsh: reasoning:
+All good. Now run the Playwright verification. Let me write the script inline.
+
+I'll be careful with quoting. Use a heredoc `python3 - <<'PYEOF'`.
+
+Let me write.
+
+Note: chromium must be installed. Let me include a fallback.
+
+Script:
+
+```python
+import json, sys
+from playwright.sync_api import sync_playwright
+
+BASE='http://127.0.0.1:3200'
+results={'errors':[]}
+
+with sync_playwright() as p:
+    browser=p.chromium.launch()
+    # ---- FOUC dark ----
+    ctx=browser.new_context(color_scheme='light')
+    ctx.add_init_script("""
+      try{localStorage.setItem('devkit.prefs.v1', JSON.stringify({theme:'dark',codeFontSize:15,reduceMotion:true}))}catch(e){}
+      window.__ff=null;
+      requestAnimationFrame(function(){var e=document.documentElement;window.__ff={dark:e.classList.contains('dark'),size:getComputedStyle(e).getPropertyValue('--code-font-size').trim(),rm:e.classList.contains('reduce-motion')};});
+    """)
+    pg=ctx.new_page()
+    pg.goto(BASE+'/', wait_until='domcontentloaded')
+    pg.wait_for_function('window.__ff !== null', timeout=5000)
+    ff=pg.evaluate('window.__ff')
+    pg.wait_for_timeout(600)
+    after=pg.evaluate("({dark:document.documentElement.classList.contains('dark'), bodyRm:document.body.classList.contains('reduce-motion'), size:getComputedStyle(document.documentElement).getPropertyValue('--code-font-size').trim(), bg:getComputedStyle(document.body).backgroundColor})")
+    print('FOUC dark firstFrame=', ff)
+    print('FOUC dark after   =', after)
+    results['dark']=ff; results['darkAfter']=after
+    ctx.close()
+
+    # ---- FOUC light with OS dark ----
+    ctx=browser.new_context(color_scheme='dark')
+    ctx.add_init_script("""
+      try{localStorage.setItem('devkit.prefs.v1', JSON.stringify({theme:'light',codeFontSize:13,reduceMotion:false}))}catch(e){}
+      window.__ff=null;
+      requestAnimationFrame(function(){var e=document.documentElement;window.__ff={dark:e.classList.contains('dark')};});
+    """)
+    pg=ctx.new_page()
+    pg.goto(BASE+'/', wait_until='domcontentloaded')
+    pg.wait_for_function('window.__ff !== null', timeout=5000)
+    print('FOUC light(OS dark) firstFrame=', pg.evaluate('window.__ff'))
+    results['light']=pg.evaluate('window.__ff')
+    pg.wait_for_timeout(600)
+    print('FOUC light after=', pg.evaluate("document.documentElement.classList.contains('dark')"))
+    ctx.close()
+
+    # ---- system theme (OS dark, no prefs) ----
+    ctx=browser.new_context(color_scheme='dark')
+    pg=ctx.new_page()
+    pg.goto(BASE+'/', wait_until='domcontentloaded')
+    pg.wait_for_timeout(400)
+    print('system(OS dark) dark=', pg.evaluate("document.documentElement.classList.contains('dark')"))
+    results['system']=pg.evaluate("document.documentElement.classList.contains('dark')")
+    ctx.close()
+
+    # ---- fonts ----
+    ctx=browser.new_context()
+    pg=ctx.new_page()
+    reqs=[]
+    pg.on('request', lambda r: reqs.append(r.url))
+    pg.goto(BASE+'/', wait_until='load')
+    pg.evaluate("() => document.fonts.load('16px \"Noto Sans SC\"', '中文测试')")
+    ok=pg.evaluate("() => document.fonts.check('16px \"Noto Sans SC\"', '中')")
+    fam=pg.evaluate("getComputedStyle(document.body).fontFamily")
+    mono=pg.evaluate("getComputedStyle(document.querySelector('.mono') || document.body).fontFamily")
+    google=[u for u in reqs if 'fonts.googleapis' in u or 'fonts.gstatic' in u]
+    print('font family=', fam)
+    print('document.fonts.check Chinese=', ok)
+    print('google font requests=', google)
+    results['fontCheck']=ok; results['google']=google
+    ctx.close()
+```
+
+For mono, `.mono` may not exist on home; skip or query a code element. Let me just check `var(--font-mono)` token. Actually simpler: evaluate on a tool page maybe. Skip; check css variable: `getComputedStyle(document.documentElement).getPropertyValue('--font-mono')`.
+
+Now PWA:
+
+```python
+    ctx2=browser.new_context()
+    pg2=ctx2.new_page()
+    reqs2=[]
+    pg2.on('request', lambda r: reqs2.append(r.url))
+    pg2.goto(BASE+'/', wait_until='load')
+    pg2.wait_for_function("navigator.serviceWorker && navigator.serviceWorker.controller !== null", timeout=90000)
+    ctrl=pg2.evaluate("navigator.serviceWorker.controller && navigator.serviceWorker.controller.scriptURL")
+    print('controller after first load=', ctrl)
+    pg2.reload(wait_until='load')
+    pg2.wait_for_function("navigator.serviceWorker && navigator.serviceWorker.controller !== null", timeout=30000)
+    print('controller after reload=', pg2.evaluate("navigator.serviceWorker.controller && navigator.serviceWorker.controller.scriptURL"))
+    # wait ready
+    pg2.evaluate("() => navigator.serviceWorker.ready.then(()=>true)")
+    # visit base64
+    pg2.goto(BASE+'/tools/base64', wait_until='load')
+    pg2.wait_for_timeout(1500)
+    cached=pg2.evaluate("() => caches.open('devkit-pages').then(c=>c.match('/tools/base64')).then(r=>!!r)")
+    print('base64 cached=', cached)
+    # visit offline page
+    pg2.goto(BASE+'/offline', wait_until='load')
+    pg2.wait_for_timeout(800)
+    offline_text=pg2.inner_text('body')
+    print('offline page (online) starts:', offline_text[:120].replace('\n',' '))
+    print('offline page controlled?', pg2.evaluate("navigator.serviceWorker.controller !== null"))
+    cached_off=pg2.evaluate("() => caches.open('devkit-pages').then(c=>c.match('/offline')).then(r=>!!r)")
+    print('offline cached=', cached_off)
+    precache=pg2.evaluate("() => caches.keys().then(ks=>Promise.all(ks.filter(k=>k.startsWith('workbox-precache')).map(k=>caches.open(k).then(c=>c.keys()).then(a=>a.length)))).then(ns=>ns.reduce((a,b)=>a+b,0))")
+    print('precache entries=', precache)
+    # go offline
+    ctx2.set_offline(True)
+    pg2.goto(BASE+'/tools/base64', wait_until='load')
+    txt=pg2.inner_text('body')
+    print('OFFLINE base64 has Base64=', 'Base64' in txt, '| snippet:', txt[:80].replace('\n',' '))
+    pg2.goto(BASE+'/tools/sm2', wait_until='load')
+    txt2=pg2.inner_text('body')
+    print('OFFLINE unvisited sm2 snippet:', txt2[:120].replace('\n',' '))
+    print('OFFLINE unvisited fallback marker=', '无法加载该页面' in txt2)
+    # offline /offline
+    pg2.goto(BASE+'/offline', wait_until='load')
+    txt3=pg2.inner_text('body')
+    print('OFFLINE /offline snippet:', txt3[:160].replace('\n',' '))
+    ctx2.set_offline(False)
+```
+
+Wait — `navigator.serviceWorker.ready` returns a registration; wrapping in `() => ...then(()=>true)` returns a promise; Playwright will await and return true. Fine.
+
+One concern: `pg2.goto(BASE+'/')` then `wait_for_function(controller !== null)`. On the very first load, the Nuxt SW registers after app mount; install precaches 400+ files. This takes maybe 3-10s. Timeout 90s should be fine.
+
+But there's a risk: precache install fails for some reason → controller never set → timeout. We'll see.
+
+Another risk: The `page.on('request')` handler for the PWA page accumulates. Fine.
+
+Also, when offline, `pg2.goto(BASE+'/offline')` — but we already visited `/offline` online, so NetworkFirst cache hit. Good.
+
+Let me also verify the static fallback served for sm2: title "当前离线 · DevKit" and body "无法加载该页面".
+
+Now run it. Let me first verify chromium is installed by a quick launch.
+
+Actually let me just run the whole script and see.
+
+Potential issue: Python playwright and browser version mismatch. Let's try.
+
+Let me run with a generous timeout (300s) in background? It may take ~30-60s. Run foreground with timeout 300000.
+
+Let me write the script to a temp file instead of heredoc for easier re-running? The sandbox allows /tmp? "Some platform temporary areas may also be writable." Let me try writing to /tmp via bash heredoc redirection (that's a shell file write, may be denied). The instruction says only modify listed files; but /tmp is outside workspace and used for temp. I'll use heredoc piped to python3 without creating a file: `python3 - <<'PYEOF' ... PYEOF`. That's fine.
+
+Let me run.
+dsh: reasoning:
+Important findings:
+
+1. FOUC works (A1/A2/A3). 
+2. Fonts: no google, Chinese font check true, woff requests (41) are actually woff2 (my filter '.woff' matches '.woff2'). Fine.
+3. PWA:
+   - controller works.
+   - base64 navigation cached True.
+   - **C3 `/offline` online snippet shows the STATIC FALLBACK "无法加载该页面"** — meaning navigating to `/offline` served the static offline.html, not the Vue page! And `/offline` cached=False. Why?
+
+Hmm. The `/offline` request online went through... The precache manifest has `offline.html`, not `/offline`. So precacheAndRoute shouldn't match `/offline`. But the snippet shows fallback content. Wait — maybe `precacheFallback` is being applied incorrectly? No, NetworkFirst online should fetch from network successfully.
+
+Wait, actually the snippet is exactly the static offline.html content. How did `/offline` return it? Possibilities:
+- The SW `runtimeCaching` NetworkFirst with `precacheFallback`: online fetch should succeed, so it returns network. Unless networkTimeoutSeconds=4 and the SSR render of /offline took >4s? Unlikely.
+- OR Nitro serves `/offline` from `public/offline.html` (clean URL)! Since Nitro public assets has `experimental` clean URL? Actually Nitro does support serving `/offline` from `offline.html`? Hmm, it might! Let me test with curl: `curl /offline` earlier returned 200. Did it return the Vue SSR page or static offline.html? Let me check content. I assumed Vue, but maybe Nitro public asset serving maps `/offline` → `offline.html` (index-like). Let me curl and grep.
+
+Actually, `curl -s http://127.0.0.1:3200/offline | head -c 300`. Let me check. If it's the static file, then `/offline` is shadowed at the server level, and my Vue offline.vue is unreachable! That's bad.
+
+Indeed the C6 offline `/offline` returned fallback too, consistent.
+
+And C5 unvisited `/tools/sm2` offline returned the SPA shell (DevKit nav...) — wait, that's surprising: it rendered some page (the home SPA shell?) not the offline fallback. And it didn't contain "无法加载该页面". Hmm. That means the response for `/tools/sm2` was... Maybe the precache has `/index` or the NetworkFirst returned a cached response for a different key? Or the offline fallback served was the precached `/` SSR HTML? Let me think.
+
+Actually C5 snippet shows the app shell with "最近使用 | 2" — a rendered page. Since the shell hydrated, it's HTML from some cached navigation. For `/tools/sm2`, NetworkFirst: offline → network fail → cache miss for `/tools/sm2` → PrecacheFallbackPlugin → `/offline.html` → should be static fallback. But we got the app shell. Unless... the offline.html content is shadowed/overridden? Wait, C3 `/offline` got the static fallback, but C5 `/tools/sm2` got an app shell. Inconsistent.
+
+Hmm, maybe the app shell in C5 is the client-side router's fallback: When offline, `page.goto('/tools/sm2')` returns offline.html (static fallback), but then... no, the snippet shows DevKit nav, not "无法加载该页面".
+
+Let me reconsider: maybe the static `offline.html` is actually being served by the *precacheAndRoute* for URL `offline.html`? No.
+
+Wait, maybe what happened in C5: `/tools/sm2` navigation offline → NetworkFirst cache miss → `precacheFallback` `/offline.html` → BUT `createHandlerBoundToURL('/offline.html')`? No, that's PrecacheFallbackPlugin. It would serve the cached `offline.html` response, which is the static fallback. So C5 should be fallback. But it wasn't.
+
+Alternatively, maybe the server DID respond for `/tools/sm2` because Playwright's `set_offline(True)` doesn't block localhost? Hmm, but C6 showed "浏览器报告网络不可用" (navigator.onLine false), and offline.html handled. But C4 base64 rendered from cache (could be cache or server). Hmm.
+
+Actually, `context.set_offline(True)` in Playwright does emulate offline for the page, but Service Worker's `fetch` might still be allowed? There's a known issue: Playwright's offline emulation may not affect service worker network requests in all versions. If the SW can still reach the network, then NetworkFirst fetches fresh pages online → `/tools/sm2` renders normally (app shell), and `/offline` returns... but then why did C3/C6 show static fallback?
+
+Hold on, C3 (online, before set_offline) also showed static fallback for `/offline`. So the issue is at the server: Nitro serves `/offline` as the static `offline.html` (clean URL). That explains C3 and C6 (C6 maybe also from cache of the static).
+
+And C5 `/tools/sm2` offline rendering the app shell means the SW served a cached response... Possibly the offline.html? No.
+
+Hmm wait, maybe the app shell in C5 is actually the *precached* `/offline.html`? No, it's DevKit nav.
+
+Let me debug more carefully. Key issues to resolve:
+1. Does the server serve `/offline` from `public/offline.html` (clean URL)? Check curl content.
+2. Why C5 offline unvisited served app shell instead of fallback?
+
+Let me curl `/offline` and `/offline.html` contents.
+
+Actually, I recall Nitro has `publicAssets` with `baseURL` and it can serve `offline.html` at `/offline` if `experimental.???`. Let me just check.
+
+If the server maps `/offline` → static offline.html, then my Vue `/offline` page is unreachable from the start (both dev and prod) as soon as public/offline.html exists. That would be a regression — the design S10 dynamic page wouldn't work. Need to avoid that.
+
+Solution: Put the static fallback in a subdirectory or under a path that won't collide: e.g., `public/offline/index.html`. Then Nitro serves `/offline/` (and maybe `/offline`?) Hmm, index.html in `offline/` might serve `/offline/` and possibly `/offline` too, colliding again.
+
+Alternatively name it `public/offline-fallback.html` and override the module transform to keep `.html` (which we now do). Then precache URL = `offline-fallback.html`, fetch `/offline-fallback.html` → 200, and no collision with `/offline`. Earlier we only renamed to `offline-fallback.html` without the manifestTransforms (transform stripped .html → 404). Now with manifestTransforms keeping `.html`, `offline-fallback.html` would work!
+
+So: rename to `public/offline-fallback.html`, set fallbackURL `/offline-fallback.html`. The transform keeps `.html`. Server serves `/offline-fallback.html` → 200 text/html. No `/offline` collision. 
+
+Let me verify the server serves `/offline` from offline.html first to confirm the collision theory.
+
+3. C5 issue: Once fallbackURL points to `/offline-fallback.html`, offline unvisited should serve the static fallback. But why did C5 serve app shell? Let me re-examine. Possibly because `precacheFallback` wasn't triggered: Workbox's `PrecacheFallbackPlugin` gets the fallback from precache. If `/offline.html` precache entry exists, PrecacheFallbackPlugin serves it. In C5 it served app shell... 
+
+Unless: Playwright offline didn't actually block the SW, so NetworkFirst got a live response (app shell) for `/tools/sm2`. Then C4 also live. C6 `/offline` served static from server clean URL. That's consistent! `set_offline` may not block service worker fetches (a known Playwright limitation: offline emulation applies to the page's network, but workers may have their own network stacks not covered). 
+
+Hmm, but C6's offline.html said "浏览器报告网络不可用" — navigator.onLine is false in the page (page-level offline emulation). But SW fetch may bypass. So the offline test is compromised: SW could still fetch.
+
+Let me verify by checking whether the precache-cached base64 response was used vs network. Hard. Alternative: stop the server process and then test offline! That's the most reliable "true offline" test: kill the preview server, then navigate. If SW serves from cache, pages render; unvisited route gets fallback. That avoids Playwright offline emulation issues.
+
+But killing the server mid-test... I can do a two-phase test:
+- Phase 1: online, warm up SW and cache pages.
+- Then kill server (from another process) and continue in the same browser context? The Playwright script runs in one process; I can kill the server via `subprocess` from within the Python script (e.g., `subprocess.run(['pkill','-f','.output/server/index.mjs'])` or send signal to the known PID). Then set_offline too.
+
+Simpler: Start the server, warm up in a script, then in a separate step kill server and run a second script that reuses... but Playwright browser context doesn't persist across script runs unless using persistent context (user data dir). I can use `launch_persistent_context` with a temp user data dir. Then:
+- Script 1: launch persistent context, visit pages, warm SW, close.
+- Kill server.
+- Script 2: launch persistent context with same user data dir, navigate offline → SW still registered and caches persist.
+
+That's robust but more complex. Alternatively, do it all in one script: after warming, kill the server using `os.kill` on a PID captured before. I can capture the server PID by starting it from within the Python script via subprocess... but I already started it as a background job. I can find its PID via `pgrep -f '.output/server/index.mjs'` and kill it from within the script with `os.system('pkill -f ...')`. Then navigate.
+
+Let me restructure: run a single Python script that:
+1. Warms up (with server running).
+2. Kills the server via `subprocess`.
+3. Waits a moment.
+4. Navigates offline (no network at all) — visited page renders, unvisited gets fallback, `/offline` renders.
+
+But then I also want online `/offline` evidence — capture before killing.
+
+Also, I realize the `/offline` collision must be fixed regardless (so the Vue page is reachable). Let me fix that first.
+
+Let me also confirm the app shell in C5 was due to SW network access. With server killed, we'll know.
+
+Let me first curl `/offline` to confirm static file collision.
+
+Also: Interesting that `document.fonts.check` true and no google fonts. Good.
+
+Let me curl.
+dsh: reasoning:
+The server `/offline` DOES serve the Vue SSR page (title "离线与缓存状态 · DevKit"), not the static file. So no collision at the server. Good. The static marker count 0. So the C3 online `/offline` showing the static fallback must be from the **Service Worker**! 
+
+How? `precacheAndRoute` manifest entry is `offline.html`, shouldn't match `/offline`. But maybe Workbox's precache route uses `urlManipulation` or the `PrecacheFallbackPlugin`... Hmm.
+
+Wait, maybe the PWA runtime plugin or the SW registered a route for `/offline`? Let me check sw.js for `offline` and NavigationRoute. We disabled navigateFallback. But maybe there's `precacheAndRoute` entry `offline.html` and workbox normalizes `.html` → directory index? Actually Workbox's `precacheAndRoute` with default `directoryIndex: 'index.html'` and `cleanURLs: true`! Yes! `precacheAndRoute` has options `directoryIndex` (default 'index.html') and `cleanURLs` (default true) in Workbox? Let me recall: `precacheAndRoute(entries, options)` accepts `directoryIndex`, `cleanURLs`, `ignoreURLParametersMatching`, `urlManipulation`. The default `cleanURLs: true` means a precached URL ending in `.html` also matches the clean URL without `.html`! So `offline.html` matches `/offline`. That's exactly it.
+
+So Workbox precache route for `offline.html` also responds to `/offline`, shadowing the Vue page. That explains C3 (online `/offline` served cached static offline.html) and C6.
+
+Solution: Avoid the `.html` file entirely, OR disable `cleanURLs`. `precacheAndRoute` options can be set via workbox-build `workbox.` ... hmm, is there an option `cleanURLs`? In workbox-build generateSW, there's a `cleanupOutdatedCaches`, `navigateFallback`, etc. The `precacheAndRoute` options like `directoryIndex`, `cleanURLs`, `ignoreURLParametersMatching` can be configured via `workbox.ignoreURLParametersMatching` maybe. Let me check workbox-build options. There is `ignoreURLParametersMatching` and `directoryIndex` in generateSW options? I recall `generateSW` has `ignoreURLParametersMatching`, `directoryIndex`, `cleanupOutdatedCaches`, `navigateFallback`, `navigateFallbackDenylist`, `navigateFallbackAllowlist`, `offlineGoogleAnalytics`. Hmm, `cleanURLs` might not be exposed.
+
+If `directoryIndex` default is 'index.html', then a precached `foo/index.html` matches `/foo/`. And `cleanURLs` default true means `foo.html` matches `/foo`. So our `offline.html` matches `/offline`.
+
+Options:
+1. Name the fallback file so that the cleaned URL doesn't collide with any route. E.g., `public/offline-fallback.html` → precached URL `offline-fallback.html`, clean URL `/offline-fallback` — no route collision (404 if navigated directly, but SW serves precache for both `/offline-fallback.html` and `/offline-fallback`). `precacheFallback.fallbackURL: '/offline-fallback.html'`. The precache fetch `/offline-fallback.html` → 200. This works and doesn't shadow `/offline`.
+
+2. Disable cleanURLs. Not easily exposed.
+
+Let me go with option 1: rename to `offline-fallback.html`, fallbackURL `/offline-fallback.html`. The module transform must keep `.html` (already done via manifestTransforms). Then:
+- precache entry `offline-fallback.html`
+- precacheAndRoute serves `/offline-fallback.html` and `/offline-fallback`.
+- No collision with `/offline`.
+- NetworkFirst fallbackURL `/offline-fallback.html` resolves in precache.
+
+Let me verify.
+
+Now the C5 issue: offline unvisited `/tools/sm2` rendered the app shell. Given `cleanURLs`, could `/tools/sm2` match a precached entry? No. So it must be live network (set_offline not blocking SW) OR... Actually wait: with `cleanURLs`, does `offline.html` match `/offline` only, not `/tools/sm2`. So C5 got a live response. That means Playwright's set_offline didn't block SW fetches. Confirmed suspicion.
+
+To do a true offline test, kill the server. Let me plan the definitive test:
+
+Approach: single Python script with persistent browser context and server control.
+
+Actually simpler: Use Playwright with `browser.new_context()` in one script; before the offline phase, kill the server via `os.kill`/`pkill`. Since the SW is already controlling and caches are in the browser context (in-memory for non-persistent context, fine within same script run), killing the server then navigating will truly be offline. Then I can also call `ctx.set_offline(True)` for navigator.onLine=false.
+
+Let me capture the server PID. The background job bash-8 runs `node .output/server/index.mjs`. I can find PID with `pgrep -f 'server/index.mjs'`. Within Python, `subprocess.run(['pkill','-f','.output/server/index.mjs'])`. But careful not to kill the build. Use `pkill -f 'node .output/server/index.mjs'`? The command line is `node .output/server/index.mjs`. pkill -f matches. Let me use `subprocess.run(['pkill','-f','node .output/server/index.mjs'])`.
+
+But there's a subtlety: Nitro might have multiple child processes? The server runs in one node process. Let me check `pgrep`.
+
+Actually, I'll just use `pkill`. After killing, the background job bash-8 will report exit. Then I need to restart the server afterward for any further tests. Fine.
+
+Let me restructure the verification to do it all in one script:
+
+1. FOUC tests (already good, rerun).
+2. Font test.
+3. PWA warmup:
+   - context, goto /, wait controller.
+   - reload.
+   - goto /tools/base64 (online) → cached.
+   - goto /offline online → assert Vue page rendered (title/state "离线缓存已接管").
+   - Check precache entries.
+4. Kill server.
+5. set_offline(True).
+6. goto /tools/base64 → assert renders (Base64 content).
+7. goto /tools/sm2 → assert fallback "无法加载该页面".
+8. goto /offline → assert Vue offline page renders (since cached) and shows real state / lists base64 cached.
+9. Report.
+
+For step 8: `/offline` was visited online and cached in `devkit-pages` (assuming cleanURLs no longer shadows). Offline → NetworkFirst cache hit → Vue page renders. Good. If not cached, fallback static shows.
+
+Also verify `navigator.serviceWorker.controller` non-null.
+
+Let me implement the kill inside the script.
+
+Also note: after killing the server, `page.goto` may throw if SW doesn't intercept. But SW should.
+
+Let me also keep the `set_offline(True)`.
+
+One more consideration: With server killed, the SW's NetworkFirst `fetch` will fail fast (connection refused) → cache hit. Good.
+
+Let me make the changes to the fallback file name and config, rebuild, restart server, rerun.
+
+Let me do:
+- mv public/offline.html → public/offline-fallback.html
+- nuxt.config: fallbackURL '/offline-fallback.html'
+
+Also, update the link inside offline-fallback.html? It links to `/offline` (Vue page). Good.
+
+Also, since `offline-fallback.html` won't collide, the Vue `/offline` page will be reachable online.
+
+Let me apply.
+dsh: reasoning:
+Now rebuild. Kill server first.
+
+Also, I realize there may be a concern about `offline-fallback.html` being cleanURL-accessible at `/offline-fallback` (no collision with real routes). Fine.
+
+Let me kill bash-8 and rebuild.
+dsh: reasoning:
+While waiting, let me update the todo list and prepare the final verification script.
+
+Let me also double-check `devkit/app/pages/offline.vue` logic for the "controlled" case and cached tools. We'll verify.
+
+Let me wait for build.
+
+Also, I should confirm the total font size and report. woff2 total 10MB (Noto ~9.8MB + Mono). Let me get exact numbers for report:
+- Noto Sans SC 4 weights woff2: 9.8MB; woff stripped saved 12.3MB.
+- JetBrains Mono 3 weights woff2: ~0.15MB.
+- precache entries 562 includes 404 Noto + 18 Mono + assets.
+
+Let me compute exact after build.
+
+Let me update todos.
+dsh: reasoning:
+Now start the server and run the definitive script (with server kill inside). Let me also compute font sizes.
+
+Start server (background job bash-10).
+
+Then run the Python script that:
+- warms up
+- kills server via pkill
+- truly offline tests.
+
+But there's a timing issue: the server must be running for the warmup. Let me start it, then run the script. The script will kill it. After the script, I'll restart the server if needed.
+
+Let me start server.
+dsh: reasoning:
+Font sizes:
+- Noto Sans SC: 392 woff2 files, 9.29 MB (after stripping woff, woff would have added ~11.9MB → total ~21MB).
+- JetBrains Mono: 0.11 MB.
+
+Interesting: 392 noto woff2 not 404. Because duplicates? Actually 4 weights × 98 chunks = 392. Earlier count 404 included some files? Whatever.
+
+Now run the definitive Playwright script with server kill.
+
+Let me write it. I'll include the full tests again (FOUC, fonts, PWA true offline).
+
+For killing: `subprocess.run(['pkill','-f','node .output/server/index.mjs'])`. Then wait until port closed (poll socket). Then set_offline and navigate.
+
+Let me be careful: after pkill, the background job bash-10 will end; that's fine.
+
+Let me write the script.
+
+Also, I want to verify the online `/offline` Vue page shows "离线缓存已接管" and lists base64 in cached column. Let me capture body text.
+
+Also verify offline `/offline` still renders Vue page (cached).
+
+Let me also verify that after server kill, a direct curl fails (proof of true offline). I can do that in the script via `urllib` before navigating.
+
+Let me write and run.
+dsh: reasoning:
+All tests pass with TRUE offline (server dead):
+- C5 visited /tools/base64 renders offline ✓
+- C6 unvisited /tools/sm2 → static fallback "无法加载该页面" ✓
+- C7 /offline renders offline (cached) ✓
+- controller present ✓
+
+But C3 `/offline` online snippet shows the app shell snippet (DevKit nav...) — that's because `inner_text('body')[:80]` starts with TopNav which comes first in the layout. That's the Vue page (title would be "离线与缓存状态 · DevKit"). C3 "lists base64 as cached" True. Good. But I should verify the offline page's state text specifically, e.g., contains "离线缓存已接管" and "已缓存 · 可离线打开". Let me do a focused check in a fresh run. Since the server is now killed, I need to restart it.
+
+Actually C3 `lists base64 as cached` checked `'已缓存' in text and 'Base64' in text` → True. Good enough, but let me get a more explicit confirmation that offline.vue renders the controlled state, not the fallback. The title for C3: I didn't log. Let me do a small follow-up test online: restart server, warm up, goto /offline, log title and whether "离线缓存已接管" or "已缓存 · 可离线打开" present, and the Service Worker facts line.
+
+Also should confirm the offline page lists base64 in the cached column. Let me run a focused check.
+
+Also there's a subtlety worth verifying: the offline.vue "未接管" state in dev (no SW) — not needed.
+
+Let me restart server and run a focused check for the /offline page state (online, SW-controlled), plus light theme screenshot maybe. Let me also grab a screenshot for evidence? The task doesn't require screenshots, but evidence is nice. I'll save to audit/evidence? The task says report to audit/reports. Creating evidence files in audit/evidence might be "modifying files not listed". Better avoid. I'll just capture text.
+
+Let me restart server and run focused /offline check.
+
+Also, I need to make sure I didn't break the dev server (localhost:3000) — the dev server is running externally and HMR will pick up changes. But my nuxt.config changes (modules) require a dev server restart, which I can't do (the dev server is managed externally). Actually the task said dev server at localhost:3000 is running. Adding the PWA module to nuxt.config may require restart; HMR might auto-restart Nuxt on config change. Not my concern; the validation uses production build.
+
+Wait, but the `@fontsource` css entries in nuxt.config and PWA module: if the dev server restarts, it should work. Let me quickly check dev server is still alive, and maybe verify the FOUC script in dev. Not required but good. Actually let me not disturb it.
+
+Let me restart prod server and do the focused offline page check.
+dsh: reasoning:
+Everything works. The offline page shows real state: SW activated, 562 precache entries, 2 caches, cached tool base64, uncached list.
+
+Now let me also verify the FOUC in dev? Not required; production tested. But the task mentions dev server running with HMR. Let me check the dev server still works and the inline script applies there too. Actually the inline script is in nuxt.config head, so dev too. But `@vite-pwa/nuxt` module added might break dev server if not restarted. Let me check if localhost:3000 is alive. Not strictly required but good to not leave things broken.
+
+Let me check.
+
+Also, I need to make sure the dev server doesn't register SW (devOptions.enabled=false default) → offline.vue will show the "未注册" state, which is truthful.
+
+Let me curl localhost:3000 to ensure the dev server still responds and the inline script is present.
+
+Then write the report.
+
+Also, let me double-check `npm run build` was the last successful build (yes). And that the running server uses it.
+
+Let me also confirm no residual `offline.html` references anywhere (e.g., offline.vue links). offline.vue links to `/` and tool routes only. Fine.
+
+Let me check dev server.
+
+Actually, one concern: I added `@fontsource` to `css` array in nuxt.config and PWA module. The dev server currently running was started before my changes. Nuxt dev watches nuxt.config and restarts automatically. Let me verify by curling localhost:3000 and checking for the inline script and no google fonts.
+
+Let me run.
+dsh: reasoning:
+Dev server at localhost:3000 returns 000 (connection failed). It may have crashed/restarted due to config change, or it was never running in my environment, or it's on a different host. The task statement said it's running, but maybe not accessible from my sandbox. Let me check if anything listens on 3000.
+
+It's possible the dev server is running but the sandbox can't reach it? The prod server on 3200 worked. Let me check `lsof -iTCP:3000` / `curl 127.0.0.1:3000`.
+
+Not critical for my validation (I used production build, as required). But I should note it. Let me check quickly.
+
+Actually, the dev server might have been stopped/restarted by another agent. I shouldn't worry. But let me check if my nuxt.config is valid for dev by running `nuxi prepare` or a quick `nuxt build` already succeeded, which validates config. Dev would work too.
+
+Let me check port 3000 listeners.
+dsh: reasoning:
+Dev server listens on IPv6 `[::1]:3000` only. So `curl 127.0.0.1:3000` fails but `curl [::1]:3000` or `http://localhost:3000` should work (localhost resolves to ::1). Let me curl localhost:3000.
+
+Let me check the dev HTML for the inline script and google fonts.
+dsh: reasoning:
+Dev server works with the inline script first, no google fonts. Good. The dev server auto-restarted with new config.
+
+Now I need to check: in dev, `@vite-pwa/nuxt` with devOptions.enabled=false → no SW. The offline page would show "未注册" state. That's truthful.
+
+Now let me also verify the dev server serves fonts correctly (the css links are @fs node_modules fontsource). Fine.
+
+Everything's verified. Now write the report.
+
+Before writing, let me gather precise evidence and commands. Let me collect:
+- Build command and result.
+- woff counts and sizes.
+- sw.js key lines.
+- Playwright outputs (already have).
+- git diff? Let me see what files changed. There's no git repo? `git status` earlier returned nothing (no output) meaning maybe not a git repo or clean. Let me check.
+
+Let me also verify the exact package-lock changes are consistent (npm install updated). Fine.
+
+Let me also double check the `nuxt.config.ts` final content and `offline.vue` for correctness (e.g., unused imports, lint). Let me read nuxt.config final.
+
+Also, one thing: the task says "不要写注释" — my code has no comments except the design-token header comment already existing in main.css (pre-existing). I added no comments. offline.vue has no comments. nuxt.config has no comments. Good.
+
+Let me read final nuxt.config to include in report and sanity check.
+
+Also, potential issue: `manifestTransforms` no-op overrides the module's transform, which also handled the Nuxt app manifest `latest.json` revision. Losing it means Workbox computes revisions for those JSON files (content hash), which is actually fine/better (auto-update detection). The app-manifest meta JSON gets a content-based revision. That's acceptable.
+
+But wait: the module's transform also converted `index.html` → `/`. In SSR there's no index.html. Fine.
+
+Also, does the no-op transform break anything with `dontCacheBustURLsMatching`? That's separate. Build succeeded and SW works. Fine.
+
+Now, one more consideration: The precache includes `offline-fallback.html` and Workbox `cleanURLs` means `/offline-fallback` also maps to it. No route collision. Good. But also, since the static file is in `public/`, Nitro serves `/offline-fallback.html` directly (200) and possibly `/offline-fallback`? We should check the server no longer serves `/offline-fallback` (without extension) — doesn't matter.
+
+Now let me also consider: with `cleanURLs`, could `offline-fallback.html` shadow any existing route? `/offline-fallback` is not a route. Fine.
+
+Let me also double check that `/offline` route is NOT shadowed now: C3 title was "离线与缓存状态 · DevKit" and showed controlled state. Confirmed.
+
+Now let me write the report. Path: /Users/hao/WebstormProjects/web_tools/audit/reports/h2-offline-fonts-fouc.md
+
+The report should include:
+- Scope, files changed
+- Task A: approach, code, evidence (first-frame checks, head order), SSR safety, single source of truth
+- Task B: approach, packages, sizes (Noto 9.29MB woff2, Mono 0.11MB, woff stripped saved ~12MB), tradeoff, evidence (no google, font-family, fonts.check)
+- Task C: approach, manifest, icons, SW config, offline.vue states, evidence (controller, precache 562, true offline visited/fallback/offline page)
+- Problems found & fixed (cleanURLs shadow, navigateFallback "/" default, @import transform not applied)
+- Known limitations / honest notes
+- Commands used
+- Last line: DONE: <absolute path>
+
+Let me also mention that dev server doesn't register SW (expected).
+
+Also mention that I could not fully verify "浅色用户不闪深色" via visual screenshot but first-frame class check proves it.
+
+Let me also note the `offline.vue` design alignment with S10a/S10b.
+
+Let me get the final nuxt.config content to quote.
+
+Also let me get exact woff stripped bytes: Noto woff was 12.3MB in node_modules referenced set; actual emitted would be similar. I'll state "若同时输出 woff 回退格式约多 12MB". Let me be precise: earlier computed for 4 weights: woff2 9.8MB, woff 12.3MB combined 22.1MB. Actual build woff2 9.29MB (Vite may dedupe). woff stripped → 0. So saved ~11.9MB (proportional). I'll say "woff 回退格式约 11–12MB 未输出".
+
+Let me write the report now. I'll include command outputs as code blocks.
+
+Let me first read the final nuxt.config.
+dsh: reasoning:
+The config looks good. Now let me write the report.
+
+Let me also collect the git status to list changed files. `git status` earlier gave no output — maybe not a git repo. Let me check `git rev-parse`. Actually not needed.
+
+Let me produce the report file. It should be thorough but readable.
+
+I'll write it with the evidence.
+
+Let me make sure the last line is exactly `DONE: /Users/hao/WebstormProjects/web_tools/audit/reports/h2-offline-fonts-fouc.md`.
+
+Let me write.
+
+Some details to include:
+- Files:
+  - devkit/nuxt.config.ts
+  - devkit/package.json + package-lock.json (deps)
+  - devkit/app/assets/css/main.css (html.reduce-motion rule; note removed @import approach)
+  - devkit/app/pages/offline.vue
+  - devkit/public/offline-fallback.html
+  - devkit/public/pwa-192.png / pwa-512.png / pwa-maskable-*.png
+- Task A details and evidence.
+- Task B details and sizes/tradeoff.
+- Task C details, problems fixed, evidence.
+
+Honest limitations:
+- Playwright `context.set_offline(True)` alone did NOT block the SW (the SW still got network), so I validated by terminating the Nitro server (true offline). This is worth stating.
+- `document.fonts.check` true confirms Chinese glyph subset loaded; I didn't do pixel-level manual visual inspection, but font check + rendered Chinese text (offline page text) proves glyphs. Actually the page text rendered from system? No—if Noto loaded and check true, it's used. Good.
+- Precaching ~10MB of fonts on first load is a real cost; noted.
+- The static fallback `/offline-fallback.html` is also reachable directly; it's not a Nuxt route.
+- The offline page lists cache state from Cache Storage; on browsers without Cache API access it degrades.
+
+Also note: FOUC script handles localStorage unavailable/corrupt, and matches usePrefs logic (theme default system; codeFontSize; reduceMotion). Single source of truth: same key `devkit.prefs.v1`, same class/style targets; usePrefs onMounted reapplies.
+
+Also note the `reduce-motion` CSS now matches both `html.reduce-motion` and `body.reduce-motion`.
+
+Let me write the report now.
+
+For the npm audit critical vuln — mention? It's a transitive dev dep, not in scope. Maybe mention briefly. Not necessary.
+
+Let me write the file.
+dsh: reasoning:
+Now let me do a final sanity pass:
+1. Ensure the running preview server (bash-11) can be left running or killed? The dev server is external. I'll leave the preview server? Better kill it to not leave stray processes. Actually the task didn't ask. I'll kill it to be clean.
+2. Verify the report last line.
+3. Verify no unintended files changed.
+4. Double check `offline.vue` compiles (build succeeded, and page rendered).
+5. Verify `/offline` in dev server still works (dev). Let me quickly curl dev `/offline` to see it's the Vue page (not shadowed) — in dev no SW, fine.
+
+Also, I should double check that the dev server (which auto-restarted) didn't error. It served 200 with prefsBoot. Good.
+
+Let me kill the preview server and do a final check of the report tail + list changed files.
+
+Let me also verify the final main.css reduce-motion selector.
+
+Let me run final checks.
+dsh: reasoning:
+Everything is in place. Let me do a final check that the dev server still serves `/offline` correctly (the auto-restarted dev server) and that no stray processes from my work remain. Also confirm the report file exists.
+
+Actually, one thing I should double-check: I killed bash-11 (preview server) but earlier the first server bash-10 was killed by pkill. bash-8 and bash-6 killed. So no stray node server on 3200. Let me verify port 3200 is free.
+
+Also verify no stray preview process.
+
+Let me finalize with a brief summary to the user.
+
+Actually, let me also reconsider whether the report's claim "只需 woff2" could break older browsers — I noted it. Fine.
+
+One more: The task says "禁止修改 design.pen、docs/**" — respected. And "app.vue（仅当确有必要）" — I didn't modify app.vue. Good.
+
+Let me verify port 3200 free and that's it.
+三个任务全部完成并已在生产构建上自测通过，报告已写入。
+
+## 交付摘要
+
+**任务 A · FOUC**
+- `nuxt.config.ts` 注入 `tagPriority:'critical'` 的内联脚本，实测排在所有样式表之前（HTML 第 2 个标签）。
+- 只读同一个 `devkit.prefs.v1`，判断逻辑与 `usePrefs` 完全一致（dark / `--code-font-size` / reduce-motion），localStorage 不可用或数据损坏均有兜底。
+- Playwright 首帧记录：深色用户 `{'dark':True,'size':'15px','rm':True}`；light(OS dark) 首帧 `{'dark':False}`；system+OS dark 首帧深色。
+
+**任务 B · 字体自托管**
+- 删除 Google Fonts 外链，改用 `@fontsource` 7 个字重；实测请求中 0 条 googleapis/gstatic，`document.fonts.check(..., '中')=True`。
+- 通过内联 Vite 插件剥离 woff 回退：Noto Sans SC 4 权 woff2 共 **9.29 MB**（392 文件），Mono 0.11 MB；若保留 woff 约再多 12 MB。体积真实报告，未牺牲离线中文显示。
+
+**任务 C · PWA / 离线**
+- `@vite-pwa/nuxt` + autoUpdate、manifest(theme_color #F4F5F7)、PIL 生成的几何图标（含 maskable）、Workbox 预缓存 + 导航 NetworkFirst + 静态回退页。
+- `offline.vue` 按真实 SW/Cache Storage 状态展示四种状态与真实「已缓存/未缓存」工具清单，不承诺全部离线可用。
+- **真离线验证**（先停掉 Nitro 服务器）：已访问的 `/tools/base64` 离线仍渲染 ✓；未访问 `/tools/sm2` 走可理解回退「无法加载该页面」✓；`/offline` 真状态页离线可开 ✓；controller 非空 ✓。
+
+**过程中修复的三个真实坑**（详见报告）：模块默认 `navigateFallback:'/'`（SSR 下会打挂导航）、manifest transform 把 `offline.html` 改写导致 404、Workbox `cleanURLs` 让 `offline.html` 遮蔽 `/offline` 路由。
+
+DONE: /Users/hao/WebstormProjects/web_tools/audit/reports/h2-offline-fonts-fouc.md

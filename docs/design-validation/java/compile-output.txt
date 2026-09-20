@@ -1,0 +1,29 @@
+=================== record (Java 16+, no Lombok) ===================
+  ok  order.id() = 9007199254740993
+  ok  order.name() = 订单-2024-A
+  ok  order.amount() = 1899.50
+  ok  order.tags() = [batch, priority]
+  ok  order.owner().uid() = 1024
+  ok  order.owner().vip() = true
+  ok  order.memo() = null
+  ok  uid is Long = 1024
+  ok  vip is Boolean = true
+record (Java 16+, no Lombok) compile+use check: PASS
+
+=================== POJO (Lombok @Data) ===================
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by lombok.permit.Permit
+WARNING: Please consider reporting this to the maintainers of class lombok.permit.Permit
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+  ok  order.getId() = 9007199254740993
+  ok  order.getName() = 订单-2024-A
+  ok  order.getAmount() = 1899.50
+  ok  order.getTags() = [batch, priority]
+  ok  order.getOwner().getUid() = 1024
+  ok  order.getOwner().getVip() = true
+  ok  order.getMemo() = null
+  ok  uid is Long = 1024
+  ok  vip is Boolean = true
+POJO (Lombok @Data) compile+use check: PASS
+
+ALL CHECKS PASSED

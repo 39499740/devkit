@@ -1,0 +1,1210 @@
+dsh: reasoning:
+Let me start by reading the brief.
+dsh: reasoning:
+Let me look at the reports directory, the requirement doc lines 354-488, and the tool implementation files.
+
+Let me start parallel exploration.
+dsh: reasoning:
+Now let me read the design boards. Let me run pen.py find for T27-T41.
+dsh: reasoning:
+There are 52 design boards. That's a lot. I have 30 minutes. Let me be efficient. I'll dump text from main boards to compare controls, and read the implementation files.
+
+Strategy: 
+1. Extract text from all boards for T27-T41 (the `text` command) — this gives me the design content including variants. Do it in bulk.
+2. Read implementation files.
+3. Write test scripts in node to verify logic.
+
+Let me first extract text for all main boards and variants. I'll batch them.
+
+Actually the `text` command on each board could be large. Let me try one to see size.
+
+Let me parallelize: dump text for T27-T33 boards, and read a few implementation files.
+
+Let me first check pen.py to understand its commands.
+dsh: reasoning:
+The text command returned []. Maybe board node needs deeper. Let me look at pen.py commands.
+dsh: reasoning:
+The board Qy9fi appears to be a frame but the `get` returns a node with no children? Actually `text` returned [] meaning no text nodes. Wait maybe the frame node is empty because the actual content is nested differently. Let me `node Qy9fi` to see.
+
+Actually the find output line format: "2 Qy9fi frame T27 / ...". The "2" is depth. get() should find it. But texts returned empty. Maybe the frame has children but name field... let me node it.
+dsh: reasoning:
+Text nodes use "content" not "text"! The pen.py `texts` uses x.get("text"), which is wrong for this schema. I need to adapt. I'll write my own extraction script that uses "content".
+
+Let me write a quick helper that extracts content text recursively for a board.
+
+Also refs need resolving (ref to component). But text within the board should be present.
+
+Let me write a small python script to /tmp (not in workspace to avoid modifications... actually writing to /tmp is fine, and workspace-write policy allows workspace but /tmp may be allowed). Let me write to /tmp.
+
+Actually I should avoid writing files unnecessarily but it's fine in /tmp. Let me create /tmp/txt.py.
+
+Let me extract text for each board. I'll do all 52 boards but only output content strings.
+
+Let me make the script take board id args.
+dsh: reasoning:
+Good. Now let me read the implementation of T27. Let me also read other boards' text. I'll do batches in parallel with reading files.
+
+Let me read t27 implementation.
+dsh: reasoning:
+Interesting. T27 implementation differences vs design:
+- Design has controls: 目标(interface/type), 根类型名, 可选属性 (保持原样/全部可选/全部必填), 只读 (关闭/readonly), 日期字段 (保持 string/转为 Date), 空数组策略 (unknown/any/手动指定), 空对象策略, 数组联合类型 (联合类型/取首项类型). Implementation only has kind, rootName, optStrategy (全部必填/含 null 标可选), readonly. Missing: 日期字段 Date 选项, 空数组策略, 空对象策略, 数组联合类型（取首项类型）, 手动指定类型/调整字段类型, 下载 .ts 按钮, 导入文件/粘贴/清空按钮, 字符/行数统计. Also design "根类型名" etc.
+- Note: implementation date field always string (no Date option). Requirement says "日期保持string" as a control.
+- Design shows `email: unknown` for null, but implementation outputs `null`. Requirement example says null → unknown per design text: "null 与空数组无法确定类型时输出 unknown". Actually the design success board output shows `email: unknown`. Implementation outputs `null`. That's a functional discrepancy vs design.
+- Design 空数组 outputs `unknown[]` — implementation does that. Good.
+- Design mixed array `(boolean | number)[]` with 1 (number) → implementation: types ['boolean','number'] → `(boolean | number)[]`. Good.
+- Design "adjust field type" panel — implementation has no adjust UI.
+- readonly: design has toggle; implemented via checkbox.
+- Design has "下载 .ts" button; implementation only 复制结果. Missing download.
+
+Also there might be a bug: `T27 / JSON转TS类型 / 空数组推断` requires 2 处类型待确认. Implementation warnings handle.
+
+Potential code bug in T27: In `infer` for arrays, `warnings.length = savedWarn` resets warnings always for non-null elements, then adds union warning. But for empty array case they push warning then return before resetting. OK.
+
+Bug: `propName` uses JSON.stringify(k) for invalid identifiers, producing `"my-key": string`. That's valid TS. Good.
+
+Bug: rootName validation happens only in execute; watch triggers on kind/optStrategy/ro but not rootName. Fine.
+
+Bug: `pascal` with hint from key like "items" → elemHint = "Item". But array of primitives uses elemHint too but doesn't register. Fine.
+
+Bug: `shapeSig` for caching: two different objects with same shape get same interface name, good.
+
+Potential bug: interfaces for nested object inside array: pass `${path}[]`. Fine.
+
+Potential bug: For array elements that are objects with null values, `registerInterface` calls `infer` which pushes warnings for null; warnings.length reset only in the else branch (line 153) not the object branch. Actually savedWarn captured at line 136. For object elements, registerInterface's infer calls push warnings and they're NOT rolled back... but then line 158 `warnings.length = savedWarn` resets all. OK fine.
+
+Now let me continue extracting design text for other boards and reading implementations. This is a lot. Let me be systematic and parallelize: I'll do design text extraction in batches and read implementation files in batches.
+
+Given time constraints, I'll dump all design texts to a file in /tmp and read it, then read all implementation files. Let me dump all 52 boards text at once to a file, then read. Actually output would be huge. Let me dump to /tmp/design_t27_41.txt and read selectively.
+
+Let me run that in background while reading implementations.
+dsh: reasoning:
+5205 lines. Too big to read all, but I can grep segments. Let me read it in parts. Actually it's about design text; 5205 lines because each text node is on its own line after splitting by spaces? No — my script prints content per line. The success board outputs show each token on its own line because the pen text contents are split into many text nodes (code tokens). Ugh, that's why. So reading is noisy.
+
+Better approach: for each board, only extract text nodes whose name is meaningful (e.g., "文案", "页面标题", labels, buttons) rather than code tokens. Or just extract all but it's noisy. 
+
+Alternatively I can look at the dump structure to identify controls and options. Given time, maybe I should focus on functional verification (which the task emphasizes) and do a moderate design coverage check using the extracted texts, filtering out code-token noise.
+
+Let me look at the design_t27_41.txt, but skip the code token lines. Actually I can post-process: join all text with spaces and collapse. Let me instead write a script that outputs text nodes with their name, so I can see which are labels vs code. Let me just read the file in chunks and skim.
+
+Actually, a more efficient approach: use `dump` for each board at depth and skim names of controls. But that's also noisy.
+
+Given the 30-minute target, let me prioritize:
+1. Functional testing of each tool's core logic by importing/running the functions. Since these are .vue SFCs with heavy DOM deps, extracting logic is hard. Better: use the running site at localhost:3000 and probe? But probe can't run interactions easily.
+
+Hmm. The task says "要真跑，不要只读代码". Many of these tools have pure logic embedded in the SFC. I can extract the script portions and test key algorithms by re-implementing? No, that's not "running the tool."
+
+Alternative: Use node to run the actual code. Many functions are inside `<script setup>`. I could extract the function bodies with a script and eval them. For pure functions (generateTypes for T27, unit conversion for T29, color for T30, etc.), I can copy them into a test harness — but that's re-implementation risk.
+
+Better idea: The site is running at localhost:3000 with SSR. I can use a headless browser? probe.py uses playwright presumably. Let me check probe.py to see if it can evaluate JS / interact.
+
+Let me look at probe.py.
+dsh: reasoning:
+probe.py only does a static probe; no interactions. But I can write my own Playwright script (read-only, no source modification) to interact with the live site. That's the best "真跑" approach. I can write a script in /tmp that navigates to each tool page, fills inputs, clicks buttons, and reads output.
+
+Playwright is available. Let me check the site is up and find the tool slugs.
+
+Let me check tools.ts for slugs of T27-T41.
+dsh: reasoning:
+/tools/t27-json2ts 404. Maybe the route is /tools/[slug] with slug 'json2ts'? Let me check. The URL /tools/t27-json2ts is wrong; slug is json2ts. Let me try /tools/json2ts.
+dsh: reasoning:
+Good, all routes work. Now let me build a Playwright interaction harness. This is the most valuable. But I need to know the DOM structure / selectors. Let me read a couple of implementations to know element classes, then write generic scripts.
+
+Given time, maybe the best approach is a two-pronged:
+1. Read implementations (fast, skim) for code defects and design coverage.
+2. For pure-logic correctness, extract and run the functions in node by transforming the Vue SFC script: strip imports of vue composables, provide stubs. Actually I can use a generic approach: use `@vue/compiler-sfc`? Probably not installed.
+
+Alternative pragmatic approach: Since the SFCs' pure functions are just TS/JS, I can write a node script that reads a .vue file, extracts the `<script setup>` block, strips the `import` lines and template, and evaluates with stubbed globals (ref, computed, watch, onMounted, etc.). Functions defined in the script become accessible if I return them. But `defineProps` etc. need stubs. This is doable and would let me "真跑" the actual code.
+
+Even better: use Playwright on the live site to drive the UI. Let me check how tool pages render. Let me fetch the SSR HTML for t27 to see selectors.
+
+Actually, let me just try a Playwright interaction for T27: navigate, fill textarea, click "生成类型", read output. Let me inspect DOM first with a quick script.
+
+Let me write /tmp/drive.py that takes URL and does a generic dump of inputs/buttons. Actually let me just do a targeted approach per tool. I'll write a Python playwright script that for each tool page prints all buttons, textareas, inputs (placeholder/label) and selects. That gives me the actual control inventory, which is great for design coverage too.
+
+Let me do that.
+dsh: reasoning:
+This introspection is useful. Let me capture the rest and save to a file for reference. Let me run for t33-t41 too and write all output to /tmp/introspect_all.txt.
+
+Note T27 has "复制 下载 清空" buttons — those are the DkEditor toolbar buttons (generic). Good — so the editor has download. Fine.
+
+Let me get the remaining.
+dsh: reasoning:
+Interesting: T33 JWT has NO verification key input shown! The buttons include "签名验证（独立执行：解码成功 ≠ 签名有效）" — that's a collapse/expand title maybe. There are no inputs. So the verify panel may be collapsed. Let me check the implementation.
+
+T37 file-digest shows no file input? It has three checkbox algos and "导出清单". No file drop in introspection (maybe it's an<input type=file> hidden and FileDrop component). Let me check.
+
+Let me now read implementations. Given time, I'll read the key logic portions. Let me start with T33 (JWT - critical), T35 (curl), T37, T39, T40, T41, and the pure logic tools T29, T30, T31, T32, T34, T36, T38.
+
+Let me read T33 first.
+dsh: reasoning:
+T33 looks pretty good and robust. Key concerns:
+- `base64ToBytes` needs to handle base64url. Let me check where defined (auto-imported? maybe in utils). It's used but not imported. Probably auto-import from composables/utils. Let me grep.
+- Note: JWT with `alg: none` and empty signature: parts length must be 3. A "none" token is `header.payload.` → split gives 3 parts with empty third. `decodeSeg` for payload fine. `sigDec` empty → base64ToBytes('') returns bytes length 0? Need to check. Then note pushed. Fine.
+- Verification compares HMAC using textToBytes on signing input — correct.
+- Important: "过期但签名有效" variant: they only show status "已过期" in the decode panel, but the verify result says "签名验证通过". The combination would show both. Does the design require a distinct message "过期但签名有效"? Design variant eq3hl. Let me check what the design shows. The requirement says variants: 仅解码未验签 / 签名不通过 / 过期但签名有效 / 格式错误. Implementation distinguishes: verify pass, verify fail, expired in decode table. But there's no combined message like "签名有效，但 token 已过期". Could be a coverage gap. Let me check the design board text.
+
+Now, the description in design main board for T33 (j3ZCW) — let me extract.
+
+Also there's a potential bug: `watch(token, decode)` triggers decode; run.markOk. If decode succeeds with a normal token and notes empty, message includes "解码成功 ≠ 签名有效". Good — requirement satisfied ("JWT 解码成功绝不能显示签名有效").
+
+Now the verification: on pass it says "签名验证通过". Fine.
+
+Potential issue: For a token with alg=none, the verify button is disabled. Good.
+
+Potential issue: `base64ToBytes` - need to check it handles '-'/'_' and padding and strict base64. Let me grep utils.
+
+Let me now look at other implementations. I'll grep for the helper functions.
+
+Given time, let me be strategic. I'll read the remaining tool files but focus on logic. Let me read T29, T30 (color/contrast), T32 (format), T35, T37, T39, T40, T41, T31, T34, T36, T38, T28.
+
+Let me batch reads. Actually each read is ~400-900 lines. That's a lot of context. Let me instead grep for key logic and test via live browser interactions.
+
+Better: build a comprehensive Playwright driver that exercises each tool and dumps results. That gives strong evidence and is fast to write once I know selectors. The introspection gave me selectors for inputs/buttons.
+
+But some tools (file-based T37-T41) need file uploads. Playwright can set input[type=file] files. I can create test files in /tmp.
+
+Plan:
+A. Pure logic tools: drive UI via Playwright, capture output text.
+B. Read code for potential defects.
+
+Let me first check base64ToBytes and other helpers.
+dsh: reasoning:
+Good. base64ToBytes handles base64url. Fine.
+
+Now the JWT verification: The biggest concern is whether the sample token in code actually verifies with 'devkit-secret'. The comment says node-generated. Let me verify with node. Also check the tampered. Let me run node.
+
+Let me also verify the expiry: exp 1900000000 = 2030-03-17, so not expired. Good.
+
+Let me test the sample HMAC.
+dsh: reasoning:
+JWT sample is genuine. Good.
+
+Now let me test the live JWT tool via Playwright: load valid sample, verify → should pass; tampered → fail; expired but valid → need to construct a token with past exp signed with devkit-secret. Let me generate one, then drive.
+
+Let me write a Playwright test for T33.
+
+Also let me test other tools in batch. Let me create an expired token and an RS256 token.
+
+Let me build the driver. I'll need selectors. For T33: the verify panel is a DkCollapse with title. `loadSample` opens it (verifyOpen = true). The button text "验证签名". Key input placeholder "如 devkit-secret". Algorithm is DkSelect (custom?) — introspection showed no <select> for jwt. DkSelect maybe custom dropdown. For our test default HS256 works.
+
+So test:
+1. goto /tools/jwt
+2. click "示例：有效签名" → then click "验证签名" → read result text
+3. click "示例：被篡改签名" → click verify → read
+4. set token to expired-valid token via paste into textarea, key devkit-secret → verify → read result and time claim
+
+Let me write /tmp/t33.py.
+
+Actually, let me write one generic test script for T33 specifically since it's critical.
+
+Let me also plan tests for other tools:
+- T29: inputs value=32, root=16, parent=20, source px target rem. Expected 32px / 16 = 2rem. Then set root=0 → invalid message.
+- T30: color conversions. Need to see UI.
+- T27: load sample, generate, read output; test null/empty/mixed.
+- T32: format HTML/CSS/JS and syntax error.
+- T35: paste curl → convert.
+- T34: URL parse.
+- T36: search.
+
+Let me read the implementations to understand outputs, but perhaps driving via UI is enough. Let me do T33 first.
+
+Let me create the expired token and RS256 test in node.
+
+Actually, for the report I mainly need to find defects. Let me be efficient: write a playwright script covering T27-T36 interactive tests, dumping results. Then separately handle file tools.
+
+Let me first read the remaining implementations quickly to know what to test and spot code bugs. I'll read them in parallel batches (multiple read calls in one block).
+
+Let me read t29, t30, t31, t32.
+dsh: reasoning:
+T29 and T30 both look solid. Let me note possible issues:
+
+T29:
+- Batch regex `(-?\d*\.?\d+)(px|rem|em)\b` — will match in `1.5rem` fine. But it will also match inside words like `2remx`? \b after rem requires non-word boundary; `remx` → 'rem' followed by 'x' is a word char so \b fails, so no match. Good.
+- Bug: it matches negative numbers and decimals, but also matches `0.5em` etc. Fine.
+- `1rem2px`? edge.
+- Big issue: The regex would match unit inside identifiers like `width:10px` fine.
+- Potential bug: `fmtNum` on results.
+- Requirement: px/rem/em互转 with root and parent separately. Implemented. Also mentions "支持多行CSS值转换但只修改用户选择的值" — implemented via batch. Good.
+- Design variant "基准字号非法" → parsePositive catches. Good.
+- But note: T29 doesn't support vw/vh/%/pt. The user's task mentions "px/rem/em/pt/vw/vh/%" for T29 — but the requirement doc only says px/rem/em. The task description says "T29 CSS 单位：px/rem/em/pt/vw/vh/% 换算正确性" — hmm, the audit instruction asks to verify those. But implementation only supports px/rem/em, which matches the requirement doc (authoritative). The design boards likely only px/rem/em. So that's fine; I'll note vw/vh/pt/% not supported but not required by T29 spec. Actually the audit prompt lists them as things to check; I should report that they're not supported but the requirement doc only demands px/rem/em. I'll note as observation.
+
+T30:
+- parseColor: for hex with #rgb it's fine. hsl parse: note hsl() with `hsl(210, 50%, 50%)` parts = ['210','50%','50%'] — parseFloat handles %. Good.
+- Issue: `rgb(255 0 0 / 50%)`? parts split by [\s,/]+ → ['255','0','0','50%'] → alpha 0.5. Good.
+- Issue: hex `#2563eb` lowercased. Fine.
+- Potential bug: `useColorSide` alpha watcher sets alpha from parse. But `fromAlpha` builds `text.value = hex6.value + hex2(...)`; then parsed recomputes; watcher sets alpha round(p.a*100)/100. OK.
+- Contrast luminance threshold uses 0.03928 (WCAG 2.0) — correct per spec. The modern WCAG says 0.04045 but 0.03928 is the original. Fine.
+- Grade: large AAA is ≥4.5, correct.
+- Issue: `hasAlpha` only checks fg/bg alpha, not composite. Fine.
+- Requirement: "透明色必须指定合成背景,不能对透明色直接给绝对对比度" — implemented with compBg. Good.
+- Design variant "无效颜色" handled.
+
+Note: T30 alpha slider: `fg.fromAlpha` writes hex with alpha. But if text is `rgba(0,0,0,0.5)`, moving alpha updates text to hex. Fine.
+
+Potential bug: for hex 8-digit, formatHex uses Math.round(a*255) — fine.
+
+Now the requirement doc says "HEX/RGB/HSL及alpha转换". Good.
+
+OK. Both fine. Let me now read T31, T32.
+dsh: reasoning:
+T31 SVG: sanitize uses DOMParser `image/svg+xml`. But then preview is `data:image/svg+xml,` encoded. However, the `<img>` preview with data URL doesn't execute scripts anyway. Also they remove scripts. Good.
+
+Potential XSS gaps in T31 sanitize:
+1. It only removes `script` and `foreignObject` elements via getElementsByTagName — for XML documents, `getElementsByTagName('script')` should find them. But case: `<SCRIPT>`? XML is case-sensitive, getElementsByTagName is case-sensitive in XML docs... Actually per spec, for XML documents getElementsByTagName matches case-sensitively. So `<ScRiPt>` wouldn't be removed. But an SVG rendered as image can't execute scripts regardless. Since it's rendered via `<img src=data:...>`, scripts don't run in that context. So XSS risk is low. But the tool claims "不执行脚本". Fine.
+
+2. External href removal: only `href` and `xlink:href`. But other external references: `<use href>`, `<image xlink:href>` handled. What about `style` attributes with `url(...)`? Not removed. CSS `@import` inside `<style>`? Not removed. However, in img context, external resources aren't loaded anyway (img SVG is a static image, external resources blocked by browsers). Actually SVG in `<img>` does not load external resources. So fine.
+
+3. `on*` attr regex `/^on[a-z]+$/i` — case-insensitive, good.
+
+4. `sanitizeSvg` doesn't remove `javascript:` in `href`? It removes any href not starting with `#` or `data:`. So `javascript:` removed. Good.
+
+5. But `data:` URLs are allowed — `data:text/html` in href could be an issue, but in img context, no.
+
+Bug in T31: `dropQuotes` regex `/="([A-Za-z0-9_.:#-]+)"/g` applied to ALL attributes including `xmlns`, `version`, `viewBox`? viewBox has spaces so not matched. But `width="48"` → `width=48`. That's fine for HTML inline. Detection note uses `/=[A-Za-z0-9_.:#-]+\s/`. OK.
+
+Bug: `shortenAttrs` regex `/="(-?\d+\.?\d*)"/g` will apply to any numeric attribute, including `viewBox="0 0 24 24"` no (spaces). But e.g. `stroke-width="1.500"` → `1.5`. Fine. But it would also shorten `data-...`? Fine.
+
+Bigger issue: The optimization is applied to the *serialized sanitized* text, but the diff is against the original src. Fine.
+
+Potential correctness issue: `sanitizeSvg` serializes with XMLSerializer, which may add `xmlns` and reorder; and importantly, XMLSerializer for SVG may produce `xmlns="http://www.w3.org/2000/svg"`. Fine.
+
+Visual change: Removing `foreignObject` changes visual — flagged. Removing scripts — flagged. Fine. The requirement says "优化可能改变视觉的提示" — flagged via notes.
+
+One issue: the design main board wants "源码/文件输入" — FileDrop present. Fine.
+
+T32 formatter: self-implemented, not a real parser. The task says "是否有真实解析器（还是正则？正则即高危）". T32 is a hand-written state machine, not a full parser. This is a known limitation; requirement doc says "仅处理源码文本". It's not regex-only for JS. But it's not a real parser, so correctness on complex inputs is questionable. Let me test with tricky inputs to find actual bugs.
+
+Potential bugs in formatHtml:
+- `<p>跨行文本\n第二行内容</p>`: inner includes '\n' so not single-line; it pushes `<p>`, depth++, but then the text content is handled as `seg` before next `<`. Then `</p>` pops. Wait: after pushing `<p>`, depth becomes 1. Next iteration finds `<` at `</p>`, seg = "跨行文本\n第二行内容" → outputs each line at depth 1. Then closing tag pops. OK.
+- HTML entities: `&lt;` won't be `<`. Fine.
+- `<script>` raw content preserved incorrectly? It pushes `<script>` line, depth++, then RAW_ELEMS branch: finds close, outputs content lines raw (no indent), depth--, pops, outputs `</script>`. Good.
+- Bug: For void elements like `<img ...>` it doesn't push stack. Good.
+- Bug: attribute values containing `>` inside quotes: findTagEnd handles quotes. Good.
+- Bug: text containing `<` like `a < b` would be misparsed as tag. In HTML text, `<` should be escaped. Acceptable.
+- Bug: `<!-- comment -->` handling: outputs raw lines without indentation. minor.
+- Bug: case-insensitive close: `list.indexOf(`</${name}`)` uses src.toLowerCase()? Actually line 125: `src.toLowerCase().indexOf(`</${name}`, i)`. name lowercased. Good.
+
+Potential bug in formatHtml with `<a href="#">text</a>`: findTagEnd handles. inner "#"? closeIdx find `</a`. Fine.
+
+Potential bug: nested same-name tags with short text inline detection: `<div><span>x</span></div>`: for div, inner = `<span>x</span>` includes '<', so not inline. Good.
+
+formatCss bugs:
+- `@media (max-width:600px){.card{padding:8px}}` — for @media, buf='@media (max-width:600px)' then `{` → flushSelector outputs `@media (max-width:600px) {`; depth++. Then `.card` `{` → flushSelector outputs `.card {`; depth++. `padding:8px` then `}` → emitDecl(';') outputs `padding: 8px;`, depth--, out `}`. Then `}` → depth--, out `}`. Good.
+- `@import url("a.css");` at top: handles string inside url. Good.
+- Bug: CSS custom properties with `{}`? e.g. `--x: {a:b}` no.
+- Bug: `content: "}";` handled via inStr.
+- Potential bug: `var(--x, 10px)` commas fine.
+
+formatJs: complex. Let me test with node. Since it's JS (not TS), I can extract formatJs and run with node. Actually simpler: drive the UI via Playwright.
+
+I think the highest-value approach now is to run a broad interactive test suite via Playwright for T27–T36 and file tools via file chooser. Let me write it.
+
+Let me first check the remaining implementations quickly: T34, T36, T35. Let me read them.
+dsh: reasoning:
+T36 STATUSES count: let me count. 1xx: 100,101,102,103 (4). 2xx: 200,201,202,203,204,205,206,207,208,226 (10). 3xx: 300,301,302,303,304,307,308 (7). 4xx: 400,401,402,403,404,405,406,407,408,409,410,411,412,413,414,415,416,417,418,421,422,423,425,426,428,429,431,451 (28). 5xx: 500,501,502,503,504,505,506,507,508,510,511 (11). Total = 60. The design board shows the same list (from introspection). Let me compare against RFC set. Missing notable ones: 305 Use Proxy (deprecated), 306 (unused), 418 present, 425 present, 451 present. Missing: 415? present. Missing 308 present. Missing 413 present. Missing 414 present. Missing 431 present. Missing 511 present. Missing 421 present. Missing 208 present. Missing 226 present. 
+
+What's missing vs the RFC/IANA registry: 
+- 305 Use Proxy (deprecated but in registry)
+- 306 (Unused)
+- 412? present.
+- 424 Failed Dependency (WebDAV) — MISSING.
+- 427 Unassigned.
+- 429 present.
+- 430 Unassigned.
+- 432-450 unassigned.
+- 509 Bandwidth Limit Exceeded (not IANA, but common).
+- 598/599 non-standard.
+- 420 non-standard (Enhance Your Calm).
+Also 103 present. 425 present.
+Missing 424 is notable (WebDAV).
+Also 306 and 305.
+
+Let me confirm the tool count is 60 and list missing. I'll do that with a script comparing to a known set.
+
+T34: Looks decent. Issues:
+- `new URL(urlInput)` requires absolute URL. Relative URLs fail. Fine.
+- Repeated keys preserved. Good.
+- Empty value `empty=` → hasEq true, value ''. key 'empty'. Preserved. Good.
+- Bug: `plainUrl` decodes the hash with safeDecode but displays `b.hash` including '#'; if hash contains '%20', safeDecode(b.hash) → '#a b'. Fine.
+- Bug: For bare params (`&flag`), hasEq false, and the row shows "≠" and hides "=". When synthesizing `queryEncoded`, `encodeURIComponent('flag')`. Good. But `queryRaw` for bare displays `flag`. Good.
+- Potential bug: `touchRow` sets hasEq=true on ANY key or value change. But it's bound via `@update:model-value="touchRow(r)"`. When user edits key, hasEq becomes true. Reasonable.
+- Bug: URL parsing with `?a=1&a=2` fine.
+- Bug: When URL has a bare `?flag` and user doesn't touch it, `embedded` yields `flag`. Good.
+- Requirement: "参数增删排序、重复键保留、编码预览" — all present.
+- Missing: reordering moves rows but `query` order changes. Good.
+
+One issue: `watch(urlInput, parse)` — parse uses `new URL`, which for `http://` etc. Fine.
+
+T36 note: "不展示未经确认的线上接口状态" — satisfied.
+
+Now T35 curl. Let me read it. It's 966 lines. Let me read key parts. Also T37-T41 file tools. Let me read them, maybe focusing on script sections.
+
+Given time, let me start writing the Playwright test script now while reading. Actually let me read T35 and the file tools, then write tests.
+
+Let me read T35.
+dsh: reasoning:
+The rest of T35 is code generation. Let me skim the remainder quickly, especially curl generation and the unsupported expr handling.
+
+Actually let me focus on testing. I'm spending too much context. Let me now write and run the Playwright test suite. This will give evidence for functionality.
+
+Let me create test files and a driver script. I'll test:
+
+T27: 
+- click 载入示例, click 生成类型, read output textarea, and status + warnings
+- test empty array variant: fill textarea with `{"id":9,"tags":[],"meta":{},"items":[]}` and generate → check unknown[]
+- test mixed array and union
+- test invalid JSON → error message
+- test root name invalid → error
+- Note the design's expectation: null → unknown vs implementation → null. Verify.
+
+T28: read impl later; test component name invalid.
+T29: root=0 invalid; 32px→2rem; em conversion.
+T30: color conversions and contrast; test hsl/rgb; low contrast.
+T31: unsafe sample; verify script removed; check preview src.
+T32: html/css/js sample format + syntax error.
+T33: valid/tampered/expired-valid; none.
+T34: sample URL, duplicate params.
+T35: curl→fetch; multipart; shell expr.
+T36: count statuses, search.
+T37-41: file uploads.
+
+That's a lot. Let me write one script per group to keep manageable. I'll use Playwright and print results.
+
+Let me first inspect the DkEditor structure to know how to set textarea values. It's a textarea presumably. I'll use page.fill on textarea.
+
+For T27, the left editor textarea has placeholder "粘贴 JSON 文本，或点击「载入示例」". The output textarea readonly. Good.
+
+Let me write /tmp/t27_36.py that tests pure tools.
+
+Note: clicking DkSegmented buttons by text may conflict with other buttons. I'll use specific selectors where possible.
+
+Let me write it.
+dsh: reasoning:
+Findings for T27:
+1. Null handling mismatch: design expects `email: unknown` (success board) and design text says "null 与空数组无法确定类型时输出 unknown"; implementation outputs `balance: null`. Requirement doc for T27 says "包含null、空数组、混合数组和嵌套对象" and design main提示. The design success board explicitly shows `email: unknown`. Implementation outputs `null` type and warns. This is a design-restoration discrepancy (中). Note the implementation's 使用说明 says "null 生成 T | null ... 字段值本身为 null 时无类型证据" - it's a deliberate choice but deviates from design.
+2. Empty object `meta: {}` → registers an interface `Meta {}` (empty interface). Design 空数组推断 board expects `meta: Record<string, unknown>` (with 空对象策略 options). Implementation generates an empty interface named `Meta`. That's arguably invalid-ish TS (empty interface) and deviates from design. Also "2 处类型待确认" not shown. Missing 空数组策略/空对象策略 controls, 数组联合类型策略 (取首项类型), 日期字段 Date option, 手动指定类型/调整字段类型 UI.
+3. JSON error message: "Unexpected token '}', "{"a":}" is not valid JSON" — no line/column! The design/requirement requires 语法错误定位 (T32) and T27 "所有失败状态保留输入并提供具体修正方向". The code does `jsonErrorPosition(e, input.value)` and if pos returns line/column. But here it printed just errMessage(e), meaning jsonErrorPosition returned null. Let me check utils/json.ts. The error is from parseJson which may throw a plain Error without position. Let me check.
+
+Actually the status shows `Unexpected token '}', "{"a":}" is not valid JSON`. The code: `const pos = jsonErrorPosition(e, input.value); errDetail.value = pos ? ... : errMessage(e)`. So pos was null. Let me check jsonErrorPosition. This might be a real defect: position detection fails for simple JSON errors. Let me read utils/json.ts.
+
+4. The output for the sample: `id: 1000000000000000001` → RawNumber → number. Design says long integers output original numeric text. Requirement says "长整型仍按原始数字文本输出". Implementation outputs `number` type (correct, since type is number). The design board says "长整型仍按原始数字文本输出" for the type inference? Hmm, "数字统一推断为 number，长整型仍按原始数字文本输出" — for T27 the output type is `number`; the note about long integers is about JSON display. Fine.
+
+Let me check json.ts to assess error positioning.
+dsh: reasoning:
+The error message `Unexpected token '}', "{"a":}" is not valid JSON` from V8 contains `position 5` usually. Let me check: In Chrome, `JSON.parse('{"a":}')` throws `SyntaxError: Unexpected token '}', "{"a":}" is not valid JSON`. Hmm, newer V8 messages don't include "position N"! Indeed, recent V8 changed error messages to include the snippet but no position. So jsonErrorPosition fails → no line/column. That's a real defect affecting T27, T32 (json errors maybe), T33 (payload JSON), and other JSON tools. But T32 is HTML/CSS/JS formatter, not JSON.
+
+Wait, actually for the sample `{"a":}` the message shown is `Unexpected token '}', "{"a":}" is not valid JSON`. In older V8 it was `Unexpected token } in JSON at position 5`. So `jsonErrorPosition` is written for the old format. On current Chromium, position is not present. This means T27's "JSON 第 N 行第 M 列附近" never triggers. That's a confirmed defect (中/高): 语法错误定位失效. Let me verify by testing in the browser console directly. Let me run a quick playwright eval to see the exact message.
+
+Let me now also test T32's syntax error, T33, T29-T31, T34-T36.
+
+Let me build a bigger test script.
+
+Also note: the design requires T27 to show "JSON 格式正确" and char/line counts. Implementation shows 字符/字节/行. Good.
+
+Now let me check the exact JSON.parse error message in Chromium.
+dsh: reasoning:
+So V8 newer messages: "Unexpected token 'X', ... is not valid JSON" without position, and "Expected double-quoted property name in JSON at position 10 (line 3 column 1)". So `jsonErrorPosition` regex `/position (\d+)/` matches the second type but not the first. For the common case `{"a":}`, no position → T27 shows raw message without line/column. This is a partial defect: some errors show position, some don't. Design requires line/column. I'll report as 中.
+
+Actually, also note the message includes the JSON snippet which could be fine.
+
+Now let me test T29, T30, T31, T32, T33, T34, T35, T36.
+
+I'll write a comprehensive script. For T32, I'll test all three languages with samples and a syntax error. For T31, test unsafe sample.
+
+Let me be careful with selectors. DkSegmented options are buttons.
+
+Let me write.
+dsh: reasoning:
+Only 3 text inputs on T29 (the value, root, parent). My index assumption wrong. Let me fix: inputs = [value, root, parent]. Actually the introspection showed 3 inputs: value=32, then 16, then 20. So inputs[1]=root, inputs[2]=parent.
+
+Let me fix and rerun. Also T29 default result good: 2rem.
+
+Let me rewrite the script more robustly.
+dsh: reasoning:
+The palette mask intercepted because clicking "button:has-text('CSS')" maybe triggered the command palette? Actually "JS" button text... Hmm, there's a `.palette__mask` overlay — clicking something opened the command palette. Possibly "button:has-text('JS')" matched the command palette trigger? No. Wait, the previous CSS step succeeded. Then clicking "button:has-text('JS')" — the sidebar has "JS"? Hmm, maybe clicking a sidebar category. Actually the overlay `.palette__mask palette-enter-active` suggests the command palette opened. Possibly "button:has-text('JS')" matched... hmm. Actually maybe the first "button:has-text('CSS')" click worked. Then "载入示例" click worked. Then "格式化" worked. Then clicking JS... Let me avoid text selectors that match multiple and use more precise ones. Actually the issue: `pg.click("button:has-text('JS')")` may match the search button? No.
+
+Actually the palette might have opened from a keyboard shortcut? No.
+
+Let me just use more specific selectors: the DkSegmented for language is within `.t32__toolbar`. Use `button:has-text("JS")` inside `.t32`. Hmm. The issue is clicking CSS worked. Then for JS, maybe the click landed on the wrong button.
+
+Actually looking again: the traceback line 60 is the CSS line? No, line 60 is `pg.click("button:has-text('JS')")`. The palette mask already present from previous step maybe? The CSS step's last click "格式化" may have... no.
+
+Wait — the `.palette__mask` appeared. The CommandPalette opens with Ctrl+K. Not clicked. Unless clicking a button with text containing "K"? Hmm.
+
+Regardless, findings so far:
+
+T29: Works. Root0 → error. Batch works. But note: in batch, inputs reordered: when switching to batch, the first text input is root (batch params). My fill('0') hit root → correct. Good.
+
+T30: Works. Blue #2563eb on white gives 5.17:1. Let me verify: #2563eb luminance. Known contrast of #2563eb on white ≈ 5.17. Good. Low #999 on white 2.85. Correct (#999 = 153; ratio ~2.85). Alpha rgba(0,0,0,0.5) on white → 3.95. Let me verify: composite 0.5 black on white = 127.5 → 128; luminance of #808080 = 0.2158; ratio = 1.05/0.2658 = 3.95. Correct. HSL(210,50%,50%) → #4080bf: correct (210°, 50%, 50% = rgb(63.75,127.5,191.25) ≈ 64,128,191 = #4080bf). Good.
+
+T31: Unsafe sample: removed 1 script, 2 on* attrs (onload, onclick), 1 external href. Preview SRC still contains `<image>` with no href (removed). Good. It also did NOT remove `foreignObject` because none. Note the requirement says block external resources — the href removed. But the preview SRC retains `%0A%20%20` etc. Fine. Also there's a stale banner. Fine.
+
+However, one issue: the sanitizer doesn't remove the `<style>` element, which could contain `@import url(...)` or `background: url(...)`. But in `<img>` context, external subresources aren't fetched. So safe. I'll note as low.
+
+T32 HTML output looks good. CSS good. The JS test failed due to overlay. Let me rerun T32 JS separately with better selectors, plus syntax errors.
+
+Also noticed in T32 HTML output: the script content is emitted unindented relative to the `<script>` tag:
+```
+    <script>
+const a = 1;
+  console.log(a);
+    </script>
+```
+Design/requirement: "script/style/pre/textarea 内容原样保留" — so unindented is by design. Fine.
+
+Now let me rerun the JS part and T33-T36. Let me use `.t32__toolbar` scoping and escape overlay by pressing Escape.
+
+Let me write test_d.py.
+dsh: reasoning:
+Interesting: "验证签名" clicks didn't produce results — the status still shows "未执行". My clicks on "text=验证签名" probably matched the collapse title (which contains "签名验证..."), not the button. Actually the button text is "验证签名". `pg.query_selector("text=验证签名")` might match the collapse header "签名验证（独立执行...）"? No, that's "签名验证" not "验证签名". Hmm. It might match the button. But the status shows 未执行, meaning verify() wasn't called or it failed silently. Wait, maybe clicking the collapse title toggled the panel (it was already open). My `if v: v.click()` where v = query_selector("text=验证签名"). Let me check: the button contains an icon + "验证签名". text= selector does substring match. It could match the `.t33__verify-actions` div? Actually text= matches the smallest element containing the text. Could be the button.
+
+But the result "未执行" persists. Maybe clicking happened but the key input wasn't set? loadSample sets verifyKey='devkit-secret'. So it should verify. Unless the click matched the hint span `{{ verifyHint }}` which contains... no.
+
+Hmm, wait: for the "有效签名" case, I did `v=pg.query_selector("text=验证签名")` then clicked. The log shows VERIFY PASS ends with "未执行" — so verify wasn't executed. Possibly the click hit the collapse header "签名验证（独立执行：解码成功 ≠ 签名有效）"? Query "text=验证签名" — the header text is "签名验证（独立执行...)" which contains "名验证" not "验证签名". So no.
+
+Maybe `text=验证签名` matched the button but the click was intercepted by something? Or the button is `disabled`? For HS256 it's not disabled. Hmm.
+
+Wait — maybe there are two elements: the DkCollapse header and the button. Playwright's `text=` in query_selector picks the first match in document order. Could be the hint span "使用 WebCrypto HMAC..." no.
+
+Let me debug by using a precise selector `.t33__verify-actions button`. Let me rerun T33 verify with that. Also verify the "过期但签名有效" combined status. This is an important requirement.
+
+Also note: the design board for "过期但签名有效" probably shows both "已过期" and "签名有效". Implementation shows expired in table and (if verify) "签名验证通过". But no explicit combined statement. Let me check design board eq3hl text.
+
+Let me rerun T33 with precise selector.
+dsh: reasoning:
+Critical finding! The tampered sample verified as "签名验证通过（HS256）"! That's WRONG. The tampered token should fail. Let me investigate.
+
+Wait — look at SAMPLE_TAMPERED: it's the same token but last char Y→Z. But loadSample(tampered=true) sets token to SAMPLE_TAMPERED, then calls decode(). But the verify() uses `token.value`. So it should use the tampered token. Yet it passed.
+
+Hmm, unless my click on "示例：被篡改签名" didn't actually change the token, and the second verify re-verified the old valid token... but the result element already had "签名验证通过" from the first verify, and verifyResult is reset to null at the start of verify(). It showed pass again.
+
+Wait, also the status bar still shows the decode success message, not the verify result. The verify status is a separate DkStatusBar. Let me check whether the token actually changed.
+
+Actually, there's a subtle bug: the tampered token's signature differs by one base64 char. But base64url decoding: the signature is 32 bytes. Changing last char 'Y'→'Z': base64 chars. 'Y' = 24, 'Z' = 25. As the last base64 character of a 43-char string (no padding), the last char contributes only 4 significant bits (since 32 bytes = 256 bits = 43 base64 chars * 6 = 258 bits, last char has 2 unused bits). So changing the last char from 'Y' (011000) to 'Z' (011001) changes only the LAST 2 BITS which are discarded during decoding! So both decode to the SAME 32 bytes! Therefore the tampered token has the SAME signature bytes and verification passes.
+
+This is a real defect: the "被篡改签名" sample is not actually tampered — changing the final base64url character of a 32-byte HMAC doesn't change the decoded bytes. So the demo of "签名不通过" fails; a user clicking it sees "签名验证通过", which is misleading and contradicts the design variant and the tool's own text ("验签必然失败").
+
+Let me verify with node: base64url decode of both signatures.
+
+m-TEfec4PcwDypb1zPDKzu2fIUQiZ82QTW5cFIlXIXY vs ...XIXZ. Let me decode.
+
+Actually let me confirm.
+
+This is a HIGH severity functional/UX defect: the tampered example passes verification, directly contradicting the documented behavior and the design requirement of a "签名不通过" variant. It could mislead users.
+
+Wait, but is it really the same? Let me compute with node Buffer.from(sig,'base64url').
+
+Let me also double check the earlier node test: I computed `c.createHmac(...).digest('base64url')===tam.split('.')[2]` which was false (string comparison). But byte comparison would be true. So the UI's byte comparison passes. Yes, defect confirmed.
+
+Let me verify with node.
+dsh: reasoning:
+Confirmed. Excellent finding. The "篡改示例" is not actually tampered at the byte level.
+
+Also the "过期但签名有效" case: verify passes, and the decode table shows "已过期". But the verify result "签名验证通过（HS256）" doesn't mention expiry. Design variant "过期但签名有效" — the implementation shows both pieces but there's no single combined verdict. That's minor coverage. Actually the requirement says "过期但签名有效" variant; implementation does render expired state + pass separately. I'll note it's covered but not combined; low.
+
+Also note the verify status bar shows the *decode* status, not the verify status? In my test the status text after verify showed the decode message. That's because I selected `.t33 [class*=status]` first 3, which includes the decode DkStatusBar. The verify DkStatusBar is inside the collapse. Let me not worry.
+
+Now, importantly: the verify result persists when the token changes? verifyResult is reset only at the start of verify() and in loadSample. If user edits token after verifying, the stale result "签名验证通过" remains visible until they click verify again. There's a stale note from run, but the big green result box stays. Potential minor issue: stale pass result displayed for a modified token. Let me check: `verifyResult` is not cleared in decode(). Since decode runs on token change, and verifyResult remains. So after verifying a valid token, if the user pastes a different token, the green "签名验证通过" remains. That's a real defect (中): stale verification result not cleared on token change, could mislead. Let me confirm by test.
+
+Let me test that and also test the wrong-key flow was fine.
+
+Now T34, T35, T36 tests. Let me continue. Also T37-T41 file tests.
+
+Let me write test_f.py for T34/T35/T36 and stale verify.
+
+For T35, I need to check unsupported shell expressions and multipart. Let me read the rest of T35 code later if needed; test behavior.
+
+Let me test:
+- curl sample → fetch
+- `curl https://x.com -F 'file=@a.png'` → warns
+- `curl https://x.com -H "Authorization: Bearer $(get-token)"` → warns command substitution
+- fetch→curl sample
+- shell expression like `curl "$URL"` → warn variable.
+
+Let me also verify the generated fetch/curl correctness.
+
+Let me write.
+dsh: reasoning:
+Findings:
+
+T33 stale: confirmed — after changing token to an alg=none unsigned token, the green "签名验证通过（HS256）" remains. Severity 中/高 (misleading).
+
+T34:
+- The row inner_text shows only "=" — because inputs' values aren't in innerText. Fine.
+- Preview works: duplicate keys preserved, empty value, URL encoded.
+- BARE/EMPTY works: `?a=1&a=2&b=&flag#f` preserved including bare `flag`.
+- INVALID: error message good. But note it says "Failed to construct 'URL': Invalid URL" — fine.
+- Potential issue: requirement says "结构化协议/主机/路径/query/fragment" — present. Rank of param rows etc. Good.
+- One possible bug: `plainUrl` uses safeDecode(pathname) which would decode `%2F` in path to `/`, changing semantics of the "plain" display. Minor.
+- Also the invalid URL still shows the previously parsed structure below (stale) — after filling invalid, the structure from previous parse remains because base.value isn't cleared on error! Look: in parse(), catch block only markFail; base.value and rows.value stay as previous. So when user enters an invalid URL, the page still shows the OLD URL's structure/preview ("https://api.example.com/search..."), which is misleading. Confirmed in output: INVALID shows `协议 https|...|结构信息|协议|https:|主机|api.example.com|路径|/search|Fragment|#results`. That's stale data for a now-invalid input. This is a real defect (中): on invalid URL, stale parse results remain displayed and the "复制编码结果" button is disabled only when status error (it is disabled). But preview still shows old content. Could mislead. Actually the template shows base if base exists regardless of error, so yes stale.
+
+T35:
+1. Generated fetch headers use unquoted object keys: `Content-Type: 'application/json'` — invalid JavaScript! Object literal keys with hyphens must be quoted. The generated code is `fetch(...)` output with `headers: { Content-Type: 'application/json', Authorization: 'Bearer test-token', }`. `Content-Type:` is a syntax error in JS. That's a HIGH severity functional defect: the generated fetch/axios code is invalid JS.
+
+Wait let me double check — maybe it's the innerText of textarea which preserves exactly. The output printed:
+```
+  headers: {
+    Content-Type: 'application/json',
+    Authorization: 'Bearer test-token',
+  },
+```
+Yes, unquoted keys with hyphens. That's invalid JS. The code generator must quote keys containing '-'. Let me check the generator code.
+
+Also trailing comma after last header — valid in modern JS. Fine.
+
+2. Multipart: warns as expected. But note the generated fetch output for multipart was 30 chars — probably `fetch('https://x.example/api')` GET, silently dropping the -F content but with warning. Acceptable given warning. But requirement says "multipart文件引用" should be clearly prompted. It is. But hmm: it outputs a GET without body; the design variant probably shows an error/unsupported state. Acceptable.
+
+3. Shell expr: warns appropriately.
+
+Let me check the generator code for header key quoting. Let me read T35 lines 520-966.
+
+Also T33 note: verify result stale.
+
+Let me read the rest of T35.
+dsh: reasoning:
+Confirmed the bug: line 602 and 635: `${SAFE_KEY.test(h.key) ? h.key : jsQuote(h.key)}` — it does quote unsafe keys via jsQuote, producing `'Content-Type'`. Wait! But the output showed `Content-Type:` unquoted. Hmm.
+
+SAFE_KEY = /^[A-Za-z_][A-Za-z0-9_-]*$/ — this regex ALLOWS hyphens! So `Content-Type` matches SAFE_KEY (because `[A-Za-z0-9_-]*` includes '-'), so it's emitted unquoted. That's the bug: SAFE_KEY permits hyphens, so header names with '-' are treated as safe JS identifiers. This is a genuine bug. Line 229 defines SAFE_KEY.
+
+So the generated fetch/axios code is invalid JavaScript for any header containing '-', which is extremely common (Content-Type, X-Request-Id, etc.). HIGH severity.
+
+Note: same SAFE_KEY is used for axios `params` keys (line 640) — same bug for query param keys with hyphens.
+
+Now let me continue reading T35 rest and then the file tools. Actually let me now read T37-T41 to assess. I'll read them (they're ~450-550 lines each). That's a lot but necessary.
+
+Let me read T37 and T38 first.
+dsh: reasoning:
+T37 looks well-designed. Potential issues:
+- SHA-256/512 requires full memory; the `full` Uint8Array is file.size, plus chunks array also holds full data → 2x memory. For large files this doubles memory. But warned. Acceptable. Actually chunks holds all bytes AND then `full` is allocated, so peak 2x file size. For a 512MB file that's 1GB. Could be an issue but within limit and warned.
+- `spark.end(false)` returns hex without raw, correct.
+- Bug potential: `recomputeAll` sets running=false and calls processQueue; but if a previous processQueue is mid-await, token check handles. OK.
+- Requirement "取消" — present.
+- Design requires "导出摘要清单" — present.
+- Design "部分失败/取消任务/校验不匹配" variants covered.
+- One issue: when SHA digest fails for a large file due to memory, MD5 may still succeed → status done, and SHA row shows error. Good.
+- Another: no "上传中" wording. Good.
+- Note: MAX_SIZE 512MB; FileDrop max-size.
+
+Let me check FileDrop for a possible issue: does it actually reject by size and show 文件名/大小/移除? Let me read FileDrop quickly. And check for "上传中" wording across T37-T41.
+
+Let me grep for 上传.
+dsh: reasoning:
+Important G02 finding: FileDrop's `maxSize` rejects the ENTIRE batch if ANY file is too big — `emit('reject', ...)` and returns, so none of the files are emitted. For T37 (multiple files), dropping 3 files where one exceeds 512MB rejects all three, instead of skipping just the oversized one. Though T37 has its own onFiles size check, FileDrop rejects before that. So an oversized file in a multi-file drop blocks all files (no partial feedback, no per-file skip). That's a real defect: "部分失败" variant should still process valid files. Severity 中. Also FileDrop displays only the first too-big file name.
+
+Also FileDrop doesn't list selected filenames (that's per-tool).
+
+Now let me read T38, T39, T40, T41.
+dsh: reasoning:
+T38: Good. EXIF orientation: createImageBitmap with default options — `createImageBitmap(f)` does NOT apply EXIF orientation by default in Chrome? Actually per spec, `imageOrientation: 'from-image'` is now the default for createImageBitmap in newer browsers (Chrome 79+ default is 'none'? Let me recall). The default for `createImageBitmap` is `imageOrientation: 'from-image'`? Actually the spec default is "from-image" since ~2020? Hmm. Historically `img` elements respect EXIF orientation, while canvas drawImage of an HTMLImageElement also respects it (browsers apply orientation). `createImageBitmap` had `imageOrientation: 'none'` default, but spec changed to 'from-image'. There's ambiguity. Potential issue: EXIF orientation not explicitly handled, so JPEGs with orientation tags may come out rotated. The requirement says "EXIF/透明度损失是否提示". The tool detects alpha and warns "检测到透明区域" but does NOT warn about EXIF metadata being stripped (it doesn't warn that EXIF/GPS metadata is removed by canvas re-encode). This is a coverage gap: design/requirement mentions EXIF loss prompt. Requirement doc T38 says "透明背景处理" (not explicitly EXIF), but the audit instruction asks to check EXIF/透明损失提示. The implementation mentions transparency but not EXIF metadata loss. I'll note as 中/低.
+
+Also GIF: FileDrop accepts image/* and the tool claims "PNG / JPEG / GIF / WebP 等". Converting animated GIF → static first frame via canvas; no warning that animation is lost. That's a real gap. Also converting to JPEG of an animated GIF loses frames. Could be noted.
+
+Also detectAlpha samples downscaled to 256px, so a small transparent region might be missed; then converting to JPEG would fill bg — but that's inherent.
+
+Also note `targetSize` applies width then height sequentially using scaling factors based on original dimensions. For width limit: s=limit/w, then h scaled. Then height limit: cur = o.h (original!) not the already-scaled h. Wait: `limits.push([mh, o.h, ...])` uses o.h, and `h` is already scaled from the first step. `if (cur > limit) { s = limit/cur; w = w*s; h = h*s }` — s computed from original h, applied to already-scaled w,h. That's actually correct for aspect-preserving "fit within box" as long as limits don't conflict: if w>mw and h>mh, first scales by mw/o.w, then by mh/o.h applied to already scaled → correct. If h not > mh, second skipped. OK correct.
+
+But `validateDim` uses `String(n) === v.trim()` — so "01920" invalid, "1e3" invalid. Fine.
+
+Potential bug: `quality.value` for PNG is hidden but still passed? No — for png, `cv.toBlob(cb, 'image/png', quality/100)` passes quality which is ignored. Fine.
+
+Now T39.
+dsh: reasoning:
+T39: 
+- generation via qrcode lib, canvas + SVG. Download PNG from canvas (256 CSS width but canvas actual size = opts.width). Fine.
+- Scan uses jsQR. No camera. Good.
+- Potential issue: `createImageBitmap(f)` may fail for SVG; caught.
+- Potential issue: `res.data` empty string check; if QR encodes empty string, res.data === '' → treated as failure. Edge.
+- Requirement "内容超出容量" variant — friendlyGenError handles. Let me test with a very long string.
+- Note: the canvas is displayed at CSS width 256px regardless of chosen size (max-width 100%). Fine.
+- Potential issue: `QRCode.toCanvas` with `width` option. Good.
+- No auto-open URL. Good.
+
+Let me now read T40 and T41.
+dsh: reasoning:
+T40: Good. Notable:
+- Target encodes only UTF-8/UTF-16LE/BE. Requirement says "编码选择、UTF-8/BOM与LF/CRLF选项". It doesn't persist GBK output but explicitly says so. The design variant "目标编码无法表示字符" — the implementation only supports UTF-8/UTF-16 which can represent all chars, so this variant isn't really demonstrated. Requirement says "无法表示字符时明确提示". With only UTF-8/UTF-16 targets, impossible. But GBK output is not supported → the variant "目标编码无法表示字符" cannot occur. Design likely has GBK target with replacement warning. Coverage gap: no target encoding that can fail to represent characters (GBK). Low/中.
+- `outBytes` computed: if target is UTF-16, `s.length*2` bytes, but BOM not included. Stats says "（不含 BOM）". Good.
+- `decode()` sets run status? It calls convert() which markOk. If bytes exist. Good.
+- Bug: `watch([sourceEnc], () => void decode())` — decode calls convert; but `run.markOk(notes.join('；'))` with empty notes → status ok with empty message. Fine.
+- loneSurrogates for UTF-16 output: warns only for utf-8. Actually encoding to UTF-16 preserves lone surrogates (since it's charCode based). Fine.
+- `countLoneSurrogates` called on convertedText, used only if target utf-8. Good.
+- Potential issue: FileDrop accept limits to text extensions; but drag-drop ignores accept. File input dialog filters. Note says manual input any filename possible. Fine.
+- Missing: the requirement example "包含中文和多行内容的文本文件" works.
+- BOM output option present.
+
+Now T41.
+dsh: reasoning:
+T41: 
+- File→Base64: no progress/cancel (single file, 50MB), but design G02 requires progress/cancel for file tools? The audit asks to check whether file tools have 文件名/大小/移除/进度/取消/失败反馈 (G02). T41 has filename/size/remove but no progress/cancel during encoding. Since encoding is a single async arrayBuffer + btoa, no progress. Design may not require. I'll note.
+- Bug: Data URL regex `/^data:([^;,]*)(;[^;,]*)*;base64,(.*)$/s` — m[1] is the MIME. For `data:image/png;base64,...` works. For `data:;base64,...` m[1]=''. Fine.
+- Important bug: When decoding a Data URL whose base64 part is empty (`data:image/png;base64,`), base64ToBytes('') returns error "Base64 为空" → shows error. Fine.
+- Bug: `base64ToBytes` normalizes base64url, so a raw string like `SGVsbG8` works. Good.
+- Potential bug: For a raw string with `data:` prefix but not base64 (e.g., `data:text/plain,hello`), regex doesn't match because it requires `;base64,`. Then b64part=raw including "data:text/plain,hello" → base64ToBytes sees illegal chars (':', ',') → error. Fine.
+- Bug: `bytesToBase64` uses btoa building a binary string, then `b64.value` for 50MB file = ~67MB string. Editor performance. Warned >10MB.
+- Bug in `watch(outForm)`: switching dataurl→raw slices at `indexOf(',',5)+1`. For `data:image/png;base64,AAAA`, indexOf(',',5) finds the comma before base64. Good.
+- File name suggestion: uses declared MIME. Good.
+- Mismatch detection: if declared 'image/jpeg' and magic 'PNG', MAGIC.some(label PNG && mime image/jpeg) false → mismatch. Good.
+- Bug: `detectMagic` uses MAGIC[2] for GIF but checks bytes.length>=4 and head length 4, fine.
+- `previewHeadHex.slice(0,8)` shows first 4 bytes. Good.
+- Note: requirement "解码后二进制文件" variant covered.
+- Potential bug: `downloadDecoded` uses declared MIME for blob type; if mismatch, uses declared (possibly wrong) but notes. Fine.
+
+Now let me test the file tools live, including uploads. Playwright can set input files. Let me create test files:
+- /tmp/digest_a.txt "hello", /tmp/digest_b.bin random
+- /tmp/test.png (create via node? use a tiny PNG base64)
+- /tmp/test.txt with Chinese and CRLF
+- /tmp/b64.txt
+
+For T37, set input[type=file] to files, then wait for digest, compare MD5 with node.
+For T38, upload PNG and check conversion.
+For T39, upload a QR generated... hard. Instead test generation with long text (capacity error) and verify QR decodes via jsQR? We can test generation by using the tool itself: generate canvas then feed to scan tab? Can't easily. Alternative: use node qrcode? Not installed. But I can test that the generated canvas is a real QR by reading its pixels in the browser via jsQR in page context. Actually the page has jsQR loaded; but it's module-scoped. Hmm.
+
+Simpler: For T39 generation, verify the canvas isn't blank and check capacity error. And test scan with the generated PNG: download the canvas as dataURL in-page, then set it as a File to the scan FileDrop input. That's doable: get canvas.toDataURL(), convert to File in page via DataTransfer? Actually Playwright `set_input_files` requires a real file path or buffer. I can get the dataURL from canvas, save to /tmp, then upload to scan input. 
+
+Let me do that: in T39 generate tab, evaluate canvas.toDataURL('image/png'), decode base64 in python, write /tmp/qr.png, then switch to scan tab, set input file, wait, read scanText. This is a strong round-trip test.
+
+For T40: create a GBK-encoded file with Chinese using python (encode('gbk')), upload, check detection/decoding.
+For T41: test raw base64 → file, invalid base64, data URL mismatch.
+
+Let me write test_g.py.
+
+For file inputs, FileDrop has `input[type=file]` display:none. Playwright `set_input_files` works on hidden inputs.
+
+Let me create the test files first.
+dsh: reasoning:
+Excellent results:
+- T37: digests match (MD5/SHA-256 verified against node). Progress/cancel present. mismatch works.
+- T38: works; larger result warned.
+- T39: generation→scan roundtrip SUCCESS (real QR). Overflow error correct.
+- T40: GBK decoded correctly ("字符 13" - let me verify: '中文编码测试\r\n第二行\r\n' = 6+2+3+2 = 13 chars. Correct). BOM detection works. CRLF counts correct (3 CRLF).
+- T41: works; mismatch detection works.
+
+Now, the requirement mentions T39 "生成（对照规范/解码回环验证）" — done.
+
+Now design coverage. I need to compare design boards. Let me extract key control/option labels from the design boards, filtering out code tokens. Let me write a smarter extractor: only text nodes with fontSize >= 12? No. Better: skip text nodes whose content is short and matches code-y patterns, or only take those under control-like frames. Simplest: for each board, print text nodes but collapse consecutive single-token lines. Hmm.
+
+Actually I can just look at the design dump for each board's toolbar and panels (names), not text. Let me use `dump` with maxdepth to get frame names and text contents. But I already have the main board text for T27. For coverage, I mostly need to know which controls exist in design vs implementation. The design `dump` names of frames like "参数区" contain controls. Let me dump depth ~6 for each board and grep for names and content of text nodes with typical label attributes.
+
+Alternative: my /tmp/design_t27_41.txt has all text; I can grep for tell-tale option labels. Let me just grep that file for sections per board and skim. Since each board is delimited by "===== id name =====", I can use awk to print only the first ~60 lines of each board (the header/toolbar area before the code) and the beginning. Actually controls appear after the code usually. Hmm.
+
+Let me instead write a filtered extractor: print text nodes but skip ones that are single non-Chinese tokens (code tokens like "export", "id", ":", numbers). Keep text with length>1 and containing CJK or spaces or being labels. Let me produce a compact "UI strings" list per board.
+
+Let me do that.
+dsh: reasoning:
+T27 design has full param panel:
+- 目标 (interface/type)
+- 根类型名
+- 可选属性 (保持原样/全部可选/全部必填)
+- 只读 (关闭/readonly)
+- 日期字段 (保持 string/转为 Date)
+- 空数组策略 (unknown/any/手动指定)
+- 空对象策略 (Record<string,unknown> / {})
+- 数组联合类型 (联合类型/取首项类型)
+- 调整字段类型 / 手动指定类型
+- 复制/下载 .ts
+- "推断不确定" 提示 banner
+
+Implementation has only: kind, rootName, optStrategy(全部必填/含 null 标可选 — note design has three options 保持原样/全部可选/全部必填; impl has two: 全部必填 and 含 null 标可选 which is roughly "保持原样"+null), readonly. Missing: 日期字段 Date, 空数组策略, 空对象策略, 数组联合类型, 调整字段类型 UI, download (though DkEditor has 下载). And the "推断不确定" banner is rendered as warnings list, decent.
+
+Also design success board output email: unknown; impl null. Design empty-array board meta: Record<string, unknown>; impl Meta {} empty interface.
+
+These are substantive coverage gaps. Severity 中.
+
+Let me get the T28-T41 UI strings. Let me run the extractor for the rest and capture. I'll do it in chunks.
+dsh: reasoning:
+Now I have a clear picture of design coverage. Major design differences:
+
+T28 design: 
+- 语言 (TypeScript/JS), 样式 (不使用/scoped/SCSS?), 组件名 validation.
+- design shows "props 可选: 跟随标记/全部必填", "按签名生成 defineEmits", props with types & optional markers, static template preview with props values, copy/download.
+Implementation from introspection: has 组件名, TypeScript/JavaScript segmented, props list (name, type select String/Number/Boolean/Array/Object/Date, 必选 default value), emits list, scoped/非 scoped/无样式, CSS/SCSS, output editor, 预览? Does implementation have "静态模板预览"? Let me check t28.
+
+Let me read t28.
+
+Also T29 design has 小数位 (2/3/4位), 小数处理 (去掉多余零/固定位数), 零值单位, per-line checkboxes, 复制表格, 批量结果 with per-line check. Implementation has none of: 小数位, 小数处理, 零值单位, per-line checkbox selection (batch converts all matching), 复制表格, 逐行识别. Requirement doc T29 says "支持多行CSS值转换但只修改用户选择的值" and "px/rem/em互转，根字号与父字号分别可填". The design's "只修改用户选择的值" is implemented as "只转换所选的单位" (batchFrom), which is a different interpretation: design = user checks specific rows; impl = user picks a source unit. Hmm. The requirement doc says "只修改用户选择的值" — ambiguous. The design boards clearly show per-row checkboxes and 小数位 options. Implementation lacks 小数位选择 and per-row selection. This is a notable coverage gap (中).
+
+T30 design:
+- 输入格式 selector (HEX/RGB/HSL input format), 不透明度 slider, 合成背景, 色值格式 (HEX·6位 etc), 复制全部格式, 建议色 (替代色 #6B7280), 恢复上一个有效色, 透明色 min/max 区间 when no comp bg.
+Implementation: has color text + picker + alpha slider + comp bg + outputs HEX/RGB/HSL + contrast + grades + low-contrast warning. Missing: 复制全部格式 button, "采用建议色/替代色", "恢复上一个有效色", 输入格式 selector (not needed), 不透明度 labeled "alpha", and importantly design says "不指定合成背景时不输出具体比值，只提示需要补充背景色" — impl defaults comp bg to #ffffff and always computes. Actually impl allows comp bg field always. The design variant 带透明度 shows "对比度从 5.17 降到 2.55"; impl shows 3.95 for rgba(0,0,0,0.5) — different sample. Coverage: transparent handling present. Missing suggestion colors. Low/中.
+
+T30 design 低对比 sample #9CA3AF → 2.54; impl's low sample #999999 → 2.85. Different sample but fine.
+
+Now let me read t28 and get T31-T41 UI strings. Let me continue.
+dsh: reasoning:
+T28 implementation lacks the "静态模板预览" (static template preview) that the design prominently shows. There's no preview pane in the component (only output source editor). Let me confirm by checking the rest of template. Also the design wants component name validity rule "PascalCase，不能包含连字符/空格" — impl allows single-word and snake_case (`User_Form` valid ident, no warning? isValidIdent allows underscore). Design says cannot contain hyphen/space/numeric start. Impl: hyphen fails ident check. Underscore allowed but design says "不允许连字符、下划线或空格". Impl allows underscore → discrepancy (low). Impl also allows lowercase first letter (e.g., `userForm`) without error, only warns if single word. Design requires PascalCase. Minor.
+
+Also design KEd1s shows "使用建议名称 UserFormCard" (suggested name) — impl doesn't suggest a corrected name, just an error message. Requirement: "组件名不合法" variant with "具体修正方向" — impl gives rule text. Good enough but no auto-suggest.
+
+Also design shows "props 可选: 跟随标记/全部必填" global toggle — impl uses per-row 必选 checkbox. Fine.
+
+Let me check the rest of t28 template for preview.
+dsh: reasoning:
+Confirmed: T28 has no static template preview. Design explicitly requires "静态模板预览 / 只读 / 不执行脚本 · 不加载外部资源 / 预览 props". Requirement doc says "静态模板预览，不运行任意源码". So this is a substantive missing feature (高? It's a required main-board element). I'd say 中/高 — the requirement explicitly says 静态模板预览. I'll mark 高 for design coverage (main board missing pane).
+
+Let me verify there is no preview elsewhere — grep. The component has no preview. Yes.
+
+Now let me get design UI strings for T31-T41 to complete coverage.
+dsh: reasoning:
+Big T31 design differences:
+Design T31:
+- 优化选项: 压缩空白, 保留 viewBox (是/否), 删除 title/desc, 小数位 (2/3/4/6位)
+- 安全预览: design's behavior on unsafe content = "预览已阻断" / "移除 <script>、on* 事件与远程 href 后才能预览 / 仅查看源码" — i.e., the design BLOCKS preview entirely when unsafe content detected, whereas implementation SILENTLY STRIPS the unsafe content and renders the sanitized preview, showing a "已移除" list. This is a behavior difference. Design says "预览已阻止不安全内容 / 移除 <script>、on* 事件与远程 href 后才能预览". The implementation auto-removes and previews, without requiring the user to modify source. Both are defensible security-wise, but it deviates from the design variant "不安全内容被阻止". Also the implementation doesn't offer "定位第 N 行". This is a design coverage difference (中).
+- 优化前后 metrics: 字节, 标签数, 节点未删除, 空白字符; 前后代码差异 (删除/新增). Implementation has byte diff + line diff but no 标签数/空白字符 counts.
+- "保留 viewBox" option not implemented.
+- 小数位 option not implemented (impl uses 精简数值属性 boolean which strips trailing zeros, not rounding to N decimals). Design's "高精度坐标取整" (visual change warning) is NOT implemented: impl only shortens `1.500→1.5` (no precision loss). So the design variant "优化可能改变视觉" (al4QE) is not covered — implementation's optimizations are only lossless whitespace/number formatting; it never rounds coordinates or merges `<g>`. The design requires a warning when optimization changes visuals. Implementation has a note mechanism but no operation triggers it (except dropQuotes which is an HTML-only caveat). So the required variant is effectively missing (中).
+- Also design says "保留 viewBox 是/否" (can remove viewBox) — impl never removes viewBox; requirement doc says "保留viewBox". Fine.
+
+T33 design:
+- Design has a unified top-level toolbar with 算法/密钥/密钥格式/验签 and 解码/验签 in one page, showing "签名验签" panel inline (need user confirm algorithm).
+- Design "过期但签名有效" shows combined message: "签名匹配但已过期 · 校验时刻 ... / 已过期 · 不应继续使用 / Token 已过期：..." Implementation shows expired state in decode table and verify pass message separately, but the verify result does NOT mention expiry. Combined state message missing. Also design shows "0/32 字节相同" detail. Impl doesn't show matching byte counts. Coverage gaps (低/中).
+- Design "密钥格式" selector (text/PEM?) — impl only HMAC text key. Design shows 密钥/公钥. Impl only HS; RS/ES unsupported. Requirement doc T33 says "明确算法与密钥要求" and "拒绝把alg:none显示为有效签名"; design variant list doesn't explicitly require RS256 verification. The audit prompt says "HS256/RS256 验签是否真实". Impl doesn't support RS256, and explicitly says so. That's a deviation from the design which shows "密钥 / 公钥" and "密钥格式". I'll note RS256 not implemented (explicitly disclosed), design likely intends it.
+- Design "算法（来自 Header）/ 算法确认 用户需选择 HS256 后验签 / 待确认" — impl auto-selects the algorithm from header and marks it as "从 Header 带出，请确认"; user doesn't need to explicitly confirm (no confirmation step), and can just click verify. Minor.
+
+Now T34-T41 design UI. Let me extract.
+dsh: reasoning:
+Very informative. Key design differences:
+
+T34 design:
+- Toolbar options: 重复键 (保留/合并), 编码 (自动/不编码), 排序 (保持原序/按键排序). Implementation lacks 合并 duplicate keys option, 不编码 output option, and 按键排序. It only keeps duplicates and always encodes. Requirement doc T34 says "参数增删排序、重复键保留、编码预览" — "排序" is implemented via move up/down, and "重复键保留" yes, "编码预览" yes (both encoded and raw shown). The design's explicit 合并/不编码/按键排序 selector is missing. Medium-low coverage.
+- Design buttons: 应用修改/复制 URL/还原 (undo). Implementation is live preview, no 应用/还原. Fine (different interaction model).
+- Design "参数 5 项" etc. Implementation shows.
+
+T35 design:
+- 方向 (curl→fetch / fetch→curl / curl→Axios) selector + 目标语言; 凭证处理 (保留占位/移除); 缩进 (2/4); 中间预览 (header count, body fields); 复制目标代码/下载.
+- Design variant "不支持的 shell 表达式" expects full解析中断 with 出错位置/下一步/复制出错行; implementation only warns and continues (generates output with the raw expression in a quoted string). Actually the design stops parsing and does NOT generate. The implementation's test: `curl "$API_URL" -H "X-Token: $(get-token)" -d "$BODY"` → generated fetch code with URL `$API_URL` (urlIsExpr → unquoted), and warnings. It did generate output. The requirement doc says "不支持的curl shell展开、文件引用等明确提示" — implementation does warn. Design shows "解析中断". Different behavior but requirement only requires explicit prompt. Coverage difference (低/中).
+- Design "凭证处理 保留占位/移除": implementation does NOT mask credentials; the sample includes 'Authorization: Bearer test-token' and it's passed through verbatim. Design says "凭证类 header 默认替换为占位符，需要保留时必须显式选择". Implementation lacks this entirely. This could be a privacy/safety gap: tokens copied from curl are output verbatim into fetch/axios. The sample is a fake token, but real usage would leak. Requirement doc T35 says "不含真实凭证" for the example but doesn't explicitly require masking. Design main board shows 凭证处理 control. Coverage gap (中).
+- Design 缩进选项 missing in impl (impl uses fixed 2-space).
+- Design multipart: expects conversion of `-F` into runtime params (file → runtime File/Blob param) and output generated; implementation refuses (warns "暂不支持转换") and produces a GET without the form data. This is a notable difference: design variant "multipart文件引用" intends generating code with runtime params, whereas impl drops it. Requirement doc only says "文件引用等明确提示". Impl warns. But the generated output silently omits the -F fields from the request (only warning). Could be considered acceptable. I'll note as 中.
+
+T36 design:
+- Design says "浏览全部 41 个状态码" and "覆盖 41 个内置状态码". Implementation has 60 statuses. Requirement: data completeness vs RFC. Design itself says 41. Hmm, so implementation has MORE than design. The design's 41 count suggests design intended a smaller curated set. Not a defect.
+- Design status detail includes: 分类/方向/是否可缓存/是否幂等/参考 RFC/相关状态码/常见原因/示例请求响应/排查顺序. Implementation detail only shows 用途 + 相近状态区别. So the design's richer detail (是否幂等, 是否可缓存, RFC 参考, 常见原因) is missing. Requirement doc T36 says "常用状态详情、用途与相近状态区别" — only 用途 and 相近区别 required. So implementation meets requirement doc but not the design's fuller detail. Coverage difference (低/中).
+- Design search covers 数字/中文/英文; implementation also searches desc. Good.
+- Design has 分类 chips; impl has them. Good.
+- Missing status codes vs RFC: Let me compute. Implementation 60. Missing 305, 306, 424 (Failed Dependency), 509, 420 etc. 424 is an IANA-registered WebDAV code and notable. Also missing 414? present. Let me compute precisely by comparing to IANA list.
+
+Let me run a quick python to list implementation codes and compare with known IANA registry.
+
+Known IANA HTTP status codes:
+1xx: 100,101,102,103
+2xx: 200,201,202,203,204,205,206,207,208,226
+3xx: 300,301,302,303,304,305,306,307,308
+4xx: 400,401,402,403,404,405,406,407,408,409,410,411,412,413,414,415,416,417,418,421,422,423,424,425,426,428,429,431,451
+5xx: 500,501,502,503,504,505,506,507,508,510,511
+
+Implementation missing: 305, 306, 424. 305/306 are deprecated/unused, 424 is "Failed Dependency" (WebDAV). So the only meaningful missing is 424. Design board says 41 codes. Implementation 60. So data is more complete than design. Requirement says "对照 RFC 状态码集合，列出缺失/错误". I'll note 424 missing (低), 305/306 intentionally omitted (deprecated/unused). Also 418 present.
+
+Wait, design said "浏览全部 41 个状态码" and the "无搜索结果" board. Implementation shows 60. That's fine (better). But is there an inconsistency: design main board "常用入口" list. Fine.
+
+Let me verify the implementation's count and missing with a script (parse t36 STATUSES codes). Let me do that.
+
+Also need T37-T41 design UI strings. Let me extract.
+dsh: reasoning:
+T37 design differences:
+- Design wants 添加文件/开始校验 buttons (explicit start), whereas impl auto-starts on drop. Design wants "重试失败项", "导出成功项/已完成项", CSV export. Impl exports .txt manifest, no retry-failed-only (has 重算全部). Design "状态" includes 超时 status; impl has no timeout. Design "部分失败/取消任务/校验不匹配" variants covered. Requirement doc: "多文件列表、逐项进度、算法选择、结果对照、移除、取消、导出摘要清单" — all present. Fine.
+- Design says export CSV; impl exports .txt. Requirement doc just says "导出摘要清单". Minor.
+- Design "取消" is a global cancel-all button; impl has per-file cancel + 清空列表. Fine.
+
+T38 design:
+- 目标格式 includes 保持原格式; impl target only jpeg/png/webp (no "keep original"). Minor.
+- Design 质量 82, 尺寸约束最长边; impl different UI but equivalent.
+- Design "格式不支持" variant: AVIF unsupported → impl only offers JPEG/PNG/WebP; it does detect toBlob fallback type mismatch and warns. But there's no way to select an unsupported target in impl, so that variant is not reachable. Minor.
+- Design 透明图转JPEG: requires bg selection; impl does that.
+- Design 结果反而更大: impl handles.
+
+Now T39-T41 design UI.
+dsh: reasoning:
+T39 design: 
+- 前景色/背景色 options missing in impl (only size/ECC). Requirement doc says "文本或URL输入、尺寸、纠错级别、PNG/SVG下载" — fg/bg not required. Fine.
+- Design 内容/字符数/UTF-8字节数 stats — impl doesn't show char/byte count in generate tab. Design overflow message includes char/byte counts. Impl message is generic "内容超出二维码容量，请缩短或降低纠错级别" without counts. Low.
+- Design "识别结果" shows 内容类型/编码模式/纠错等级 — impl shows only content + char count. Low.
+- Design "在浏览器打开（需确认）" button for recognized URL — impl doesn't provide open button (safer). Requirement says "不自动打开识别出的URL" — impl complies. Fine.
+- Impl scan uses FileDrop but design shows the imported image filename/size ("ticket-qr.png · 512×512 · 18.4 KB"). Impl shows scanMeta "图片 256×256，识别成功". Partial.
+
+T40 design:
+- Source/target encoding selectors, newline, BOM, save.
+- Design "目标编码无法表示字符" variant with GB18030 target and per-char location. Implementation does NOT support GBK target at all → this required variant is impossible/unimplemented. Requirement doc explicitly lists "必画变体：...目标编码无法表示字符". So this is a real coverage gap (中). Impl claims "GBK 输出不支持，已禁用" which is a reasonable technical limitation but deviates from design's required variant.
+- Design "编码不确定" variant: design shows side-by-side interpretation under two possible encodings. Impl shows a warning note + manual override but no side-by-side comparison. Partial coverage.
+- Design shows "原字节/新字节" sizes; impl shows 字节. Good.
+
+T41 design:
+- 输出 raw/Data URL toggle: impl has "Base64 裸串"/"Data URL". Good.
+- Design "File → Base64" shows 复制结果/下载 .txt; impl uses DkEditor toolbar copy/download. Fine.
+- Design invalid base64: "定位到具体位置（第1行第27列）"; impl error is generic "Base64 中包含非法字符（支持标准与 URL-safe 字母表，允许空白）" — no position. Requirement doc says "所有失败状态保留输入并提供具体修正方向". Impl preserves input but doesn't locate the offending char. Coverage gap (低).
+- Design type mismatch: impl shows mismatch and detected header. Good. Design has 导出选项 类型来源 (按实际文件头推断) + 取消; impl just warns and downloads with declared MIME. Minor.
+- Design binary: impl hex preview. Good.
+
+Now, let me also check for the "上传中" wording across all T27-T41 — none found except "不会上传" which is fine.
+
+Let me check FileDrop progress/cancel requirements for T37-T41: T37 has progress+per-file cancel. T38/T39/T40/T41 have no progress/cancel. The design for T40 doesn't show progress. The audit prompt asks "是否具备设计中要求的文件名/大小/移除/进度/取消/失败反馈". T38 shows filename/size/remove? T38 has FileDrop only, and after loading shows original panel; there's no explicit "移除文件"/clear file button in T38! Let me check: T38 has no clearFile in the template. Looking at t38 code: `function clearFile()` is NOT defined (I saw clearFile? No — I saw `clearFile` in T40 and T41; T38 has no clearFile function and no 移除 button). Let me verify: In t38 template there's no 移除 button. So T38 cannot remove the loaded file (only drop another). Design T38 variants don't explicitly show remove, but G02 file workbench expects 移除. The audit asks to check 文件名/大小/移除/进度/取消/失败反馈 (G02). T38 lacks 移除. Also T39 has no remove for the imported scan image (no filename shown). T40 has 移除 (trash icon). T41 has 移除. T37 has per-item trash.
+
+Let me grep to be sure.
+
+Also, T38 has no progress indicator during conversion other than busy status "转换中…". Fine.
+
+Let me verify T38 lacks clear/remove.
+
+Also check "上传中" is absent everywhere.
+
+Let me also check the T36 status count.
+
+Let me run a few quick greps/scripts.
+dsh: reasoning:
+My regex counted `related: [{ code: N` too. Let me fix to count only top-level STATUSES entries. Use regex `^\s{2}\{ code: (\d+)` at line start with two spaces. Let me redo.
+
+Also: T38 has `clearFile` function defined at line 129 but is it used in template? Let me grep template usage. Earlier read showed clearFile defined but I didn't see it in template. Let me check.
+
+T39: no remove.
+
+Let me redo counts.
+dsh: reasoning:
+Confirmed:
+- T36 has 60 codes. Missing from IANA: 305 (Use Proxy, deprecated), 306 (unused), 424 (Failed Dependency, WebDAV). So only 424 is a meaningful omission.
+- T38: `clearFile` defined at line 129 but NEVER used (dead code) — no UI to remove/clear the loaded image. So the function is dead code and the tool lacks "移除文件". Real defect (低/中, G02).
+
+Now let me check T39/T40/T41 for progress/cancel — T39 no remove, T40 has 移除, T41 has 移除.
+
+Also check T31 for "移除输入文件"? Not needed.
+
+Now let me also verify the T35 header-quoting bug more precisely and check fetch→curl output validity. And check the generated fetch with `Content-Type` — I already have evidence. Let me also produce a node syntax check of the generated fetch code to prove invalidity. That's strong evidence. Let me do that: node --check on the generated snippet.
+
+Generated:
+```
+fetch('https://api.example.com/users', {
+  method: 'POST',
+  headers: {
+    Content-Type: 'application/json',
+    Authorization: 'Bearer test-token',
+  },
+  body: JSON.stringify({"name":"devkit","role":"admin"})
+})
+```
+`node --check` should fail on Content-Type. Let me run.
+
+Also T35 design "凭证处理" missing.
+
+Let me also verify T32's formatter on more complex JS to find correctness bugs. Let me test a few tricky cases via node (extract formatJs). Actually easier: test through the UI. Let me test:
+- `const o={a:1,b:{c:2}};`
+- `if(a){b()}else{c()}`
+- `const s="}";`
+- template literal
+- regex
+- `for(let i=0;i<3;i++){x()}`
+- object in array
+
+Let me drive the UI with these. But time. Let me instead extract the formatJs function to node. I can copy the code lines into a temp .js file and run. That's "re-running the actual code" essentially. Let me do it via a script that extracts lines 266-512 from the vue file and wraps.
+
+Actually the UI test earlier worked for the sample. Let me test a couple of tricky inputs quickly via Playwright.
+
+Let me also test T32 HTML with `<pre>` and entity, and CSS with `}` in string.
+
+Given time constraints (I've used a lot), let me prioritize writing the report. I have enough findings. Let me do a few final verification commands:
+1. node --check the T35 generated fetch → prove syntax error.
+2. T35 fetch→curl roundtrip test (to check output validity).
+3. Quick T32 tricky tests.
+4. Check T40 target encoding options (only utf) - already known.
+
+Let me run these.
+dsh: reasoning:
+Confirmed syntax error. Now let me do a final Playwright test of T35 fetch→curl and some T32 tricky inputs, plus check T33 stale result (already done). Let me also verify T27 null/unknown and the `Meta {}` empty interface output for the design.
+
+Let me also check T30's contrast values against an independent computation (node) for #2563eb/white and #999/white, #9ca3af/white, and the alpha composite. Already matches known values; I can compute with a quick node script to include as evidence.
+
+Let me run a combined verification script.
+dsh: reasoning:
+Matches. Good; T30 contrast formula correct.
+
+Now let me do the T35 fetch→curl test and T32 tricky tests, plus verify T35 masks credentials (it doesn't). Also check T35 "方向" only via source/target segmented (design has 方向 presets + 目标语言). The impl does have source/target and swap.
+
+Let me run final Playwright.
+dsh: reasoning:
+T32 handles these tricky cases correctly. Good. It's a self-implemented conservative formatter, not a real parser, but behavior is decent. Note: `if(a){b()}else{c()}` output is:
+```
+if(a){
+  b()
+} else {
+  c()
+}
+```
+Wait, `else` line: after `}` it checks `kw` and adds ' ' to cur, then `{` pushes... The output shows `} else {` on one line then `c()`. Hmm actually output:
+```
+} else {
+  c()
+}
+```
+Wait the printed output shows `} else {` and `c()`. Let me re-read: 
+```
+if(a){
+  b()
+} else {
+  c()
+}
+```
+Yes correct.
+
+Also `for(let i=0;i<3;i++){x()}` correct.
+
+CSS `content:"}"` and url with `}` correct.
+
+HTML `<pre>` content preserved. Good.
+
+Now I have a good body of evidence. Let me also quickly test the T27 null/unknown discrepancy and T29 batch "只修改用户选择的值" vs design per-row. Already have.
+
+One more: T31 "unsafe" design expects preview blocked; impl previews sanitized. Already have evidence.
+
+Let me also verify T31 optimization never changes visuals / no rounding option. Confirmed from code: shortenAttrs only strips trailing zeros; no decimal rounding, no empty `<g>` merging. Design variant al4QE cannot occur. Also no 保留viewBox option.
+
+Let me also check T27's `id: 1000000000000000001` output — I saw `number` and warnings about date. Fine.
+
+Let me now also double check T34 stale-on-invalid bug with fresh page (I saw it). Good.
+
+Let me also check T33 stale verify already confirmed.
+
+Now, one more important check: the T37 "取消" flow and FileDrop multi-file oversize rejection. I'll note FileDrop behavior from code (it rejects the whole batch). That's evidence from code lines 22-28 of FileDrop.vue. Could test but code is clear. I'll cite.
+
+Also G02: T38/T39 lack remove. T39 has no filename/size display for imported image. T41 has remove/filename/size. T40 has.
+
+Let me now check whether T40 has progress/cancel: no progress bar; busy status text "读取文件…". It's a single small file, no cancel. Design doesn't show progress. I'll note T40/T41 lack progress/cancel but it's low.
+
+Now the "封面"/design text for T35 "凭证处理 保留占位/移除" is missing. Let me confirm no masking in code: grep for mask/占位. Not present in t35. The sample passes through. Confirmed by test output.
+
+Let me also quickly check tools.ts slugs/names match design titles (design uses "Vue 单文件组件模板生成" vs registry/filename "Vue 单文件组件模板"; page title from DkToolPage maybe). Minor. Design T39 title "二维码生成与识别" matches.
+
+Now I should also check the design main board for T28 page title vs implementation title, but not critical.
+
+Let me also verify T31 sanitizer XSS on `<script>` via uppercase or `xlink:href` javascript. Actually the key XSS question: since preview is via `<img src="data:image/svg+xml,...">`, scripts can't execute. But the `sanitizedText` is also not inserted via v-html. So safe. Good. I'll state that.
+
+One potential real security issue: `previewUrl.value = 'data:image/svg+xml,' + encodeURIComponent(clean)`. encodeURIComponent doesn't escape `'`? Actually for a data URL in an HTML attribute, Vue sets src via DOM property, so fine.
+
+Now let me check T31 external href removal: what about `<use href="http://...">`? Removed. Good. What about CSS `@import` inside `<style>`? Not removed but img context. Fine.
+
+Now, let's think about additional code defects:
+
+T27: `pascal` hint for nested objects in arrays: `elemHint` derived from hint (key) — for `items` → `Item`. Good.
+T27 bug: `generateTypes` `usedNames` includes rootName; `uniqueName(base === rootName ? base + '2' : base)` — if a nested object hint pascalizes to rootName, it becomes rootName+'2'. But `uniqueName` adds to usedNames. Fine.
+T27: For `type` kind with nested objects, interfaces are still emitted as `export interface X`. That's valid.
+T27: `optStrategy='nullOptional'` makes null props optional but the type stays `null`. Design wants `email: unknown` by default. Already noted.
+T27: For arrays of all nulls: returns `(null)[]`? types=['null'], types.length===1 → `null[]`. Design would want unknown[]. Minor.
+
+T28 potential bug: `validDefault` allows `'string'` etc. TypeScript generation: `withDefaults(defineProps<Props>(), { disabled: false })` good.
+T28: The generated `interface Props { disabled?: boolean }` and template uses `:disabled="disabled"`. Good.
+T28: For JS mode, `defineProps({ title: { type: String, required: true } })`. Good.
+T28 bug: emit rows in TS mode generate `const emit = defineEmits<{ (e: 'submit'): void; }>()`. Good.
+No preview (design gap).
+
+T29 potential bug: `fmtNum` uses toFixed(4) then parseFloat; design wants 小数位 selection (missing).
+T29 bug: `convertBatch` regex would match numbers inside e.g. `z-index: 10`? '10' has no unit → no match. Good. But it also matches inside URLs like `image-2x.png`? '2x' no. `1.5em` inside a comment is converted (design says only selected rows). Since impl converts all occurrences, it could modify comments/strings. Design says only checked rows. Noted.
+
+T30: `parseColor` bug: `#` with 0 hex digits? `#` → hex='' → regex `^[0-9a-f]+$` fails → error. Good. `hsl(210 50% 50% / 0.5)` works. Fine.
+T30: `rgb(255,0,0)` alpha undefined → 1. Good.
+T30: design wants "输入格式" selector and "复制全部格式" — missing. Low.
+
+T33: sample tamper bug (HIGH). Stale verify (中). RS256 unsupported (design). Combined expired+valid message (low).
+
+T34: stale structure on invalid URL (中). Missing 合并/不编码/排序 options (低). 
+T34 bug: `addRow` with empty key produces `=value`; hint shown. Fine.
+
+T35: header key quoting bug (HIGH). Missing credential masking (中 per design). Multipart/expr behavior differs from design (中). 缩进/目标语言/方向 presets missing (低).
+
+T36: 424 missing (低). Richer detail fields missing (低).
+
+T37: FileDrop multi oversize rejects all (中). No retry-failed-only (低). Export as txt not CSV (低).
+
+T38: clearFile dead code / no remove button (中? G02). EXIF orientation/metadata loss not warned (中/低). Animated GIF to static not warned (低). No "保持原格式" target (低).
+
+T39: no fg/bg color options (低, not required), no char/byte stats (低), no remove. Roundtrip works.
+
+T40: GBK target unsupported → "目标编码无法表示字符" variant impossible (中). No side-by-side uncertain-encoding comparison (低).
+
+T41: invalid base64 no position (低). File→Base64 no progress/cancel for large files (低). Actually requirement "大文件内存" — 50MB limit, warns >10MB. Fine.
+
+Now, let me also check T27's JSON error position defect more broadly. It's due to V8 message format. I'll cite `devkit/app/utils/json.ts:197-209`.
+
+Also potential bug: `jsonErrorPosition` line/column computation: `column = pos - before.lastIndexOf('\n')`. If pos is at start of a line, lastIndexOf('\n') = posOfNewline, column = pos - posOfNewline = 1-based. Correct.
+
+Now let me also verify the T27 warnings for null: design says unknown; impl null. Evidence: live output `balance: null` and warning. Good.
+
+Let me now check one more thing: the design T27 main board sample has `"tags": []` and expects `unknown[]` (matches impl) and `email:null` → unknown (impl null). Also `meta:{}` → design empty-array variant expects `Record<string, unknown>`; impl `Meta {}` (empty interface). I have live evidence: "export interface Meta {\n\n}".
+
+Now I'll write the report. Let me make sure I have file:line references.
+
+Key refs:
+- T27 null: t27-json2ts.vue:111-114 (returns 'null'), design Qy9fi expects unknown.
+- T27 empty object: t27-json2ts.vue:167-168 registerInterface → empty interface; design L4CzT expects Record<string,unknown>.
+- T27 missing controls: template lines 270-303 (only kind/rootName/optStrategy/readonly); design expects 日期字段/空数组策略/空对象策略/数组联合类型/调整字段类型.
+- T27 JSON error position: utils/json.ts:197-209; live message without position.
+- T28 missing preview: t28-vue-sfc.vue:370-394 (right pane only source editor); design oVrIm expects 静态模板预览.
+- T28 name rule: t28-vue-sfc.vue:47-57 isValidIdent allows underscore/lowercase; design KEd1s requires PascalCase no underscore.
+- T29 missing 小数位/小数处理/逐行勾选: t29-css-units.vue:105-119 convertBatch converts all occurrences; design s2aSl/ceWdh.
+- T30 missing 复制全部/建议色: t30-color.vue template.
+- T31 preview blocked vs strip: t31-svg.vue:45-77, 147-151; design ZUMYv.
+- T31 missing 保留viewBox/小数位: t31-svg.vue:20-24 options.
+- T32 no real parser (self-implemented state machine): t32-html-format.vue:19 note. Behavior tested OK. I'll note as design/technical risk, not a bug.
+- T33 tampered sample: t33-jwt.vue:13 SAMPLE_TAMPERED; verification at 228-249 compares bytes; base64 last char same bytes.
+- T33 stale result: t33-jwt.vue:106-146 decode() doesn't reset verifyResult; :174-175.
+- T33 RS256 unsupported: t33-jwt.vue:182, 207-210.
+- T34 stale on invalid: t34-url-params.vue:57-75 catch doesn't clear base/rows; template :159 v-if="base".
+- T35 SAFE_KEY hyphen: t35-curl-convert.vue:229, used at 602 and 635, 640.
+- T35 no credential masking: design ndB0M; code has no such option.
+- T35 multipart: t35-curl-convert.vue:350-352 warns and drops.
+- T36 424 missing: t36-http-status.vue STATUSES.
+- FileDrop batch reject: FileDrop.vue:22-29.
+- T37 export txt: t37-file-digest.vue:284 downloadText .txt.
+- T38 dead clearFile: t38-image-compress.vue:129 (no template usage). No EXIF warning.
+- T40 GBK target unsupported: t40-text-encoding.vue:7 TargetEnc, :65-69 targetOptions.
+- T41 invalid base64 no position: t41-file-base64.vue:144-149.
+
+Now let me also confirm T38 clearFile truly unused by searching template. grep only found line 129 in the whole file → indeed unused. Good (dead code + missing remove).
+
+Let me also confirm there's no "移除" in t38 template — grep "移除" found none. Good.
+
+Let me double-check T39 lacks remove: grep none. Good.
+
+One more: T37 "重算全部" vs design "重试失败项". And design's auto vs manual. Low.
+
+Also G02 requires "进度" — T37 yes; T38 busy text; T39 scanBusy; T40 busy; T41 no busy indicator during arrayBuffer read (it's fast). I'll note T41 lacks progress.
+
+Also G02 "文件名/大小" — T39 scan doesn't show filename/size (only "图片 WxH"). Low.
+
+Now let me also verify there are no console errors on these pages (pageerrors). Our tests showed PAGEERRORS [] for test_g. test earlier reported ERRS mostly empty. Let me quickly probe all 15 pages for console errors using probe.py? That's heavy. Let me do a quick Playwright loop capturing pageerror/console error. Given time, do it fast.
+dsh: reasoning:
+Wait, the listeners accumulate across iterations but the output shows empty for all, good (they'd accumulate but none fired).
+
+Now I have enough. Let me also quickly check the design coverage for T27/T29 "下载" — the design wants 下载 .ts / 下载 .css. DkEditor toolbar has 下载. So fine.
+
+Let me now write the report. It needs:
+- 结论摘要 (overall coverage + 3-5 most severe)
+- 覆盖对照表 (per tool one line, in a table)
+- 设计还原问题
+- 功能与代码缺陷
+- 无法验证/存疑项
+- 修复优先级建议
+- Last line DONE: absolute path
+
+Let me determine overall design coverage. 15 tools. Main boards all have corresponding pages. Coverage high. I'll estimate ~78% (control/state coverage).
+
+Let me write the report carefully with evidence. I'll include the tables.
+
+Let me structure the 覆盖对照表 with columns: 工具 | 页面 | 主画板要素覆盖 | 必画变体覆盖 | 证据/缺口.
+
+Let me enumerate the key per-tool assessment:
+
+T27: 主画板基本；变体: 空数组 (实现 unknown[]，但空对象→空 interface，缺 空数组策略/空对象策略/数组联合策略/日期 Date/调整字段类型) → 部分. 
+T28: 主画板缺 静态模板预览；组件名不合法校验有但规则方向略异（允许下划线/小写）. 变体 props/emits 覆盖, 组件名不合法覆盖.
+T29: 主画板缺 小数位/小数处理/逐行勾选/复制表格/下载 .css（编辑器有下载）; 变体 批量(单位维度而非行勾选)、基准非法覆盖.
+T30: 主画板基本; 缺 输入格式/复制全部/建议替代色/恢复上一有效色; 变体 透明/低对比/无效覆盖.
+T31: 主画板缺 保留viewBox/小数位/标签数统计; 不安全变体为"剥离后预览"而非"阻断预览"; 视觉变化变体不可达. 
+T32: 主画板缺 换行/属性换行/保留空行选项; 语言/缩进/错误定位覆盖; 变体 CSS/JS/错误覆盖. Also 标签配对/括号配对状态有.
+T33: 主画板结构覆盖（但算法/密钥控件在折叠面板内、默认收起）; 变体 仅解码/签名不通过(示例伪造无效)/过期但有效(无合并结论)/格式错误覆盖. RS256 不支持.
+T34: 主画板缺 重复键合并/编码切换/按键排序; 变体 重复/无效覆盖.
+T35: 主画板缺 方向预设(有源/目标+swap)、目标语言、凭证处理、缩进; 变体 fetch转curl覆盖、shell表达式(警告但继续生成,设计为中断)、multipart(拒绝而非转运行时参数).
+T36: 主画板缺 详情页(方向/缓存/幂等/RFC/常见原因/示例) ; 变体 详情/无结果覆盖; 数据 60 条缺 424.
+T37: 主画板覆盖(自动开始 vs 开始校验按钮), 变体 部分失败/取消/不匹配覆盖; 导出为 txt 非 CSV; 缺 仅重试失败项; FileDrop 批量超限全拒.
+T38: 主画板覆盖; 变体 结果更大/透明转JPEG覆盖; 格式不支持变体不可达(无可选不支持格式); 无 移除文件.
+T39: 主画板覆盖；缺 前景/背景色、字符/字节统计；变体 生成(回环验证通过)/识别成功/未识别/超容量覆盖.
+T40: 主画板覆盖；变体 编码不确定(仅警示,无并列解读)、目标编码无法表示(GBK输出禁用,不可达) → 部分.
+T41: 主画板覆盖；变体 无效Base64(无定位)/类型不匹配/二进制覆盖.
+
+Now severity summary top 5:
+1. 阻断/高: T35 生成的 fetch/axios 代码 header 名带连字符未加引号 → 语法错误 (SAFE_KEY 允许 '-'). Also affects axios params keys.
+2. 高: T33 "被篡改签名" 示例并未真正篡改（改了 base64url 末位，解码字节相同），点击后显示"签名验证通过"，与设计/文案矛盾。
+3. 中: T33 验签结果不随 Token 变化清除，切换 Token 后旧"签名验证通过"继续显示。
+4. 中: T27 空对象生成空 interface、null 输出 null（设计为 unknown），并缺多项策略控件。
+5. 中: T28 缺静态模板预览（设计主画板必需）。
+6. 中: T31 不安全内容行为与设计不符（设计阻断，实现剥离后预览），且"优化改变视觉"变体不可达。
+7. 中: T34 无效 URL 时保留旧解析结果。
+8. 中: T40 目标编码仅 UTF 系，"无法表示字符"变体不可达。
+9. 中: FileDrop 多文件超限整批拒绝。
+10. 中: T38 无移除文件（clearFile 死代码）。
+
+I'll pick top 5 in summary.
+
+Now write the report file. Need to use write tool. Let me create it.
+
+Let me also include the exact command outputs snippets as evidence.
+
+I'll write a thorough but concise report.
+
+For the "覆盖对照表要能看出 需求项 → 是否实现 → 证据", I'll include a table with major requirement items.
+
+Let me draft.
+
+I should double-check line numbers I cite:
+- t35 SAFE_KEY line 229; used 602, 635, 640. Yes.
+- t33 SAMPLE_TAMPERED line 13. Yes.
+- t33 verify compare lines 228-249. verifyResult reset only line 193 (verify start) and loadSample 263.
+- t27 null lines 111-114. empty obj registerInterface line 168.
+- t27 controls template lines 270-303.
+- t28 right pane lines 370-394 (no preview).
+- t31 options lines 20-24; sanitize 45-77; preview 147-157.
+- t34 parse catch 70-74; base not cleared.
+- t40 TargetEnc line 7; targetOptions 65-69.
+- FileDrop.vue 22-29.
+- t38 clearFile 129.
+- t36 STATUSES list.
+- t41 144-149.
+- utils/json.ts 197-209.
+- t29 convertBatch 105-114.
+- t30 template.
+- t39 template.
+- t37 export 259-285.
+
+Let me write.
+
+One more thing: I should verify the claim "T33 verify passes on tampered" is due to base64 trailing bits, and that this is a real UX bug: the design explicitly requires a "签名不通过" variant, and the tool's own text says "验签必然失败". I have node evidence.
+
+Also note there's a wrong-key path that does show failure, so the "签名不通过" state is reachable by editing the key; but the provided sample button fails to demonstrate it.
+
+Let me write the report now.
+
+I'll also mention T27 missing "下载 .ts" explicitly? DkEditor has download so it's covered. Design also has "导入文件" — DkEditor maybe has import? The design T27 shows 粘贴/导入文件/清空. DkEditor toolbar earlier showed "复制 下载 清空" — no 导入文件. So T27 can't import a .json file. Design shows 导入文件. That's a coverage gap. Let me check DkEditor for upload. grep.
+dsh: reasoning:
+DkEditor has no file import. So T27 design's "导入文件" is missing (T27 has no FileDrop). Similarly T32 design has "导入文件" but implementation only has DkEditor (no import). T29 design has "导入文件" for batch — impl no import. T31 has FileDrop. So T27/T29/T32 lack "导入文件" control required by design. I'll note as coverage gaps.
+
+Wait, DkEditor had buttons "复制 下载 清空". Let me confirm no import by reading DkEditor toolbar. grep for "下载" and button labels.
+dsh: reasoning:
+Confirmed: DkEditor toolbar has 复制/下载/清空 only, no 导入. So T27, T29(batch), T32 lack the design's "导入文件" button. T28/T30/T33-T36 designs also had "导入文件" for the source editor (T32, T33 shows 粘贴/清空 only for JWT). T33 design shows 粘贴/清空 (no import). T28 no import. 
+
+Designs with 导入文件: T27, T29(batch), T31, T32, T35? T35 design shows 粘贴/清空 (no import). T37 add file. T39 导入图片. T40/T41 file drop.
+
+So the missing "导入文件" applies to T27, T29, T32 (and T31/T40/T41 have FileDrop). I'll note as a low-severity common gap.
+
+Now write the report. Let me be efficient but thorough.
+
+Let me now compose the markdown.
+
+I'll include a coverage table with 15 rows + summary rows, then detailed issues.
+
+Let me write the file.
+dsh: reasoning:
+Let me verify the file's last line and that it's written. Also double check a couple of facts:
+- T28 registry name: tools.ts:209 says 'Vue 单文件组件模板'. Let me verify exact text.
+- tools.ts:281 T40 name.
+
+Let me check quickly and confirm the report ends correctly.
+dsh: reasoning:
+The report is written and the last line is the DONE marker. Everything checks out.
+
+Let me do a final quick sanity check that I haven't modified any project source (red line). I only wrote to /tmp and audit/reports. Good.
+
+I'll now provide a brief summary to the user.
+报告已完成并写入 `audit/reports/r4-tools-t27-t41.md`（末行含 `DONE:` 标记）。只做了只读审核与 Playwright/node 实测，未改动 `devkit/**`、`design.pen`、`docs/**`。
+
+## 主要发现
+
+**高严重度**
+1. **T35 生成的 fetch/Axios 代码是非法 JS** — header 名含 `-`（`Content-Type` 等）未加引号，根因 `t35-curl-convert.vue:229` 的 `SAFE_KEY` 正则允许 `-`。`node --check` 复算出 `SyntaxError: Unexpected token '-'`。
+2. **T33 “被篡改签名”示例并未真正篡改** — 只把 32 字节 HMAC 的 base64url 末位 `Y→Z`，低 2 位是丢弃的填充位，解码字节完全相同。实测点击该示例后验签显示“**签名验证通过**”，与工具自身文案“验签必然失败”和设计变体直接矛盾。
+
+**中严重度**
+- T33 验签绿色结果不随 Token 变化清除（换 token 后仍显示通过）。
+- T27 空对象生成空 `interface`（设计为 `Record<string,unknown>`）、`null` 输出 `null`（设计为 `unknown`），且缺 5 组策略控件；`jsonErrorPosition` 对新版 V8 的 `Unexpected token ...` 消息取不到行列。
+- T28 缺设计主画板必需的“静态模板预览”。
+- T31 “不安全内容”是剥离后照常预览（设计为阻断预览），“优化改变视觉”变体不可达。
+- T34 无效 URL 时仍显示上一次解析结果。
+- T40 只支持 UTF 系目标编码，“目标编码无法表示字符”必画变体不可达。
+- `FileDrop` 多文件投递一个超限就整批拒绝；T38 无“移除文件”（`clearFile` 死代码）。
+
+**已验证正确**：T29 换算、T30 WCAG 对比度（node 独立复算一致）、T31 清洗无 XSS、T32 三种语言格式化含难例、T33 正确密钥/错密钥/alg:none/过期/格式错误、T37 摘要与 node 完全一致、T39 生成→jsQR 回环通过、T41 类型不匹配检测；15 页均无 console error。
+
+覆盖对照表逐工具一行（含 52 个设计画板 ID 清单与证据 `文件:行号`）、设计还原问题、功能与代码缺陷、存疑项、修复优先级均已在报告中列明。

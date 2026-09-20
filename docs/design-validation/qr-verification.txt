@@ -1,0 +1,7 @@
+image        : WNWtF.png  494x494 px
+corners found: yes
+decoded      : 'https://devkit.example/tools/base64?from=qrcode'
+target       : 'https://devkit.example/tools/base64?from=qrcode'
+lengths      : decoded=47  target=47
+
+RESULT: EXACT MATCH -- the exported PNG is a real, scannable QR code

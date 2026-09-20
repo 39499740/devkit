@@ -1,0 +1,1683 @@
+{
+ "url": "http://localhost:3000/",
+ "console": [],
+ "pageerrors": [],
+ "failed_requests": [],
+ "status": 200,
+ "title": "DevKit · 开发者本地工具箱",
+ "metrics": {
+  "body": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 3131,
+   "bg": "rgb(15, 17, 21)",
+   "color": "rgb(233, 237, 243)",
+   "font": "\"Noto Sans SC\", -apple-system, \"system-ui\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+   "size": "14px",
+   "border": "rgb(233, 237, 243)"
+  },
+  "header": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 60,
+   "bg": "rgb(22, 26, 33)",
+   "color": "rgb(233, 237, 243)",
+   "font": "\"Noto Sans SC\", -apple-system, \"system-ui\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+   "size": "14px",
+   "border": "rgb(233, 237, 243) rgb(233, 237, 243) rgb(39, 47, 59)"
+  },
+  "nav": {
+   "x": 0,
+   "y": 60,
+   "w": 236,
+   "h": 840,
+   "bg": "rgb(22, 26, 33)",
+   "color": "rgb(233, 237, 243)",
+   "font": "\"Noto Sans SC\", -apple-system, \"system-ui\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+   "size": "14px",
+   "border": "rgb(233, 237, 243) rgb(39, 47, 59) rgb(233, 237, 243) rgb(233, 237, 243)"
+  },
+  "sidebar": {
+   "x": 0,
+   "y": 60,
+   "w": 236,
+   "h": 840,
+   "bg": "rgba(0, 0, 0, 0)",
+   "color": "rgb(233, 237, 243)",
+   "font": "\"Noto Sans SC\", -apple-system, \"system-ui\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+   "size": "14px",
+   "border": "rgb(233, 237, 243)"
+  },
+  "main": {
+   "x": 236,
+   "y": 60,
+   "w": 1204,
+   "h": 3071,
+   "bg": "rgba(0, 0, 0, 0)",
+   "color": "rgb(233, 237, 243)",
+   "font": "\"Noto Sans SC\", -apple-system, \"system-ui\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+   "size": "14px",
+   "border": "rgb(233, 237, 243)"
+  },
+  "h1": {
+   "x": 268,
+   "y": 92,
+   "w": 1140,
+   "h": 35,
+   "bg": "rgba(0, 0, 0, 0)",
+   "color": "rgb(233, 237, 243)",
+   "font": "\"Noto Sans SC\", -apple-system, \"system-ui\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+   "size": "22px",
+   "border": "rgb(233, 237, 243)"
+  },
+  "h2": {
+   "x": 268,
+   "y": 271,
+   "w": 60,
+   "h": 24,
+   "bg": "rgba(0, 0, 0, 0)",
+   "color": "rgb(233, 237, 243)",
+   "font": "\"Noto Sans SC\", -apple-system, \"system-ui\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+   "size": "15px",
+   "border": "rgb(233, 237, 243)"
+  },
+  "htmlBg": "rgba(0, 0, 0, 0)",
+  "cssVars": {
+   "--bg": "#0f1115",
+   "--surface": "#161a21",
+   "--surface-subtle": "#1b2029",
+   "--border": "#272f3b",
+   "--text-primary": "#e9edf3",
+   "--text-secondary": "#9fa9b8",
+   "--text-tertiary": "#6c7686",
+   "--accent": "#4d8dff",
+   "--accent-soft": "#1a2740"
+  },
+  "textSample": [
+   {
+    "t": "DevKit",
+    "tag": "SPAN",
+    "size": "16px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "搜索工具，例如 JSON、国密、时间戳",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "⌘",
+    "tag": "KBD",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "K",
+    "tag": "KBD",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "源码",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "全部工具",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(77, 141, 255)"
+   },
+   {
+    "t": "41",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(77, 141, 255)"
+   },
+   {
+    "t": "我的收藏",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "0",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "最近使用",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "0",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "工具分类",
+    "tag": "P",
+    "size": "11px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "数据格式",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "4",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "JSON 格式化",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "JSON 差异比较",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "JSON / YAML 转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "CSV / JSON 转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "编码与文本",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "7",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "Base64 编解码",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "URL 编解码",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Unicode / 字节编码转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "文本去重与整理",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "命名风格转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "文本差异比较",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "正则表达式测试",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "摘要与加密",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "6",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "MD5 / SHA 摘要",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "HMAC 计算与校验",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "AES 加解密",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "SM2 加解密与签名",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "SM3 摘要",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "SM4 加解密",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "时间与标识",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "4",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "时间戳转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "UUID 生成与解析",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Cron 解析与执行预览",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "日期时间差计算",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Java 开发",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "5",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "JSON 转 Java 类",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Java 字符串转义",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Properties / YAML 转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Java 异常堆栈整理",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Maven / Gradle 依赖转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Web / Vue",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "6",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "JSON 转 TypeScript 类型",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Vue 单文件组件模板",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "CSS 单位换算",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "颜色转换与对比度",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "SVG 预览与优化",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "HTML / CSS / JS 格式化",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "接口辅助",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "4",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "JWT 解析与验签",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "URL 参数编辑",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "curl / fetch / Axios 转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "HTTP 状态码速查",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "文件与图片",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "5",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "文件摘要与批量校验",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "图片压缩与格式转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "二维码生成与识别",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "文本文件编码转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "文件 / Base64 转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "所有计算在浏览器内完成，输入内容不会上传到服务器。",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "开发者本地工具箱",
+    "tag": "H1",
+    "size": "22px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "41 个面向 Java、Web、Vue 开发者的常用工具。输入、转换、摘要、加解密与文件处理全部在你的浏览器本地完成，支持静态部署、离线使用。",
+    "tag": "P",
+    "size": "13px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "搜索工具：JSON、国密、时间戳、Cron…",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "⌘",
+    "tag": "KBD",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "K",
+    "tag": "KBD",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "推荐工具",
+    "tag": "H2",
+    "size": "15px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "第一次访问？从这些高频工具开始。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "JSON 格式化",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "格式化、压缩并校验 JSON，支持缩进选择与树形视图。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "数据格式",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(77, 141, 255)"
+   },
+   {
+    "t": "大整数安全",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Base64 编解码",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "文本与文件的 Base64 / Base64URL 编码和解码。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "编码与文本",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(169, 139, 250)"
+   },
+   {
+    "t": "支持文件",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "SM4 加解密",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "国密 SM4 CBC/ECB 加解密，PKCS#7 与 NoPadding 可选。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "摘要与加密",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(53, 211, 156)"
+   },
+   {
+    "t": "国密",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "JSON 转 Java 类",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "从 JSON 生成 POJO 或 record，支持 Lombok / Jackson 注解。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Java 开发",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(248, 113, 113)"
+   },
+   {
+    "t": "POJO / record",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "JWT 解析与验签",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "解码 JWT Header / Payload 并本地验签，解释时间字段。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "接口辅助",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(232, 121, 249)"
+   },
+   {
+    "t": "本地验签",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "二维码生成与识别",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "文本或 URL 生成二维码 PNG / SVG，本地识别图片中的二维码。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "文件与图片",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(45, 212, 191)"
+   },
+   {
+    "t": "生成 / 识别",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "数据格式",
+    "tag": "H2",
+    "size": "16px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "4 个工具",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "分类详情 →",
+    "tag": "A",
+    "size": "12px",
+    "color": "rgb(77, 141, 255)"
+   },
+   {
+    "t": "JSON、YAML、CSV 等结构化数据的格式化、校验与转换。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "JSON 格式化",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "格式化、压缩并校验 JSON，支持缩进选择与树形视图。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "数据格式",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(77, 141, 255)"
+   },
+   {
+    "t": "大整数安全",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "JSON 差异比较",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "结构化比较两个 JSON，标注新增、删除与修改。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "数据格式",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(77, 141, 255)"
+   },
+   {
+    "t": "结构化差异",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "JSON / YAML 转换",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "JSON 与 YAML 双向转换，保留中文、布尔与数组。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "数据格式",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(77, 141, 255)"
+   },
+   {
+    "t": "双向转换",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "CSV / JSON 转换",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "CSV 与 JSON 互转，支持分隔符、表头与引号规则。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "数据格式",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(77, 141, 255)"
+   },
+   {
+    "t": "表格预览",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "编码与文本",
+    "tag": "H2",
+    "size": "16px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "7 个工具",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "分类详情 →",
+    "tag": "A",
+    "size": "12px",
+    "color": "rgb(77, 141, 255)"
+   },
+   {
+    "t": "Base64、URL、Unicode 等编码转换与文本批量处理。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Base64 编解码",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "文本与文件的 Base64 / Base64URL 编码和解码。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "编码与文本",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(169, 139, 250)"
+   },
+   {
+    "t": "支持文件",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "URL 编解码",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "完整 URI 与组件模式的 URL 编码和解码。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "编码与文本",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(169, 139, 250)"
+   },
+   {
+    "t": "Unicode / 字节编码转换",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "Unicode 转义、UTF-8 文本与 Hex 字节互转，区分字符与字节。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "编码与文本",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(169, 139, 250)"
+   },
+   {
+    "t": "字符与字节区分",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "文本去重与整理",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "逐行去重、去除空行与整理排序，可选是否处理空格。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "编码与文本",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(169, 139, 250)"
+   },
+   {
+    "t": "命名风格转换",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "camelCase、snake_case、kebab-case 等命名风格批量互转。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "编码与文本",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(169, 139, 250)"
+   },
+   {
+    "t": "批量处理",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "文本差异比较",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "逐行与行内差异比较，支持同步滚动与忽略空白。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "编码与文本",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(169, 139, 250)"
+   },
+   {
+    "t": "行内差异",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "正则表达式测试",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "JavaScript 正则匹配测试、捕获组与替换预览。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "编码与文本",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(169, 139, 250)"
+   },
+   {
+    "t": "JavaScript 引擎",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "摘要与加密",
+    "tag": "H2",
+    "size": "16px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "6 个工具",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "分类详情 →",
+    "tag": "A",
+    "size": "12px",
+    "color": "rgb(77, 141, 255)"
+   },
+   {
+    "t": "MD5、SHA、HMAC、AES 与国密 SM2/SM3/SM4，全部本地计算。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "MD5 / SHA 摘要",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "计算文本或文件的 MD5、SHA-256、SHA-512 摘要并对照期望值。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "摘要与加密",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(53, 211, 156)"
+   },
+   {
+    "t": "支持文件",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "HMAC 计算与校验",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "HMAC-SHA256/SHA512 计算与期望值对照，密钥编码可选。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "摘要与加密",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(53, 211, 156)"
+   },
+   {
+    "t": "AES 加解密",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "AES-GCM 本地加解密，密钥与 IV 编码、AAD 与认证标签可配。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "摘要与加密",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(53, 211, 156)"
+   },
+   {
+    "t": "WebCrypto",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "SM2 加解密与签名",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "国密 SM2 加解密与签名验签，公私钥与密文格式可选。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "摘要与加密",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(53, 211, 156)"
+   },
+   {
+    "t": "国密",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "SM3 摘要",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "国密 SM3 摘要计算，支持文本与文件、Hex 与 Base64 输出。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "摘要与加密",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(53, 211, 156)"
+   },
+   {
+    "t": "国密",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "SM4 加解密",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "国密 SM4 CBC/ECB 加解密，PKCS#7 与 NoPadding 可选。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "摘要与加密",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(53, 211, 156)"
+   },
+   {
+    "t": "国密",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "时间与标识",
+    "tag": "H2",
+    "size": "16px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "4 个工具",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "分类详情 →",
+    "tag": "A",
+    "size": "12px",
+    "color": "rgb(77, 141, 255)"
+   },
+   {
+    "t": "时间戳、UUID、Cron 与日期时间差计算。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "时间戳转换",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "秒/毫秒时间戳与可读时间双向转换，支持时区与 ISO8601。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "时间与标识",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(56, 189, 248)"
+   },
+   {
+    "t": "UUID 生成与解析",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "批量生成 UUID v4 / v7，解析版本与格式信息。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "时间与标识",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(56, 189, 248)"
+   },
+   {
+    "t": "v4 / v7",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Cron 解析与执行预览",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "Unix 五字段与 Quartz 方言解析、字段解释与未来执行预览。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "时间与标识",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(56, 189, 248)"
+   },
+   {
+    "t": "Unix / Quartz",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "日期时间差计算",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "计算两个时刻的实际经过时长与日历年月日差，支持跨时区。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "时间与标识",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(56, 189, 248)"
+   },
+   {
+    "t": "Java 开发",
+    "tag": "H2",
+    "size": "16px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "5 个工具",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "分类详情 →",
+    "tag": "A",
+    "size": "12px",
+    "color": "rgb(77, 141, 255)"
+   },
+   {
+    "t": "JSON 转 Java、转义、配置转换、堆栈整理与依赖声明转换。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "JSON 转 Java 类",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "从 JSON 生成 POJO 或 record，支持 Lombok / Jackson 注解。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Java 开发",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(248, 113, 113)"
+   },
+   {
+    "t": "POJO / record",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Java 字符串转义",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "原文与 Java 字符串字面量互转，处理引号、换行与反斜杠。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Java 开发",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(248, 113, 113)"
+   },
+   {
+    "t": "Properties / YAML 转换",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "properties 与 YAML 配置互转，处理 Unicode 转义与点路径嵌套。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Java 开发",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(248, 113, 113)"
+   },
+   {
+    "t": "Java 异常堆栈整理",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "解析异常链与 Caused by，折叠框架调用、突出业务包。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Java 开发",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(248, 113, 113)"
+   },
+   {
+    "t": "Maven / Gradle 依赖转换",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "Maven XML 与 Gradle Groovy / Kotlin 依赖声明互转。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Java 开发",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(248, 113, 113)"
+   },
+   {
+    "t": "Web / Vue",
+    "tag": "H2",
+    "size": "16px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "6 个工具",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "分类详情 →",
+    "tag": "A",
+    "size": "12px",
+    "color": "rgb(77, 141, 255)"
+   },
+   {
+    "t": "TypeScript 类型、Vue 组件模板、CSS 单位、颜色与前端格式化。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "JSON 转 TypeScript 类型",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "从 JSON 推断生成 TypeScript interface / type 定义。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Web / Vue",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(251, 191, 36)"
+   },
+   {
+    "t": "Vue 单文件组件模板",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "按表单配置生成 .vue 单文件组件模板源码。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Web / Vue",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(251, 191, 36)"
+   },
+   {
+    "t": "Composition API",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "CSS 单位换算",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "px / rem / em 互转，根字号与父字号分别可设。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Web / Vue",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(251, 191, 36)"
+   },
+   {
+    "t": "颜色转换与对比度",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "HEX / RGB / HSL 转换与前景背景对比度等级计算。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Web / Vue",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(251, 191, 36)"
+   },
+   {
+    "t": "对比度等级",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "SVG 预览与优化",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "SVG 源码安全预览、体积优化与前后差异对比。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Web / Vue",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(251, 191, 36)"
+   },
+   {
+    "t": "安全预览",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "HTML / CSS / JS 格式化",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "HTML、CSS、JavaScript 源码格式化与缩进配置。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "Web / Vue",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(251, 191, 36)"
+   },
+   {
+    "t": "接口辅助",
+    "tag": "H2",
+    "size": "16px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "4 个工具",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(108, 118, 134)"
+   },
+   {
+    "t": "分类详情 →",
+    "tag": "A",
+    "size": "12px",
+    "color": "rgb(77, 141, 255)"
+   },
+   {
+    "t": "JWT、URL 参数、请求代码转换与 HTTP 状态码速查。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "JWT 解析与验签",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "解码 JWT Header / Payload 并本地验签，解释时间字段。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "接口辅助",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(232, 121, 249)"
+   },
+   {
+    "t": "本地验签",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "URL 参数编辑",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "结构化编辑 URL 的 query 参数，支持重复键与编码预览。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "接口辅助",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(232, 121, 249)"
+   },
+   {
+    "t": "curl / fetch / Axios 转换",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "curl、fetch、Axios 请求代码互转，仅转换不执行。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "接口辅助",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(232, 121, 249)"
+   },
+   {
+    "t": "HTTP 状态码速查",
+    "tag": "SPAN",
+    "size": "14px",
+    "color": "rgb(233, 237, 243)"
+   },
+   {
+    "t": "HTTP 状态码分类速查，含用途说明与相近状态区别。",
+    "tag": "P",
+    "size": "12px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "接口辅助",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(232, 121, 249)"
+   },
+   {
+    "t": "离线知识",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(159, 169, 184)"
+   },
+   {
+    "t": "文件与图片",
+    "tag": "H2",
+    "size": "16px",
+    "color": "rgb(233, 237, 243)"
+   }
+  ],
+  "counts": {
+   "a": 102,
+   "button": 60,
+   "input": 0,
+   "imgs": 0,
+   "svg": 113
+  },
+  "doc": {
+   "w": 1440,
+   "h": 3131
+  },
+  "a11y": {
+   "buttonsNoName": 0,
+   "imgNoAlt": 0,
+   "inputsNoLabel": 0,
+   "landmarks": {
+    "header": true,
+    "nav": true,
+    "main": true,
+    "footer": false
+   }
+  }
+ }
+}

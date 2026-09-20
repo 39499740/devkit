@@ -1,0 +1,1151 @@
+dsh: reasoning:
+Let me start by reading the brief file to understand the constraints.
+dsh: reasoning:
+Let me set up a todo list and start exploring the codebase. Let me look at the devkit directory structure, package.json, and begin with build/typecheck.
+
+Let me be systematic. First, gather structure.
+dsh: reasoning:
+Note: nuxt.config.ts uses external Google Fonts stylesheet — that's a network dependency and potential offline issue. Also no `@nuxt/typecheck` / `vue-tsc` in devDependencies — `npx nuxt typecheck` may need to install `vue-tsc` and `typescript`. Let me check.
+
+Let me gather all files and start the build/typecheck in background since it may take time.
+dsh: reasoning:
+Important consistency findings already:
+- README says dev server default 3000; FOUNDATION says dev server runs on 3100. Brief says 3000 is baseline, 3100 is Pen embedded browser. Actually FOUNDATION says "dev server 已运行在 http://localhost:3100" which conflicts with README's "默认 3000". That's a documented inconsistency (as the task hints).
+- README/package.json has no `typecheck` script and no `vue-tsc`/`@nuxt/typecheck` devDependency. So `npx nuxt typecheck` may fail or install. Let me check.
+- Google Fonts external stylesheet — offline claim "纯静态部署" but fonts loaded from network → offline page, privacy claim. Worth noting.
+
+Let me start typecheck/build in background and meanwhile grep the code. First check node version and whether vue-tsc installed.
+dsh: reasoning:
+No `vue-tsc`, no `@nuxt/typecheck`. So `npx nuxt typecheck` will likely try to download `vue-tsc` (npx installs it), which may be slow/network. Let me try `npx nuxt typecheck` with a timeout, in background. Actually, it may prompt to install. Let me run it in background and capture.
+
+Let me also run build in background. But careful: running two heavy npm processes simultaneously could conflict. Actually typecheck and build both use .nuxt — potential race. Better run sequentially. Let me first do typecheck (background), and meanwhile do greps/reads (no build). Then build.
+
+Actually `npx nuxt typecheck` without vue-tsc will auto-install `vue-tsc` and `typescript`, modifying node_modules — is that a "write operation"? BRIEF says don't modify devkit/**. Installing dev deps modifies node_modules. Hmm. That's risky and arguably a violation. Let me check if `npx vue-tsc --noEmit` is available—no. But `tsc` is available. Let me instead check if nuxt typecheck requires vue-tsc. Nuxt's typecheck command checks and if vue-tsc missing, it prompts to install. Given "禁止修改 devkit", I should avoid installing. I can run `npx vue-tsc --noEmit` but it would download too.
+
+Alternative: use `npx nuxi typecheck`? Same. Let me check whether there's a global vue-tsc. `which vue-tsc`. Also check `npx --no-install vue-tsc` to see.
+
+Let me check .nuxt/tsconfig.json presence — Nuxt prepare generates it. Then `tsc --noEmit` may not understand .vue files, but we can at least run `tsc -p .nuxt/tsconfig.json --noEmit` for TS files (won't typecheck vue template SFC unless vue-tsc). Let's see.
+
+Let me first check network ability. The task explicitly instructs to run typecheck, so attempting npx is expected. But writing to node_modules... The report task's own constraint is no source modification; node_modules is not source. Still, cautious. Let me try `npx --no-install vue-tsc --version` first. If not available, try `npx nuxt typecheck` and see behavior (it may just error out without installing).
+
+Let me run that.
+dsh: reasoning:
+Interesting — `npx --no-install vue-tsc --version` returned Version 5.9.3. So vue-tsc IS resolvable via npx cache maybe? Wait `which vue-tsc` exit=1 (not on PATH) but `npx --no-install` found it (probably in npx cache or a parent node_modules). Let me find where. Actually `npx --no-install` searches local node_modules/.bin and npm cache. It printed Version 5.9.3. Good — so `npx nuxt typecheck` might work. But nuxt typecheck uses its own resolution of vue-tsc from the project. Hmm, Nuxt's typecheck command checks if `vue-tsc` is resolvable from project. Let me just try `npx nuxt typecheck` in background with a timeout and capture output to file.
+
+Let me start it in background.
+dsh: reasoning:
+While that runs, let me read the key utils/composables. Start with json.ts and bytes.ts.
+dsh: reasoning:
+Let me read the typecheck log. And also analyze json.ts carefully.
+
+Potential bugs in json.ts:
+
+1. `wrapNumbers`: When a number appears in value position, it wraps as `"@@raw:123@@"`. But then a string that originally starts with `@@raw:` and ends with `@@` would be misinterpreted by unwrap as a RawNumber. E.g. JSON `{"a":"@@raw:123@@"}` -> after wrapNumbers, inString so unchanged, JSON.parse gives string "@@raw:123@@" -> unwrap converts to RawNumber("123"). That's a correctness bug: a genuine string value gets converted into a number on re-serialize. Edge case but real.
+
+2. The regex `/^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?/` matches leading `-` alone? `-?(0|[1-9]\d*)` requires digits, so `-` alone doesn't match (m would be null), then out += '-', lastMeaningful='-'. Fine.
+
+3. Big numbers: for value position with `[-0-9]` regex. What about numbers preceded by `[` with whitespace? handled since whitespace doesn't update lastMeaningful. Good.
+
+4. What about JSON with an object key that starts with digit, e.g. `{"1":2}`? `"1"` is a string -> inStr. Fine.
+
+5. Top-level number: lastMeaningful==='' -> valuePos, wraps. Good, `1e21` preserved as raw. Actually `1e21` -> RawNumber("1e21"), stringify outputs `1e21`. Good.
+
+6. `-0`: regex matches `-0`, RawNumber("-0"), outputs `-0`. JSON.parse would give -0 but they preserve text. Good.
+
+7. Duplicate keys detection: `detectDuplicateKeys` is called on raw text before wrapping. Let me check path logic. `pathParts` starts []. On `{` push path = '' then pathParts.push('{}'). For nested, `top.path = pathParts.join('.')` at the time of pushing. Hmm at root, path='' and then pathParts becomes ['{}']. For a key at root: `top.path` is '' -> label = pendingKey. Good. For nested object inside key "a": when we see `{` after `"a":`, stack.push path = pathParts.join('.') = '{}' (still root pathParts = ['{}']?) Wait pathParts at that point is ['{}'] since root `{` pushed '{}'. So nested object's stored path = '{}'. Then key label = '{}'.key. Hmm not ideal but works to disambiguate. Arrays push '[]'. So paths like '{}' weird but duplicates detection still functions. Not a "reported path" correctness maybe minor.
+
+Actually bigger issue: duplicate key detection only registers key when it encounters `:` and pendingKey not null. When a string is followed by `:` it sets pendingKey. For values that are strings followed by colon inside string? no. Fine. But if duplicate keys, JSON.parse keeps last; dups list fine.
+
+But there's a subtle bug: `pendingKey` is set whenever a string is immediately followed by `:`. Consider a string value inside an array followed by colon? Not valid JSON. Fine.
+
+8. `jsonErrorPosition`: message may be like "Unexpected token } in JSON at position 5" -> matches position. For newer V8: "Expected ',' or '}' after property value in JSON at position 5 (line 1 column 6)". It matches position first, computes line/column itself. Good. But `column = pos - before.lastIndexOf('\n')`. If before has no newline, lastIndexOf = -1, column = pos+1. V8 column is 1-based char. For pos=0, column=1. Good.
+
+But note: the position from JSON.parse on the *wrapped* text differs from the original text position because wrapping changes offsets! parseJson calls JSON.parse(wrapNumbers(text)). If there's a syntax error, V8 reports position in the transformed string, not the original. `jsonErrorPosition(e, text)` uses original text. So error position will be wrong for any input where a number appears before the error. That's a real bug! E.g. `{"a":1, "b":}` — wrapNumbers transforms `1` into `"@@raw:1@@"` (adds 10 chars), so the error position in transformed string is shifted, causing wrong line/column displayed. Let me verify with node.
+
+Actually wait — `wrapNumbers` only wraps valid number tokens. `{"a":1,"b":}` -> 1 wrapped, error at `}` in transformed. The reported position will be original position + length difference. The `jsonErrorPosition` is maybe used with the transformed? Let me check t01 usage.
+
+Let me check the typecheck log first and search usages.
+dsh: reasoning:
+Typecheck failed: "Cannot find matching tsconfig.json in ... devkit or parent directories". There's no `tsconfig.json` in devkit root! Nuxt normally generates `.nuxt/tsconfig.json` and the project should have a root tsconfig.json extending it. The project lacks a `tsconfig.json`. This is a real defect: no root tsconfig, so `nuxt typecheck` fails out of the box. Actually Nuxt 4 projects should have tsconfig.json. Let me confirm there's no tsconfig.json. `ls` showed no tsconfig.json. That's a genuine finding (typecheck cannot run; no typecheck npm script; no vue-tsc/@nuxt/typecheck devDependency).
+
+Let me try `npx vue-tsc --noEmit -p .nuxt/tsconfig.json` to actually get type errors. That uses the generated tsconfig. Let me run in background.
+
+Also `npx tsc --noEmit -p .nuxt/tsconfig.json` won't check .vue. vue-tsc is available via npx (5.9.3). Let me run.
+
+Meanwhile let me continue analysis. Let me read the composables.
+dsh: reasoning:
+useToolRun: FOUNDATION says status: idle|ok|error|stale|running but RunStatus type has no 'running' and DkStatusBar may support running. That's a doc/impl inconsistency (FOUNDATION claims running). Let me confirm DkStatusBar. Also the state machine race: `markOk` sets status='ok' then `lastSig = getSignature()`. The watch is not immediate and triggers on change. Fine. But the "stale" transition: watch triggers asynchronously (Vue watchers flush 'pre' by default, before render, on next tick). If user modifies input and immediately clicks copy before watcher flushes... unlikely. 
+
+Also stale: when status is 'idle' (before first run) and signature changes, armed false so nothing. After markFail, status='error', then signature changes -> 'stale'. In stale state, errorMsg is retained, staleNote set. DkStatusBar shows stale. The "retry" executes. OK.
+
+Potential real issue: For preview-type tools that watch+execute and call markOk each time, the watch on signature and execute's watch both fire; ordering could cause: signature changes -> run watcher sets stale, then execute sets ok. Fine.
+
+But a subtle bug: `markOk` sets lastSig but lastSig is never read. Dead variable (lint). Also `armed`. lastSig unused → dead code.
+
+Now composables prefs/favorites/recent. Let me read them all plus usePalette, useClipboard, useToast, useTransfer.
+dsh: reasoning:
+useTransfer has a clear bug: `compatibleTargets` references `from?.slug` but `from` is declared later with `const from = computed(...)`. Due to temporal dead zone, calling `compatibleTargets` before... no wait, `from` is defined in the same function scope before `compatibleTargets` is *called* (the function is returned after `from` declaration). So at call time `from` is initialized. But `from` is a computed, and `from?.slug` — computed is a ref, `.slug` is undefined! It should be `from.value?.slug`. So `from?.slug` is always undefined, meaning the filter `t.slug !== undefined` is always true. Result: the "exclude current tool" logic is broken — current tool is NOT excluded from compatible targets. Real bug (low/medium). Let me verify `from` is a computed ref: `const from = computed(...)`. Yes. So `from?.slug` → undefined always. Bug confirmed by reading; can also demonstrate with TS? It would be a type error if `from` is `ComputedRef`. Actually `from?.slug` where from is ComputedRef<{slug:string}|undefined> — accessing `.slug` on ComputedRef is a TS error: "Property 'slug' does not exist on type 'ComputedRef'". Let me see if vue-tsc catches it. Good.
+
+Also `deliver(target)` pushes route but does not pass payload; consume used by target. Fine.
+
+usePrefs: `persist()` doesn't handle localStorage unavailable/quota. `loadPrefs` catches. `persist` will throw if localStorage disabled (e.g. Safari private mode / storage full). update() would throw and possibly break UI. Similar in favorites/recent. Worth a medium finding: no try/catch around setItem; no handling of quota exceeded (recent could grow but sliced 30, favorites grows with 41 max, prefs tiny). But localStorage disabled is real.
+
+Also `loadPrefs` merges stored JSON without validating types. Malformed prefs (e.g. codeFontSize: "abc") could break. Minor.
+
+Red line check: do any localStorage writes include input text/keys/tokens? Need grep for localStorage usage and check stores. Let me grep.
+
+Also important: usePrefs uses `useState` with `loadPrefs` initializer. On client, useState initializer runs during setup (client-side hydration) and loadPrefs reads localStorage — that's fine (client). On server returns defaults. But the initial state on server is defaults, and client hydration initial state also defaults (since `useState` payload from server takes precedence during hydration?). Actually Nuxt's useState: during hydration, the server payload value is used, so `loadPrefs` may not be called? The initializer is a function; Nuxt uses it if no payload. During hydration payload has server prefs (defaults). So client initial value = server defaults, then... no onMounted reload for prefs! Unlike favorites/recent which reload in onMounted, usePrefs does NOT reload from localStorage in onMounted. So on a fresh SSR page load, the user's stored prefs (theme, font size, wrap, indent) are ignored until... never! Wait: `useState` initializer `loadPrefs` — on the server it returns defaults and serializes to payload. On client hydration, Nuxt reuses the payload, ignoring the initializer. So stored prefs won't apply. But `update()` reassigns and persists. Hmm, but applyTheme in onMounted uses isDark from prefs (defaults). So a user who set dark theme and reloads will see... did `loadPrefs` run client side? Let me think carefully about Nuxt useState behavior.
+
+Nuxt `useState(key, init)`: 
+```
+const state = toRef(nuxtApp.payload.state, key)
+if (state.value === undefined && init) {
+  const initValue = typeof init === 'function' ? init() : init
+  ...
+  state.value = initValue
+}
+```
+During SSR, payload.state doesn't have key → init runs → loadPrefs returns defaults (import.meta.server true) → stored in payload. During client hydration, `nuxtApp.payload.state` is populated from `__NUXT__` payload, so key exists = defaults → init NOT called. So localStorage prefs ignored on first load after SSR. Is this real? Yes, this is a classic Nuxt useState SSR pitfall. Favorites/recent avoid it with the `loaded` flag + onMounted reload. usePrefs lacks that. Let me verify by running the site and testing with localStorage set. Good candidate for a real high bug: prefs not applied on reload (theme/font size/indent/wrap). But wait — maybe app.vue or layout has something. Let me check where usePrefs is used and whether there's a client plugin.
+
+Actually, hmm: In Nuxt, `import.meta.server` in the init — but does Nuxt call the initializer on client even if payload has value? The payload from SSR includes `state` for all useState keys. Let me verify empirically. I can set localStorage then reload and check DOM class. Use probe? probe.py may support. Let me check probe.py capabilities. Otherwise use a headless approach. Let me read probe.py.
+
+Let me also check whether the running site on 3000 is up.
+
+Let me read probe.py and check dev server.
+dsh: reasoning:
+Let me read the vue-tsc log. Also inspect ToolPageLayout localStorage visited (stores only slugs presumably). Let me read.
+dsh: reasoning:
+Great, extensive findings:
+
+Typecheck: `nuxt typecheck` fails outright because no root tsconfig.json. Then running vue-tsc against .nuxt/tsconfig.json gives 51 TS errors. Notable one: `app/error.vue(11,39): error TS2304: Cannot find name 'getTool'` — that's a real bug that could break the error page at runtime! Let me investigate error.vue. `getTool` not found could be a ReferenceError at runtime when error page renders. That's high severity.
+
+Also `useTransfer.ts(56,86): Property 'slug' does not exist on type 'ComputedRef<...>'` confirms the bug I found.
+
+Note: vue-tsc was run from /Users/hao/node_modules/vue-tsc (global-ish), version 5.9.3 vs project typescript 5.8.3. The mismatch might cause some ArrayBuffer generic errors (TS 5.7+ typed arrays). Still valid but worth noting it wasn't project-installed. Actually the ArrayBufferLike errors are due to TS 5.9 lib or vue-tsc's included TS. Hmm, the errors reference `Uint8Array<ArrayBufferLike>` which is TS 5.7+ generic. Project's typescript is 5.8.3, also generic. These are legitimate type errors with modern lib.dom.
+
+Let me get the full list of 51 errors by file. Let me extract unique files.
+
+Also note: the "Resolve plugin path failed: vue-router/volar/sfc-route-blocks" warning — because vue-tsc 5.9.3 from /Users/hao/node_modules, not project. Not a project bug per se, but indicates project has no local vue-tsc.
+
+Let me count errors per file and get list of lines.
+
+Now let me investigate error.vue.
+
+Also I need to run the build (`npx nuxt build`). The .output exists (7.7M) already, but re-running build verifies. Build with typecheck disabled will succeed likely. Let me run build in background now.
+
+Also start probe on key routes. Let me do things in parallel.
+
+Let me run build in background and extract error files.
+dsh: reasoning:
+`getTool` is used in error.vue without import. It's supposed to be auto-imported from `~/data/tools`? Nuxt auto-imports composables and utils but NOT arbitrary exports from data files unless configured with `imports` or the file is in `composables/`. `app/data/tools.ts` — Nuxt auto-imports from `app/composables/` and `app/utils/` only (and `imports.dirs`). So `getTool` from data/tools is NOT auto-imported. Let me verify: grep getTool definition and usages, and check .nuxt/imports.d.ts for getTool. This is likely a real runtime bug: 404/error page throws "getTool is not defined".
+
+Let me check.
+dsh: reasoning:
+Confirmed: `getTool` is NOT auto-imported (not in imports.d.ts) and error.vue does not import it. So error.vue will throw ReferenceError at runtime when rendered. Other pages explicitly import. This is a real high-severity runtime bug on the 404/error page.
+
+Let me verify live: visit a nonexistent route and check console/pageerror. Use probe.py.
+
+Let me also check pages/index.vue imports and other auto-import assumptions. And data/tools.ts. Let me read tools.ts fully.
+
+Also let me run probe on multiple routes. probe.py is single route per invocation. I can loop in bash. Let me write a small python wrapper? Actually simpler: run probe.py for key routes and save JSON. But each launches a browser (~few sec). Let me do a handful: /, /tools/json-format, /does-not-exist (404), /settings, /offline, /favorites, /recent, /help, /privacy, and a tool like /tools/aes. Actually task says "主要路由". Let me run a loop and aggregate using python. But launching playwright for each is fine.
+
+Let me first quickly test the 404 route with probe.
+
+Also, let me build a node test harness for json.ts and bytes.ts. Since these are TS modules with no external deps, I can transpile with esbuild? Not available maybe. Simpler: re-implement by importing via `npx tsx`? Not installed. I can use `node --experimental-strip-types` (Node 24 supports type stripping natively for .ts!). Node 24 supports `node file.ts` with type stripping by default (since 23.6). Let me try importing json.ts directly with node. But json.ts uses `export` ESM; fine. Need `--experimental-strip-types` maybe on by default in 24. Let's test.
+
+Let me create test scripts in /tmp (not devkit) to avoid writing to devkit. The BRIEF forbids modifying devkit/**. Writing test files to /tmp is fine.
+
+Let me test json.ts edge cases.
+dsh: reasoning:
+Type stripping fails on parameter property. I can use `--experimental-transform-types` flag to transform. Node 24 supports `--experimental-transform-types`. Let me try.
+dsh: reasoning:
+Excellent, many real bugs confirmed:
+
+1. `[string-looks-like-raw]`: A genuine string value `"@@raw:123@@"` is silently converted to a number (RawNumber) — round-trip corrupts string → number. Real correctness bug. Severity medium.
+
+2. `[error-after-number]`: `jsonErrorPosition` returns null for the common V8 error format "Unexpected token '}', ...\"90@@\",\"b\":} is not valid JSON". New V8 doesn't include "position N" for short inputs? It includes a snippet instead. So error position not returned → error display lacks line/column. Actually the trailing-comma case DID return position. The difference: V8 message format changed. Let me note that jsonErrorPosition returns null for many errors. Also the key bug: even when position IS returned, it's the position in the WRAPPED string, so column computed against original text is wrong. Let me verify with a case where position is present and number wrapped: trailing-comma with a big number. `{"a":12345678901234567890,}`.
+
+Let me test: `{"a":12345678901234567890,}` → wrapped adds 10 chars, error position in wrapped vs original. jsonErrorPosition uses original text and pos from wrapped → column inflated by 10. Let me confirm.
+
+3. Duplicate key detection: works for flat. Let me test nested and arrays to see path weirdness. Not critical.
+
+Also note `minifyJson` on `RawNumber` fine.
+
+Also `detectDuplicateKeys` for top-level duplicate keys works. But note the regex on line 157: `text.slice(0, i + 1).match(/"((?:[^"\\]|\\.)*)"$/)` — for a key with escaped quote `{"a\"b":1,"a\"b":2}` maybe works. Let me test. Also it uses the last `"..."` which is the key. Good.
+
+But there's a real bug: detectDuplicateKeys treats any string followed by `:` as key, including a string value in a *nested* wrong context? Only valid JSON. Fine.
+
+Let me test the error position with wrapping and nested duplicates.
+
+Now bytes.ts tests. Need a browser-like environment for btoa/atob/TextEncoder. Node 24 has btoa/atob and TextEncoder globals. Good. Let me test bytes.ts.
+
+Let me run both.
+dsh: reasoning:
+Let me analyze the results.
+
+JSON error position bug confirmed: 
+- `{"a":1,}` original error at position 5 (V8 says position 17 in wrapped; original is pos 7? Let's compute. Original `{"a":1,}`: error is the `}` at index 7? Actually `{"a":1,}`: chars: 0`{`,1`"`,2`a`,3`"`,4`:`,5`1`,6`,`,7`}`. Wrapped: `1` becomes `"@@raw:1@@"` (10 chars) replacing 1 char → +9. So wrapped pos 17? Let's see wrapped = `{"a":"@@raw:1@@",}`. Positions: `}` at end index 17. Yes. jsonErrorPosition computes against original text: pos=17, but original length 8, `Math.min(17, 8)=8` → column = 8 - lastIndexOf('\n')(-1) = 9. So it reports line 1 column 9, while the real error is at column 8 (index 7+1). So off by the total length added by number wrapping. Confirmed: original column 8, reported 9. For multi-line with big numbers, it reported line 3 column 2 for `trailing-comma-after-bignum` whereas V8's own "line 3 column 1" (though V8's line/col is in wrapped too, but for that case wrapping is on line 2 and error line 3 so line is correct; column 2 vs 1 off by... hmm). The clearest demonstration: `plain-trailing` reported column 9 but real is column 8. And the message itself says position 17 (in wrapped) which is internally inconsistent with the reported line/col.
+
+So bug: error position is computed from transformed text offset, giving wrong column (and potentially wrong line for single-line inputs where min() clamps). Medium severity since it's just error display, but it's misleading to users.
+
+- Also jsonErrorPosition returns null for the newer V8 short-snippet messages (no "position"). So many syntax errors show no location. Medium/low.
+
+Duplicate key paths: `"{}.b"` and `"{}.{}c"` — path labels are `{}` placeholders instead of actual key names. This is a real display bug: duplicate key report shows `{}.b` rather than e.g. `a.b`. Let me check how t01 displays duplicateKeys — likely shows "重复键：a". Let me check. The path is weird. Medium/low.
+
+base64ToBytes: `'AB==CD'` — non-canonical padding. It returns error. Good. `'a'` returns error. `'ab'` → [105] which is not standard base64 (length 2 not multiple of 4). It pads to 'ab==' which atob decodes to [105]. That's actually atob's behavior. Standard base64 wouldn't have length 2; being lenient may be acceptable. But note `'abc'` → [105,183] which is wrong interpretation? 'abc=' normally → 2 bytes [105,183]. Yes atob('abc=') = 'i·'. Fine.
+
+`====` errors. Good.
+
+BOM: `bytesToText` with BOM returns "A" with BOM char retained? Output printed `{"text":"A"}` — the BOM char (U+FEFF) is included but invisible. So BOM is preserved. Decoding tools that expect BOM stripping might show a leading zero-width char. Not necessarily a bug.
+
+`formatBytes(-5)` returns '-5 B' — negative input; edge case minor. Also formatBytes(1.5) = '1.5 B'. Fine.
+
+`lineCount('a\n')` returns 2 — for a trailing newline it counts an extra line. `lineCount('')` returns 0. Inconsistent: empty is 0 lines but "a\n" is 2 lines. Whether this is a bug depends on intent. DkEditor stats might show. Low.
+
+hexToBytes: ignores all whitespace, accepts uppercase. '0x' prefix rejected. Fine. Odd length rejected. Fine. But note: hexToBytes strips whitespace then validates, so `'de ad'` works. Good.
+
+Now build log. Let me read it. Then run probes.
+dsh: reasoning:
+Build succeeded (exit 0), no warnings apparently. Let me get build duration and the client bundle total. `_nuxt` is 1.5M. 41 tools chunked (that's good — each tool chunk exists). Let me check whether tool components are code-split. Look for t01-json-format chunk in .output/public/_nuxt. Let me check.
+
+Also check the largest JS is 160KB — likely entry/vendor. Need to see what the largest chunk is (probably qrcode or jsqr or sm-crypto). Let me check gzip sizes and identify.
+
+Let me also check the main entry loaded on homepage: find index.html preloads and measure total transferred bytes on / with curl. Actually SSR HTML size was 105KB. The JS is loaded client-side. Let me parse the HTML for script tags.
+
+Let me get build time from full log (search "Build complete" / elapsed). Also check full log start.
+
+Let me now run the probe on routes. I'll do it in background as it takes time. Let me run a script that probes main routes and saves JSON files, aggregating.
+
+I'll write a bash loop invoking probe.py for each route; but probe.py prints JSON with indent. Save to /tmp/r6-probe-*.json. Then aggregate with python/jq.
+
+Routes: /, /tools/json-format, /tools/aes, /tools/qrcode, /does-not-exist-xyz, /settings, /favorites, /recent, /help, /privacy, /offline, /category/data-format maybe. Let me check category ids from tools.ts.
+
+Let me read tools.ts.
+dsh: reasoning:
+Now let me note tools.ts issues:
+- t05 alias includes `'encrypt64'` — unusual, likely a typo for something? Actually "encrypt64" maybe intentional but odd.
+- t33 tags `['本地验签']` and alias includes 'token' — matches "本地" claim.
+- `getCategory` returns `categories.find(...)!` — non-null assertion; if key invalid, runtime undefined. Category IDs come from tools, so fine.
+
+Now tags vs actual function: t31 svg claims "安全预览" — need to check if it uses v-html/srcdoc and sanitization. t32 html-format claims formatting. t36 "离线知识" — data is static. t40 claims "编码识别" (GBK etc.) — does it actually support GBK? Only TextDecoder supports gbk in browsers. Need to check.
+
+Let me now focus on security grep: v-html, innerHTML, eval, new Function, srcdoc, rel=noopener, target=_blank.
+
+And SSR: window/document/localStorage/navigator/crypto at setup top-level. Let me grep.
+dsh: reasoning:
+Security:
+- Only one v-html: DkIcon.vue:158. Need to inspect it — is `html` derived from a static icon table or user input? If static, safe. Let me read DkIcon.
+- No eval/new Function. Good.
+- TopNav external link has noopener noreferrer. Good.
+- t31-svg.vue line 34 has a malicious payload as an example; need to check how SVG preview is rendered. If via `<img src="data:image/svg+xml;...">` then script won't execute; if via v-html or iframe srcdoc, could be XSS. Let me read t31.
+
+SSR safety:
+- `layouts/default.vue:20` window.addEventListener — need context (onMounted?). Let me read.
+- `pages/offline.vue:10-12` navigator/window events — check context.
+- `TopNav.vue:8` navigator.platform — check context.
+- `help.vue:6` navigator.platform — check context.
+- `SplitPanes.vue:23` window.innerWidth — check context.
+- `useClipboard.ts:12` navigator — inside function called on click likely.
+- `t39-qrcode.vue:108` document.createElement inside function.
+- `t38` canvas inside function.
+- `crypto` usages in event handlers.
+
+Need to check setup top-level. Let me read those files' relevant parts.
+
+Also `ToolPageLayout.vue:13` localStorage inside onMounted. Good.
+`usePrefs` loadPrefs guarded by import.meta.server. persist guarded. applyTheme guarded. onMounted for matchMedia. Good. But the useState hydration issue remains.
+
+Let me read: layouts/default.vue, pages/offline.vue, TopNav.vue, help.vue, SplitPanes.vue, DkIcon.vue, t31-svg.vue.
+dsh: reasoning:
+DkIcon v-html: `html` is derived from static `icons` table keyed by `props.name`. If name not found, what happens? Let me read the rest (lines 140-160). If it falls back to `''` it's safe. If it does something like `icons[props.name] ?? props.name`, then user-controlled name could inject. Names come from tools.ts data (static), so not user input. But `DkIcon :name="t.icon"` where t.icon comes from registry — static. Safe. Let me read tail.
+
+offline.vue: `window.addEventListener('online', ...)` inside onMounted but NEVER removed (no onUnmounted). That's a memory/timer leak — event listeners leak when navigating away. Real finding (low/medium). Two listeners added each mount, never removed.
+
+Also offline.vue: `retry()` calls `location.reload()` — `location` global not guarded. Only called on click. Fine. But `retry` is disabled when online, so it only runs when offline... `if (navigator.onLine) location.reload()` — when offline, navigator.onLine false, so button does nothing despite being enabled when !online. Wait button `:disabled="online"` means enabled when offline. But retry only reloads if online. So clicking "重试加载" while offline does nothing. That's a functional bug: the retry button is a no-op in the exact state it's offered. Actually maybe intended (only reload when back online), but the button is disabled while online so it can never reload. So "重试加载" is effectively dead. Real medium bug. Good catch.
+
+Now let me read DkIcon tail and t31-svg. Also check `help.vue` and `TopNav.vue` navigator usage context (lines).
+
+Let me run probes now in background while reading.
+
+Let me write a probe loop.
+dsh: reasoning:
+DkIcon html = static icons lookup, fallback help. Safe. Good.
+
+Now t31-svg. Let me read it. And TopNav/help navigator context. And t32 html-format (does it render HTML? if it uses v-html maybe not — grep showed only DkIcon v-html). Good, so no XSS via v-html except DkIcon static.
+
+Let me read t31-svg.vue fully-ish.
+dsh: reasoning:
+t31 SVG: sanitization is reasonable (removes script/foreignObject/on*/external href, renders via img data URL). Potential bypass: `<use href="data:image/svg+xml,...">`? data: allowed. `<animate>`? Not script. `<set attributeName="href" to="javascript:...">`? img rendering of SVG doesn't run JS in modern browsers (img SVG is a "secure static mode" — scripts disabled, external resources not loaded). So XSS via img is not feasible. Also encoding sanitized text into data URL. Probably fine. But note sanitize removes external href but allows `data:` href — data: image could embed another SVG but still in img context. Acceptable. I'll note as low/no issue, maybe "安全预览设计合理但外链 data: 未做递归清洗" as suggestion.
+
+Actually one real bypass: DOMParser with `image/svg+xml` — script elements inside are parsed as elements. Handled. `<a href="javascript:...">` — href starts with 'javascript:' → removed (not # nor data:). Good.
+
+Now check TopNav/help navigator + SplitPanes. Let me read relevant lines.
+
+Also, the more important SSR question: does SSR page throw? Probe will tell. Let me wait for probe.
+
+Let me read TopNav lines, help lines, SplitPanes.
+dsh: reasoning:
+All these navigator/window usages are in onMounted or event handlers — SSR safe. Good.
+
+Now the critical SSR bug: error.vue `getTool`. Let me confirm the 404 page behavior. The probe for `/this-page-does-not-exist` will show. Let me check job output.
+
+Meanwhile, let me look at usePalette and CommandPalette for keyboard accessibility and focus trap. Also DkModal focus trap. And check watch cleanup / setInterval.
+
+Let me grep for setInterval/setTimeout/addEventListener and their cleanup.
+dsh: reasoning:
+offline.vue online/offline listeners never removed — confirmed leak. That's 2 leaks per visit to /offline.
+
+Also check timer leaks in t38/t39/t41: timers used for debounce; are they cleared on unmount? `let timer` declared but no onUnmounted clear. Minor leak, but timers are short. Let me check if the components clear onUnmounted. grep onUnmounted in those files.
+
+Also t11-regex-test timer inside a function; let me check cleanup.
+
+Let me check CommandPalette for keyboard handling (⌘K/Esc/arrows) and focus trap, and DkModal.
+
+Let me read CommandPalette.vue and DkModal.vue.
+dsh: reasoning:
+CommandPalette a11y issues:
+- No focus trap. When open, Tab moves focus behind the dialog (no `inert`). `aria-modal="true"` but focus not trapped.
+- On close (Escape), focus is not restored to the previously focused element.
+- The input has no `aria-label`, only placeholder. probe a11y counts inputsNoLabel as those without aria-label, labels, or placeholder — has placeholder so not counted. But placeholder-only is not a real label (a11y issue, low).
+- The selected item highlight uses `results.indexOf(t) === sel` but arrow keys only work when the input has focus (onKeydown is on input). Fine.
+- `sel` clamping: ArrowDown `Math.min(sel+1, results.length-1)`; when results empty, length-1 = -1, sel becomes -1. Minor.
+- No `role="listbox"/"option"` on items. `aria-activedescendant` not used. Screen reader can't perceive selection. Low/medium.
+
+DkModal focus trap: let me read. Also check `useToast` setTimeout cleanup. Also check DkStatusBar for 'running'.
+
+Let me read DkModal, DkStatusBar, useToast, useClipboard.
+
+Also `CommandPalette` is rendered inside `<div class="shell">` in default layout, but it uses Teleport to body. Fine.
+
+Let me check probe results now; job may still be running. Let me check job list/output.
+dsh: reasoning:
+DkStatusBar has 'running' and uses icon 'loader'. Does DkIcon have a 'loader' icon? Let me grep icons table for 'loader'. If not, it falls back to `icons.help`, so running status shows a help icon (spinning question mark) — minor visual bug. Let me check the whole icons table for 'loader'.
+
+DkModal: focus not trapped (Tab can leave panel); Escape handled on panel keydown (only when focus inside panel — since panel is focused, works). Focus restored. But no focus trap. Low/medium.
+
+Now, usePrefs hydration bug needs verification. Let me check the probe output for /settings with a stored dark pref? Hard. Better: use Playwright directly to set localStorage and reload, then check `document.documentElement.classList.contains('dark')`. Let me write a small python script.
+
+Also verify the error.vue getTool bug: probe /this-page-does-not-exist.
+
+Let me check probe job output.
+dsh: reasoning:
+Now aggregate the probe JSONs. Let me write a python summarizer to report status, console errors/warnings, pageerrors, failed_requests, a11y per route.
+dsh: reasoning:
+Interesting. The error page:
+1. `/this-page-does-not-exist` returns 404 status and title "页面不存在 · DevKit", and NO pageerror. But `[NUXT_E1005] Error caught during app initialization` only on `/tools/does-not-exist`. Hmm. Both show the error page with common tools. So maybe `getTool` IS available somehow? Wait, on the 404 page, `commonTools` uses `getTool`. If getTool were undefined, the error page render would throw and we'd see a pageerror or the error page would fail. Let me look more carefully: The `_this-page-does-not-exist` page had console error "Failed to load resource ... 404". The `_tools_does-not-exist` shows a NUXT_E1005 error during init. Hmm.
+
+Actually maybe `getTool` IS auto-imported because Nuxt auto-imports from `app/utils/` and `app/composables/`, but `app/data/` is not. But wait, Nuxt 4 might auto-import from any file in `app/`? No. Let me check `.nuxt/imports.d.ts` for `data/tools` — earlier grep found nothing. Let me check `.nuxt/types/imports.d.ts`? The file exists `.nuxt/imports.d.ts`. grep found no getTool. So getTool is not auto-imported.
+
+But the error page displayed common tools? Let me check the actual rendered HTML for commonTools. Let me curl the 404 page and look. Maybe the error.vue is not the component rendered; Nuxt has its own error page for 404 vs custom error.vue. Actually in Nuxt 4, `app/error.vue` is the custom error component. It should render. If getTool threw, we'd get a pageerror. But in SSR, a throw in error.vue might be caught and produce a fallback? Hmm.
+
+Let me directly curl the 404 and grep for tool names like "JSON 格式化".
+
+Also the NUXT_E1005 warning on `/tools/does-not-exist` suggests an error during app initialization — maybe from `[slug].vue` throwing createError. That's expected for invalid slug.
+
+Let me verify getTool runtime: curl the page and check server logs. Also, importantly, `getTool` may be globally available because the build inlined it? No. Let me test: In the browser console on the 404 page, evaluate `typeof getTool`. Let me use playwright quickly.
+
+Actually simpler: curl the SSR HTML and grep. Let me do that.
+
+Also probe warnings:
+- "An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing." — This is a Chromium warning likely from Playwright/Nuxt devtools? It appears on error pages. Could be from Nuxt error page? Or the probe environment. Hmm, it appears on error pages only. Might be Nuxt's built-in error page iframe? Unlikely. Could be from Chrome's own error page. Not a project bug necessarily. I'll note as environment/unclear.
+
+- Vue Router warnings for unmatched route — expected on 404.
+
+- `settings` page: buttonsNoName: 3 — 3 buttons with no accessible name! That's a real a11y issue. Let me investigate settings.vue for icon-only buttons without aria-label/title. Also `favorites`/`svg` inputsNoLabel: 1. Let me investigate.
+
+Wait probe's `inputsNoLabel` counts inputs without aria-label, labels, or placeholder. For /favorites there's 1 input — likely the command palette input? No, palette isn't open. /favorites has a search box maybe. Let me check. Actually /favorites has a filter input? Let me read. And /svg has 8 inputs, 1 unlabeled.
+
+Let me investigate settings buttons.
+
+Also note landmarks footer: false everywhere — no `<footer>` landmark; but pages have `tool-page__docs` etc. Low.
+
+Let me now:
+1. curl 404 HTML, grep common tools + getTool.
+2. Check server log for SSR errors.
+3. Inspect settings.vue buttons and favorites input.
+4. Verify usePrefs hydration with playwright.
+5. Check DkIcon 'loader' presence.
+
+Let me batch.
+dsh: reasoning:
+Confirmed: the 404 page's HTML does NOT contain "常用工具" nor any common tool items (err__common-item count 0). So `commonTools` is empty or errored. The page title says "页面不存在 · DevKit" and h1 etc. But the common tools section is missing. This is the `getTool` bug: `getTool is not defined` at setup. Let me check server logs and the SSR render. Actually the page still rendered the rest of error.vue? That's odd if setup threw. Maybe Nuxt catches the setup error and renders error with partial. Or maybe `commonTools` computation threw and the template section didn't render. Let me check server log.
+
+Wait, the SSR HTML: does it include err__title, err__actions? Let me grep. Also check the server console for "getTool is not defined".
+
+The dev server on 3000 — where do logs go? Probably a terminal. Let me check if there's a log file. `ps aux | grep nuxt`. Perhaps /tmp/devkit-dev.log is for 3100. Let me look for logs.
+
+Let me check the SSR HTML for err__title and any error text. Also test client-side navigation to 404 to see pageerror. The probe navigated directly and no pageerror — because SSR error.vue setup threw, Nuxt fell back? Let me look at raw HTML around err.
+
+Let me curl and inspect.
+dsh: reasoning:
+The HTML length is only 1513 bytes! But the probe reported the page title and 47 anchors. That's because the probe's 404 page is client-side rendered after hydration — the initial SSR response for an unmatched route is a minimal SPA shell (Nuxt returns 404 with a small HTML that then hydrates the error page client-side). So the SSR output doesn't contain error.vue. The probe's DOM after hydration showed the error page. But `err__common-item` count 0 and no "常用工具"? The probe counts a:47. Let me check the probe text sample for the 404 page to see if 常用工具 appears.
+
+Wait, earlier `_this-page-does-not-exist.json` showed pageerrors: 0. If getTool threw during client setup, we'd expect a pageerror. Unless Nuxt catches it. Let me look at the probe textSample for that page.
+
+Actually, the probe HTML from curl is 1513 bytes — that's the Nuxt SPA fallback / error shell. So the error page renders client-side. The probe pageerrors 0 suggests getTool somehow worked or error silently swallowed. Let me check the text sample.
+
+Let me examine the probe JSON textSample for the 404 page.
+dsh: reasoning:
+Now it's clear! The 404 response from the dev server returns a JSON error payload when Accept header isn't HTML. `curl` got JSON. The browser gets HTML. The probe's text sample shows "常用工具" heading but then `[[1,24],...]` — meaning the common tools grid rendered NOTHING (empty). So `getTool` likely threw, and Vue's render error was caught, leaving the `err__common-grid` empty, or `commonTools` became empty array because the setup threw and component partially rendered.
+
+Actually the text sample shows "常用工具" then the next text is a weird `[[1,24],{...}]` which is the Nuxt payload script text. So no tool names rendered. That confirms the common tools list is empty. The error "getTool is not defined" would be thrown during setup, causing the whole error.vue component to fail to render. But we still see "404 | 页面出现了错误 | Page not found..." — those are from a fallback? Hmm.
+
+Wait, actual `error.vue` template uses `is404` and `error.message`. It shows "页面出现了错误" and "Page not found" — but for a 404, `is404` should be true, so title should be "工具不存在或链接已失效". It shows "页面出现了错误"! So `is404` is false on the 404 route because `props.error.statusCode`... wait error payload shows statusCode 404. On the client, the `error` prop? The text says "页面出现了错误" (is404 false) and message "Page not found: ...". Hmm, for the client-rendered error, `error.statusCode` may be 404. But is404 computed from props.error?.statusCode. Weird.
+
+Actually more likely: error.vue setup threw at `const commonTools = common.map((s) => getTool(s)!)` and Nuxt displayed its own internal error page? No — the text includes "常用工具" which is from error.vue. So it rendered.
+
+Hmm, but if setup threw, nothing from error.vue renders. Unless `getTool` IS defined. Let me reconcile: maybe Nuxt auto-imports `app/data/tools.ts` exports? Let me check `.nuxt/imports.d.ts` again more thoroughly — maybe there's an `imports` config auto-scanning `app/**/*.ts`? Actually Nuxt 4's default `imports.dirs` includes `composables/**` and `utils/**` only. But Nuxt also auto-imports from `app/utils` and `app/composables`. data isn't included.
+
+But wait — the grep for getTool in .nuxt/imports.d.ts found nothing. Let me check `.nuxt/types/imports.d.ts`? Earlier command checked both files. Let me search all of .nuxt for getTool.
+
+Alternatively, `getTool` could be a global because pages are in the same bundle? No.
+
+Let me directly test in the browser: use playwright to go to 404 and evaluate `typeof getTool` and capture any errors. Also check the common grid innerHTML. Let me write a quick python playwright script (using the installed playwright).
+
+Actually, the cleanest: add a page.on("console") and page.on("pageerror") and evaluate. But the probe already showed no pageerror. Maybe the error.vue setup didn't throw because `getTool` resolved via Nuxt's auto-import *because Nuxt scans `app/data` too*? Let me check `.nuxt/components.d.ts`? No.
+
+Let me look at the actual dev server compiled error.vue to see if getTool import was added. Search `.nuxt` or node_modules/.cache for error.vue compiled. In dev, files are in `node_modules/.cache/nuxt/.nuxt/dist/...`. Let me grep for `getTool` there. Actually the dev server transforms on the fly. Let me search the client bundle for getTool. Hmm.
+
+Simplest: Let me use playwright to evaluate `typeof getTool` in page context and inspect the common grid. Let me do it.
+dsh: reasoning:
+Confirmed:
+- `window.getTool` is undefined.
+- The 404 page's common tools grid is empty (`<!--[--><!--]-->` = empty fragment). So `commonTools` was empty. But no pageerror?! If `getTool` is not defined, calling it in setup would throw ReferenceError. Yet title and desc render. And no pageerror logged. Hmm. Perhaps Vue's error handling catches the setup error and the component partially rendered? That doesn't make sense.
+
+Wait — maybe the error.vue that actually rendered is NOT the custom one; maybe Nuxt's default error page. But "常用工具" and "err__common-title" class match error.vue. And `.err__title` = "页面出现了错误", `.err__desc` = message, `.err__code` = 404. So error.vue rendered template but `commonTools` is empty and is404 false. That means the `<script setup>` threw at the `getTool` line, so subsequent `is404` computed... wait is404 is defined BEFORE commonTools. In `<script setup>`, execution order: props, is404 computed, useSeoMeta, common, commonTools (throws). If it throws, the component setup fails and nothing should render... unless Nuxt's error handling renders the component in a special way.
+
+Hmm, but maybe `getTool` is actually defined at module scope in the error.vue chunk via compiler inlining? The evaluate `typeof window.getTool` is undefined because it's module-scoped, not global. Auto-import would make it available in module scope. So `typeof window.getTool` being undefined doesn't prove it's not available in the module. But the empty grid DOES prove `common.map(...)` returned empty or errored.
+
+Wait, `commonTools = common.map((s) => getTool(s)!).filter(Boolean)`. If getTool exists and works, this should produce 5 tools. It produced 0. So either getTool is undefined (throws) or returns undefined for all 5 slugs. The slugs are 'json-format','sm4','timestamp','jwt','qrcode' — all valid. So getTool must be undefined/throwing.
+
+But if it throws, why does the rest render? Possibly Vue's `setup` error is caught by Nuxt's error boundary and it renders the template with partial state? Actually in Vue, if setup throws, render never happens. So we'd see nothing.
+
+Alternatively, `getTool` might be provided as a global by Vue's template compiler auto-import? No.
+
+Let me reconsider: Maybe error.vue setup runs and `getTool` is undefined → ReferenceError thrown. Nuxt's `NuxtErrorBoundary`? The app root catches the error and shows... the error page again? Could cause the `[NUXTE1005] Error caught during app initialization` warning. And the rendered error page might be Nuxt's built-in fallback that coincidentally has class names? Unlikely to have `err__common-title`.
+
+Hmm, let me check: maybe there are TWO error renderings. The fallback default error page in Nuxt has classes like `#__nuxt-error-page`. The class `.err__common-title` is definitely custom.
+
+Let me look at the actual rendered outerHTML of the `.err` container to understand.
+
+Actually, maybe I'm wrong: perhaps the error.vue `<script setup>` did NOT throw because `getTool` is auto-imported at build time via Nuxt's `imports.dirs` including `app/data`? But then commonTools would be non-empty. Unless `common` slugs are wrong? They're correct.
+
+Wait, is it possible that error.vue in Nuxt 4 is compiled differently: props define `error` but `is404` uses props.error?.statusCode. The rendered title is "页面出现了错误" meaning is404=false. On the /this-page... route error.statusCode=404. So is404 should be true. It's rendering as if `props.error` is undefined/different. This strongly suggests the rendered error page is NOT from `app/error.vue` executing normally, but rather Nuxt's internal default error handling that uses `error.vue`'s template? No...
+
+Let me just get the outerHTML and also check if maybe a different file defines these classes. Search for `err__common-title` across the app. Only error.vue. And search Nuxt's built-in for `err__common`? unlikely.
+
+Let me test with Playwright: force a client-side error and see. But more usefully, let me check the SSR response with an HTML Accept header (browser) and see if server throws. `curl -H "Accept: text/html"`. The dev server likely returns the HTML error page. Let me get that HTML and search for "getTool is not defined" or common tools.
+
+Also, I realize: the reason no pageerror appears might be that the error.vue setup error happens during SSR? No.
+
+Let me do: curl with html accept, check length and content; and search dev server logs. Let me find the dev server process and its log.
+dsh: reasoning:
+The HTML version is 151240 bytes, includes "常用工具" but 0 common items, and shows "页面出现了错误". So SSR rendered error.vue but with empty commonTools and is404=false. This is bizarre. It suggests `props.error` at SSR has statusCode but `is404` false, and getTool returned empty without throwing.
+
+Hold on. Let me reconsider `getTool`. Maybe Nuxt auto-imports it and it works fine... no, then commonTools non-empty.
+
+Let me look at what error Nuxt reports. Check /tmp/devkit-dev.log tail.
+
+Also, maybe the actual issue: error.vue's `<script setup>` uses `getTool` which is not imported. At build/SSR, Rollup/vite might treat unresolved `getTool` as a global reference and it becomes `getTool` (undefined) → ReferenceError. Nuxt's server renderer catches the setup error and re-renders the error page with a *fallback error* (the "页面出现了错误" branch) — but this is the same component so it would loop.
+
+Actually, I bet what happens: The SSR render of error.vue throws. Nuxt catches and renders the error page again via a "client-only" or fallback mechanism, but this time it uses a Vue error handling where the setup error is swallowed, producing an error object with statusCode 500? And the template renders with the fallback values, `commonTools` = [] (because the map threw before assignment, leaving `commonTools` as... wait it's a const, if the initializer throws, the variable isn't defined; template referencing it would throw again).
+
+Hmm. Unless `common.map((s) => getTool(s)!)` does NOT throw because `getTool` is resolved to something. Let me check whether `getTool` might be defined as a global by some provider. `window.getTool` undefined. But Nuxt auto-imports inject `import { getTool } from ...` at top of compiled SFC. If the auto-import registry doesn't have getTool, Vite/Rollup leaves it unresolved. In the browser, an unresolved identifier in an ES module throws ReferenceError only when evaluated. Since commonTools initializer evaluates it, should throw.
+
+But wait — maybe it doesn't throw because of how the compiled code is: maybe Nuxt's auto-import plugin generates `const getTool = ...`? No.
+
+Let me look at the compiled error.vue in the SSR output or dev cache. Search node_modules/.cache and .nuxt for `getTool`. Actually let me search the built `.output/server/chunks/_/error-500.mjs` and `.output/public/_nuxt` for `getTool`. The production build already exists. Let me grep.
+
+Also grep the dev-served client chunk. Let me find the error chunk on the dev server. Simpler: search `.output` (from build) for "getTool".
+
+Let me also check dev log for the actual error.
+dsh: reasoning:
+The production build's error chunk: let me search for the custom error.vue chunk. It's probably in `.output/server/chunks/build/error-*.mjs`. Let me grep for `err__common` and `getTool`. Note `.output` is from the build I ran (after the code state). Let me grep for `commonTools` or `err__common`.
+
+Actually the grep for getTool in .output found files but not an "error" chunk. Let me search for the SFC named error. Let me find the chunk with `err__common`.
+
+Let me also grep the client JS `CYl-jWQt.js` (which contains getTool) — that might be the tools data chunk.
+
+Let me find the error component chunk and inspect how getTool is referenced.
+dsh: reasoning:
+Let me inspect how `getTool` is used in entry.mjs and CYl-jWQt.js. Let me see the surrounding code — whether there's an import for getTool.
+
+`.output/server/chunks/virtual/entry.mjs` has both getTool and err__common. Let me grep the import list and the definition context.
+dsh: reasoning:
+Confirmed: The compiled error component calls `getTool(e)` with NO import and NO local definition. So `getTool` is a free variable → ReferenceError. But note the compiled code: `let r=[...].map(e=>getTool(e)).filter(Boolean)`. If getTool is undefined, this throws at setup → the whole error component fails. Yet the page renders error content...
+
+Hmm wait, the client chunk shows the setup function. If it throws, Vue catches via `handleError` and the app might unmount/render fallback. But we saw error content rendered. Confusing. But regardless, `getTool` is definitely an unresolved free variable, and `commonTools` is empty. The title says "页面出现了错误" not the 404-specific title, and is404 computed works (it evaluated `t.error?.statusCode===404`)... 
+
+OH WAIT. I see it now. The compiled code:
+```
+let t=e, n=P(()=>t.error?.statusCode===404);
+wr({title:P(()=>n.value?`页面不存在 · DevKit`:`出错了 · DevKit`)});
+let r=[...].map(e=>getTool(e)).filter(Boolean);
+```
+If `getTool` throws, then `n` and title were already set. The `<script setup>` throw propagates. Vue's `setup` throws → component render fails. But in SSR, the title meta was already pushed via unhead before the throw, which is why the title shows "页面不存在 · DevKit" (the probe title) even though the DOM shows the fallback? Hmm the DOM `.err__title` showed "页面出现了错误" though.
+
+Actually maybe this: SSR render of error.vue throws; Nuxt catches it and renders a *second* error page, but the error object now is a 500-ish error without statusCode 404, and it doesn't call getTool? No, commonTools always runs.
+
+I think I'm overanalyzing the exact mechanism. The observable facts are enough:
+- `window.getTool` undefined and compiled code references unimported `getTool`.
+- The 404 page shows "常用工具" but zero tool links.
+- The 404 page uses the generic "页面出现了错误" title instead of the 404-specific copy even though status code is 404 — indicating is404 not taking effect / an error occurred.
+- The console logs `[NUXT_E1005] Error caught during app initialization`.
+
+Let me confirm the ReferenceError directly by capturing in browser. The pageerror is empty, which is suspicious. Let me inject a test: navigate to 404 and check `window.__NUXT__.state` or call the component. Alternatively, evaluate the error by triggering a fresh render. Actually, let me check if there's an error overlay (nuxt-error-overlay) in the DOM. The earlier text sample included `nuxt-error-overlay` script — that's injected when there's a dev error. That strongly indicates a runtime error occurred. The probe's `pageerrors` array may not capture errors that Vue catches. Let me capture via `page.on('console')` all messages including the Nuxt error overlay text, and check for the shadow DOM of `nuxt-error-overlay`.
+
+Let me check `nuxt-error-overlay` shadow content for the error message.
+
+Actually, the earlier HTML grep found `nuxt-error` count 7 in the SSR HTML — but that's the dev error overlay script always present in dev mode. Hmm.
+
+Let me directly evaluate: `document.querySelector('nuxt-error-overlay')?.shadowRoot?.textContent`. Let me do a focused playwright check.
+
+This is enough evidence for a high-severity bug: `app/error.vue` references `getTool` without import, TS error TS2304, and the 404 page's common-tools list is empty. Whether it throws a visible error or silently degrades, it's a real defect. Let me nail the runtime error to be precise.
+dsh: reasoning:
+The `.err` container DOES render, including `.err__actions` (which comes after commonTools assignment in setup). So setup did NOT throw! That means `getTool` must be defined somehow in the SSR/module scope. But the client chunk shows `getTool(e)` with no import... Wait, the client chunk `CYl-jWQt.js` might have `getTool` defined earlier in the same module or imported at the top. Let me check: the chunk filename `CYl-jWQt.js` also contains `getTool`. Perhaps the whole tools.ts data module is bundled into the same chunk and `getTool` is a function defined in that chunk scope! Since the chunk is `entry` client chunk containing error component AND tools data? The grep matched `getTool` in the same file. If tools.ts is in the same module scope (bundled together), then `getTool` is defined. But wait, `getTool` in tools.ts is exported; in a shared chunk it'd be a local function within the chunk's module scope — but the error component is in a DIFFERENT module. Vite/Rollup would need an import. Unless it's the same chunk and same module due to hoisting? No, modules are separate scopes.
+
+Hmm. Actually the minified code `let r=[...].map(e=>getTool(e))` — maybe `getTool` is defined in an outer IIFE scope of the same chunk (rollup concatenates modules into one scope; top-level functions from different modules can share scope after rename, but imports are explicit... actually Rollup hoists all modules into one file and can reference symbols directly without import statements because they're all in the same file scope!). Yes! In the final bundled chunk, Rollup concatenates modules and resolves imports at build time — the imports are removed and symbols referenced directly within the same chunk scope. So `getTool` is a function defined elsewhere in `CYl-jWQt.js` (the tools data chunk). So it IS available at runtime.
+
+But then why is commonTools empty? Because... the 404 page's error object. Wait, `commonTools` = map over 5 slugs. If getTool works, non-empty. But grid is empty. Unless the error component rendered is a DIFFERENT error component — the `err__common-grid` is `<!--[--><!--]-->` meaning `commonTools` empty. Hmm.
+
+Wait, maybe this environment: The dev server page uses the DEV (Vite) bundle, not the `.output` production build. In dev, Vite doesn't bundle — it serves ES modules. So auto-import plugin must inject `getTool` import. If it doesn't, ReferenceError. But `.err__actions` rendered, so no throw. So in dev, `getTool` must resolve. But `typeof window.getTool` is undefined. In ESM, a top-level `import { getTool } from '...'` is module-scoped, not on window. So dev did inject the import? But `.nuxt/imports.d.ts` didn't list getTool. Hmm.
+
+Wait — maybe the 404 route is rendered CLIENT-SIDE only (the SSR returned a minimal shell because error handling), and the client-side error.vue is loaded via a chunk that... Let me reconsider the client render: the `.err` container rendered fully including actions, but common grid empty. If getTool is available and valid slugs, should be non-empty.
+
+Unless the `error.data` object at client has different shape and the commonTools is fine but the CSS/rendering... no, gridChildren=0.
+
+Let me test `getTool` resolution directly by evaluating in the browser the tools search? Actually, the sidebar rendered all 41 tools, so the tools data is loaded in the app. But that doesn't expose getTool globally.
+
+Let me reconsider: maybe `common.map(...)` is fine and returns 5, but `t.id`/`t.slug` etc. The grid `v-for="t in commonTools"`. If commonTools is non-empty, links render. It's empty. So map returned empty or filter removed all. filter(Boolean) removes falsy. So getTool returned undefined for all 5 slugs. That means `getTool` resolved to a function but returned undefined — perhaps a DIFFERENT `getTool`? Or the slugs don't match? Slugs: 'json-format','sm4','timestamp','jwt','qrcode' — all valid per tools.ts (t01, t17, t18, t33, t39). So getTool should find them.
+
+Unless... `getTool` is defined in tools.ts but error.vue's `getTool` resolves to a *different* global function named getTool from some library? Unlikely.
+
+Hold on: maybe Nuxt auto-imported `getTool` from a different source. Let me check if there's a `getTool` anywhere else, e.g. in nuxt internals. grep node_modules? Could be. But most likely the dev auto-import resolved to nothing and Vite left it as a browser global reference. In the browser, `getTool` would be undefined → ReferenceError when called. But then setup throws. Unless... the `common.map` line is inside a `try`? No.
+
+Wait, maybe the compiled dev SFC is different: Nuxt's auto-import plugin might rewrite `getTool` to `__nuxt_auto_import__` or inject `const { getTool } = ...`? If it failed to resolve, Vite would error at build time ("getTool is not defined")? Vite doesn't error on undefined globals.
+
+Let me actually inspect the dev-served error.vue module. Fetch the dev module for error.vue from Vite. The error page is client-rendered, so there's a client chunk. Let me find the Vite module URL. In dev, we can fetch `/_nuxt/@fs/.../app/error.vue`. Let me look at the HTML to find the module graph. Simpler: curl `http://localhost:3000/app/error.vue`? Vite serves source modules at `/_nuxt/app/error.vue` maybe. Let me try a few.
+
+Actually, let me take a more direct approach to settle the runtime behavior: evaluate in the browser a forced client-side navigation to a 404 (via router) and check. Or better: the `commonTools` emptiness is the observable defect. Regardless of mechanism, this is a real bug. But I want to state the cause accurately: TS error TS2304 confirms `getTool` is not in scope for the type checker (no import), and the runtime common tools list is empty. It's possible Nuxt's auto-import DOES resolve it at runtime in dev but in a way that yields undefined? Hmm.
+
+Wait wait. Let me re-read the client chunk snippet:
+```
+let r=[`json-format`,`sm4`,`timestamp`,`jwt`,`qrcode`].map(e=>getTool(e)).filter(Boolean)
+```
+This is from `.output/public/_nuxt/CYl-jWQt.js` — the PRODUCTION client chunk. And `grep getTool` matched the same file. If `getTool` is defined in that same file (Rollup concatenation), then it works in production. Let me verify by extracting the definition of getTool in that file. If it's there, production works and the empty grid is a DEV-only issue. If it's NOT there, production has a ReferenceError and 404 page's common tools are broken (and possibly more).
+
+The dev site on 3000 is what we're auditing. The empty grid is observed. Let me check whether the dev server resolves getTool. Actually, let me check if maybe the error component executed fine in dev but `getTool` returned undefined because... 
+
+New hypothesis: In dev, Vite's auto-import resolved `getTool` but there are TWO functions and tree-shaking... no.
+
+Let me just fetch the dev error.vue compiled module. Vite dev URL for a file outside root: `/_nuxt/@fs/Users/hao/WebstormProjects/web_tools/devkit/app/error.vue`. Let me try.
+dsh: reasoning:
+Let me get the full compiled dev module and search for getTool.
+dsh: reasoning:
+In DEV, the compiled error.vue has NO import for `getTool` — it's a free variable. So calling `getTool(s)` throws ReferenceError. Yet the component rendered `.err__actions` which is AFTER the commonTools line...
+
+Wait, look at the compiled dev code: `const commonTools = common.map((s) => getTool(s)).filter(Boolean);`. If this throws, setup throws. But we observed the rendered DOM with `.err__actions` and `.err__title`. Let me re-examine: maybe this `const commonTools` line is INSIDE a try/catch or the component we saw rendered is from a cached/older render? Or maybe the reference error is thrown but Vue continues? No.
+
+Actually, hold on. Maybe `getTool` DOES exist as a global in the browser because some other script defines `window.getTool = ...`. But `typeof window.getTool` was undefined. In ESM/strict mode, an unresolvable identifier throws ReferenceError. Unless the dev module is not strict? ES modules are always strict. So it should throw.
+
+Let me directly check: in the browser, does `.err` exist AND is there an error overlay indicating a caught error? The `hasOverlay: true` — the Nuxt dev error overlay is present! In dev, Nuxt injects an error overlay when there's an unhandled error. The overlay's shadow content had CSS (first 1500 chars). Let me get the overlay's text content beyond CSS to find the error message. The shadow textContent includes CSS then the actual message. Let me extract the last part.
+
+Actually, more decisive: Let me evaluate in the browser whether the app is actually mounted and whether the `.err` we see is from the FIRST render (before error) or a fallback. The `.err` has data-v-f249f6ff (scoped style attribute consistent with error.vue). Nuxt error.vue is rendered by the app root when `error` state is set. It should render once.
+
+Hmm, but maybe the error overlay is a separate iframe/pip, and the visible page is the SSR HTML. The SSR HTML (151KB) contained "常用工具" and "页面出现了错误" but 0 items. So SSR rendered error.vue with empty items and no throw?! That means during SSR, `getTool` was defined! In SSR, the server bundle could resolve getTool because Nitro bundles all modules into one scope (Rollup concatenation) — as we saw in `.output/server/chunks/virtual/entry.mjs`, `getTool` is a free variable in the same concatenated scope and the tools module is likely in the same bundle, so it resolves to the real function. But then why empty on SSR?
+
+Wait, in `.output/server/chunks/virtual/entry.mjs`, is `getTool` DEFINED in that file? Let me grep for `function getTool` or `getTool =`. If not defined there, then it's imported from another chunk. Earlier `grep -n getTool entry.mjs` showed only line 2018 (the call). No definition and no import! So in the server entry, `getTool` is undefined too. So SSR should throw. Yet SSR output contained "常用工具" (so it got past that line?) — no wait, the HTML containing "常用工具" could be from the Vite dev client template? No, "常用工具" is only in error.vue.
+
+Let me re-examine: the 151240-byte HTML with "常用工具" and 0 items. If SSR threw at commonTools, the SSR error page would be Nuxt's 500 default (English), not the custom one. So SSR did render custom error.vue with empty commonTools. So getTool returned undefined for all, not threw?! That means `getTool` resolved to SOMETHING undefined-valued.
+
+Could `getTool` be defined as a global variable in the SSR context by another package? e.g., `globalThis.getTool`? If Nuxt/Rollup treats an unresolved import as a global and the server runtime has no such global, referencing it throws ReferenceError in strict mode. But Nitro server bundles are... also ESM strict.
+
+Alternatively, maybe the error.vue used at SSR is compiled by a different pipeline that DID auto-import getTool (because Nuxt scans `app/data` for auto-imports in some versions?). And getTool returns undefined because... no.
+
+Hmm, let me test getTool behavior directly with the tools data in node: import tools.ts and call getTool('sm4') — it works (we can test). So the function is fine.
+
+I think the most likely explanation: Nuxt auto-import *did* inject `getTool` in some compile passes (SSR) but the client dev module we fetched lacks it? We only fetched one URL. Possibly that URL is the client transform and the auto-import transform failed for client. And on SSR, the auto-import worked. But then commonTools would be non-empty on SSR → items would appear in SSR HTML. They didn't.
+
+OK, let me stop theorizing and get hard evidence: evaluate the SSR render error by checking the Nuxt error overlay's actual message (not CSS). Let me extract from shadow DOM the portion after the CSS. Also check `window.__NUXT__` or `__NUXT_ERROR__`.
+
+Actually the simplest decisive test: directly execute the compiled expression in the browser. `eval("getTool")` → ReferenceError or undefined? In the page context (not module scope), there's no getTool. But module scope differs.
+
+Let me instead check whether the overlay contains "getTool is not defined". Let me extract shadow text fully.
+dsh: reasoning:
+Let me just grab the text by iterating child nodes and excluding style. Or use JSON of outerHTML? Shadow root innerHTML should be accessible. Let me get `o.shadowRoot.innerHTML` and search for "getTool". Let me do simpler: `o.shadowRoot.innerHTML` then Python regex strip tags.
+dsh: reasoning:
+The overlay text doesn't show the error (it's a pip/compact view). So the presence of the overlay indicates an error was captured. The `[NUXT_E1005] Error caught during app initialization` warning also indicates an error.
+
+Regardless of exact mechanism, I have strong evidence:
+- TS error TS2304 at error.vue:11 "Cannot find name 'getTool'".
+- Compiled dev module confirms `getTool` is an unresolved free variable with no import.
+- 404 page's common tools grid renders 0 items and Nuxt logs `[NUXT_E1005] Error caught during app initialization` plus shows the dev error overlay.
+- Title falls back to generic "页面出现了错误" instead of 404-specific copy.
+
+Hmm but the `.err__actions` DID render. Let me reconcile one more time: maybe when setup throws, Vue still renders the previous/subsequent template? Actually the compiled code order: `is404`, `useSeoMeta`, then `commonTools` const. If `commonTools` throws, the setup function throws before returning the render function object. Vue catches and reports, then... the component's subtree is empty. But we see `.err`. 
+
+Unless the throw is caught by Nuxt's `useSeoMeta`? No.
+
+Could it be that `getTool` is actually defined as a **global on `globalThis`** in the client because Nuxt's auto-import for `#imports` registers some globals? Let me check `window.getTool` — undefined. But what about `globalThis.getTool`? Same as window in browser. Undefined.
+
+Wait — maybe the dev module I fetched is a stale cached transform from before some change, while the actual module served to the page (with `?t=...` timestamp) differs. Let me fetch with the same query/version using the page's module graph. Hmm.
+
+Actually, the more I think: maybe there's a `getTool` defined at module top-level by Vite's import analysis rewriting a *previous* import that got removed by tree-shaking? No.
+
+Let me try a completely different, decisive test: temporarily (without modifying files) evaluate the error page component behavior by navigating client-side from home to an invalid route, and observe. Actually, the simplest: check whether `.err__common-grid` is empty in DEV but non-empty in the production build preview. But we can't easily run preview? We can: `node .output/server/index.mjs` on a different port. That would confirm whether it's dev-only. But the audit is of the dev site (3000). Still useful.
+
+Alternatively — and this is key — maybe `commonTools` is empty because the error page rendered by Nuxt is NOT error.vue but Nuxt's **client-side error component** which imports error.vue... no.
+
+Let me try yet another approach: Use Playwright to hook `window.onerror` and also patch `console` before navigation via `add_init_script` to capture the ReferenceError. The `pageerror` event only fires for unhandled errors, but Vue catches errors via `app.config.errorHandler` and logs to console.error; Nuxt may swallow. Let me add init script that wraps `Promise` and `window.onerror`, and also intercept `console.error`. And crucially, override `Error.prepareStackTrace`? Simpler: `window.addEventListener('error', e => window.__errs.push(e.message))`.
+
+Let me do that. But honestly, I have enough: the defect is real and manifest. Let me also verify the production build by grepping whether `getTool` is defined in CYl-jWQt.js. Let me check if the function definition exists in the same file. `grep -c "function getTool\|getTool=" CYl-jWQt.js`. If present, production resolves. Let me check.
+
+Actually, given the dev module lacks the import, dev is broken. In production Rollup may or may not link it. Let me verify quickly.
+dsh: reasoning:
+In the production client chunk, `getTool` appears only once (the call) and no definition. So it would be a ReferenceError in production too. Wait, but maybe the definition is minified to a single-letter name and imported via an imported binding that Rollup renamed. Since `getTool` is a free identifier appearing once with that exact name, and Rollup minification would rename local functions, the fact that it retains the name `getTool` suggests it's treated as an external/global, NOT linked. So production 404 page also broken.
+
+Let me confirm: search CYl-jWQt.js for a minified function that does `t.slug===` or `.find`. But the key point: there's exactly one occurrence of `getTool` and no import statement. Let me check its import lines.
+
+Actually, let me look at the top of CYl-jWQt.js imports. If `getTool` isn't imported, it's a global reference. Let me check.
+
+But more importantly, I should confirm the runtime behavior in production. Let me run the built server on port 3200 and probe the 404 page. That's a solid test. `PORT=3200 node .output/server/index.mjs &`. Let me do it in background.
+
+Actually port env for Nitro: `PORT=3200` or `NITRO_PORT`. Let me use `PORT=3200`.
+
+Let me run it.
+dsh: reasoning:
+Interesting! Production preview 404: `err__common-item` count = 1, but the grep for "常用工具" found nothing. Wait, the grep output is empty for the second command — meaning the HTML doesn't contain those Chinese strings? But `err__common-item` count 1? That's odd. Maybe the response is the JSON error (because Accept header with text/html should give HTML). Let me look at the preview 404 properly. Also `err__common-item` count 1 could be within the bundled JS? No, curl HTML includes inline payload with component? Actually SSR HTML may include the scoped style or JS references. Hmm.
+
+Let me fetch and inspect. Also note production 404 might be handled by Nitro's error handler returning the SPA shell + client render.
+
+Let me curl and check length/content.
+dsh: reasoning:
+The production SSR 404 HTML is only 5475 bytes: it contains `err__common-item` and `err__common-grid` strings but these are likely inside the inlined CSS or JS payload? Actually "err__common-item" count 1 — maybe in the inlined CSS `<style>`. And Chinese strings 0 because the SSR response is the SPA shell with payload? Hmm, the title is "页面不存在 · DevKit" so the error state is 404. len 5475 is small — likely the SSR render failed and Nuxt returned the client-only shell. Let me look at the full HTML to see if `.err` is present.
+
+Actually wait, the production 404 page might render client-side entirely. The title being correct means `useSeoMeta` ran during SSR (error.vue setup got far enough to set title). If getTool threw, setup would throw before returning; but useSeoMeta ran and set title. Actually `commonTools` line comes after useSeoMeta, so useSeoMeta already executed and head was pushed, then getTool throws → SSR render fails → Nitro returns SPA shell (with head from the errored render?) Hmm.
+
+The dev server (3000) is the audit baseline. Let me not over-invest. I have enough: TS error + no import + empty common tools in dev + NUXT_E1005 + dev overlay.
+
+Let me do one final decisive test: patch the page in-browser to call the error component? Too complex. Let me instead capture `window.addEventListener('error')` with init script and also intercept console.error to find the ReferenceError message. Vue's `app.config.errorHandler` default logs via `console.error`. Nuxt might route it to `[NUXT_E1005]`. Let me add an init script that wraps `console.error` and records all args including stack, then navigate.
+
+Let me do it quickly.
+dsh: reasoning:
+The init script's console.error override may be reset by the page, or errors happen in module scope before? `window.__caught` was readable and 0. Hmm.
+
+Maybe there really is no error and `getTool` is somehow defined in dev. Let me check the dev module more thoroughly. The fetch showed no import line for getTool, but maybe Vite's import analysis adds it later, or there's a global `getTool` via Nuxt's `#imports` injection at runtime. Actually, Nuxt auto-imports work by Vite plugin `unimport` which rewrites identifiers and prepends imports. The dev module output listed imports via my regex `import {[^}]*} from "..."` — but the auto-import could be `import { getTool } from "/_nuxt/data/tools.ts"` which my regex would catch (it's `import {x} from`). It didn't. Let me just dump the whole dev module and look at all `import` lines and any `getTool`.
+
+Let me get the full dev module and grep all "import" lines. Also check if `getTool` is declared with `const` somewhere.
+
+Actually, maybe the `commonTools` line never executed because the component was rendered from a cached SSR payload and only the parts... no, client hydration runs setup.
+
+Hmm, wait — maybe `.err` we see is from SERVER-rendered HTML (SSR), and during client hydration, the setup throws but Vue *continues hydrating the server DOM*, so we still see the `.err` from SSR. And SSR's `getTool` resolved (or was empty). The grid is empty in both. The console errors are caught by Nuxt and not surfaced as pageerror.
+
+So: SSR produced `.err` with empty grid → in SSR, `getTool` did NOT throw (else no `.err`). So SSR getTool returned undefined. How? Because Nitro's server bundle has `getTool` as an unimported free variable; in an ESM module, referencing an undeclared identifier throws ReferenceError. Unless... Nitro server runs in a context where `getTool` is a global. Hmm, but `getTool` would be a ReferenceError, not undefined.
+
+Unless Rollup's SSR transform actually DID link it. `.output/server/chunks/virtual/entry.mjs` line 2018 is the call; maybe the actual definition is in a different chunk imported. Let me check the imports of entry.mjs — I saw the import list (first 2500 chars) but it may have more imports later. Nitro entry.mjs is huge and likely imports the tools module. Let me grep the imports for "getTool" or "tools". Actually Rollup would add `import { g as getTool } from '../chunks/build/tools-....mjs'` at top. The head showed many imports but truncated at 2500 chars. Let me grep all import statements mentioning tools or `getTool` as alias.
+
+If SSR links getTool correctly, then commonTools should be non-empty. But it's empty. So either it's not linked (undefined/ReferenceError) or the slugs mismatch. Wait — maybe there are TWO tools modules? Or maybe the server-side `getTool` is a DIFFERENT function from a different file (e.g., Nuxt internals) that returns undefined for these slugs! `getTool` is a generic name. Rollup might resolve the free identifier `getTool` to a global that happens to be imported from somewhere? No, Rollup errors on unresolved imports unless declared external.
+
+I'm spending too long. Let me take the pragmatic path: The bug is confirmed by TS2304 and by the observable empty "常用工具" list on the 404/error page. That's enough for the report with file:line + evidence. I'll describe it as: `getTool` is referenced without import (TS2304), and on both the dev site and production build the 404 page's "常用工具" list renders zero items, with Nuxt logging `[NUXT_E1005] Error caught during app initialization` and the dev error overlay present. I'll mark severity 高.
+
+Let me move on. Kill the preview server later.
+
+Now let me verify the usePrefs hydration bug with Playwright: set localStorage devkit.prefs.v1 with dark theme and codeFontSize, reload, check `documentElement.classList.contains('dark')`. Let me write a script.
+
+Also test the useTransfer bug and confirm `compatibleTargets` includes current tool. Hard to test UI. TS error is enough.
+
+Also test settings a11y buttonsNoName=3. Let me inspect settings.vue around the segmented/switch controls to find icon-only buttons. Let me read settings.vue.
+
+Also check favorites/svg inputsNoLabel.
+
+Let me batch: read settings.vue, favorites.vue.
+dsh: reasoning:
+The `settings` buttonsNoName:3 — which buttons? Probably DkSwitch or DkSegmented render buttons without accessible names. Let me check DkSwitch.vue and DkSegmented.vue. Also DkCheckbox maybe. The three switches (reduceMotion, editorWrap, recordRecent) = 3 buttons with no name! Yes. So DkSwitch renders a `<button>` without aria-label/role=switch/aria-checked. That's an a11y defect. Let me verify DkSwitch.
+
+Also probe counts buttonsNoName in settings = 3, exactly the 3 DkSwitch. Confirmed likely.
+
+For /favorites inputsNoLabel:1 — DkSelect renders a `<select>` but no label/placeholder maybe. Let me check DkSelect. Actually DkSelect likely renders a select with `aria-label`? Let me read DkSelect.vue and DkSwitch.vue and DkSegmented.vue and DkCheckbox.vue.
+
+For /svg inputsNoLabel:1 — probably one of the DkCheckbox inputs (checkbox with label but input itself lacks aria-label; probe checks `i.labels?.length` — DkCheckbox's label may not be associated via `for`/`id`, so input has no label association → counted). Let me check DkCheckbox.
+
+Let me read the Dk components.
+dsh: reasoning:
+A11y findings:
+- DkSwitch: `<button role="switch" aria-checked>` but NO accessible name (no aria-label, no text content). The 3 switches in settings yield buttonsNoName=3. Real a11y defect. Fix: accept `label`/`aria-label` prop, or associate with the visible label via aria-labelledby.
+- DkCheckbox: `<input type="checkbox">` wrapped in a `<label>` element. The input IS inside the label, so `input.labels` should return the label element — actually per spec, a labelable element inside a label is associated. So `i.labels?.length` should be 1. But probe counted inputsNoLabel=1 for /svg. Hmm, maybe the unlabeled input is the DkEditor textarea (placeholder present? DkEditor has placeholder; probe counts placeholder as label fallback). Let me not over-claim; I'll investigate the specific unlabeled input. Actually probe's rule: `!aria-label && !labels?.length && !placeholder`. For /svg there are 8 inputs: 5 DkCheckbox + textarea(s) + range? Let me just query which input. But it's minor. The DkSwitch issue is solid.
+
+- DkSegmented: `role="tablist"` with buttons `role="tab"` but no `tabpanel`, and keyboard arrow navigation not implemented (tabs require arrow key navigation and roving tabindex). Also all tabs are in tab order. Using role=tab without tabpanel is semantically wrong; better role=radiogroup/radio or listbox. Medium/low a11y.
+- DkSelect: `<select>` has no label/aria-label. In /favorites inputsNoLabel=1 (the DkSelect). Real a11y defect. Also in tools using DkSelect without a DkField label, there's no accessible name. Medium.
+- DkStatusBar: retry button has text, fine.
+
+Focus visibility: DkSegmented/DkSwitch/DkSelect may lack `:focus-visible` styles. DkSwitch has none → keyboard focus not visible. DkSegmented none. DkSelect uses `:focus` box-shadow (visible). Global CSS may define focus-visible. Let me check main.css for focus styles.
+
+Let me now verify the usePrefs hydration bug. Then performance/bundle analysis, then consistency.
+
+Let me check main.css for focus-visible and also reduce-motion class usage (does it apply via `.reduce-motion` on body?).
+
+Let me run the prefs test.
+dsh: reasoning:
+Confirmed the usePrefs hydration bug:
+- localStorage has theme:'dark', codeFontSize:18, reduceMotion:true, recordRecent:false.
+- After reload, `document.documentElement.classList.contains('dark')` = false, `--code-font-size` = 13px (default), reduce-motion false.
+- The settings page renders 13px, and computed `prefs` = defaults.
+
+So persisted preferences are IGNORED on full page reload (SSR). This is a high-severity user-facing bug: theme/font size/indent/wrap settings don't persist. Root cause: `useState` with `loadPrefs` initializer; Nuxt payload from SSR (defaults) short-circuits client initializer; unlike useFavorites/useRecent there's no onMounted reload. File: usePrefs.ts:21-33, 63-68.
+
+Let me also verify useFavorites/useRecent DO persist across reload (they have onMounted reload). Quick check maybe. Let me test favorites: set storage, reload /favorites, count. But enough—code shows the mechanism. I'll test quickly to strengthen.
+
+Actually, let me verify: does useState really short-circuit? The observed result proves prefs not applied. Good.
+
+Now let me also check that when user changes theme in-app, it persists and applies until reload. That's the "works during session" part. Fine.
+
+Now performance/bundle. Let me analyze:
+- The 41 tool components are code-split: yes, each has a chunk in server output. Client `_nuxt` has many JS files. Let me check the public HTML entry scripts and total transferred JS for homepage. Use curl for HTML, list `/_nuxt/*.js` preloads and their sizes.
+- Check duplicate deps: `npm ls` for duplicates? The package-lock may have duplicates. Let me check `npm ls --depth=0` and look for duplicate versions of vue etc. Also check bundle contains both qrcode and jsqr? Fine.
+- External Google Fonts: render-blocking, network dependency, violates "offline/静态" and privacy claims. Also if fonts fail to load, fallback. Probe failed_requests was empty (network available). But offline page claims cached tools work; fonts won't. It's a moderate performance/privacy issue: fonts.googleapis.com request leaks IP, contradicts privacy page "输入不出浏览器"? Fonts request doesn't include input. But README says "纯静态部署" and "无云端". Loading Google Fonts from CDN means network dependency at runtime. Worth medium.
+
+Let me measure homepage resource weight with playwright: count JS bytes loaded. Let me do a script capturing responses.
+
+Also check the `.output/public/_nuxt` for a huge vendor chunk. 160KB GCZueUgi.js is likely the entry (gzip?). Let me compute gzip sizes.
+
+Let me also check whether tool chunks are loaded on homepage (shouldn't be). The homepage has 41 tool cards, but components shouldn't be loaded until route. The dynamic route [slug].vue loads components via defineAsyncComponent? Let me check pages/tools/[slug].vue.
+
+Let me read pages/tools/[slug].vue and index.vue.
+dsh: reasoning:
+In dev mode, Vite serves unbundled modules (191 scripts) — not representative. The production build is what matters. But note the Google Fonts: the Noto Sans SC split into ~16 woff2 subset files (unicode-range subsets), which is normal. Total font bytes could be significant. Let me measure font transfer sizes from the performance entries. Actually the external fonts loaded 16+ files. Noto Sans SC subset files can be ~100-300KB each for the subsets actually used (Chinese subsets). For a homepage with lots of Chinese, many subsets load. This is a real performance concern: external Google Fonts, multiple Chinese subsets, render-blocking CSS. And offline/privacy concern.
+
+Let me measure in production preview (3200) the total transferred bytes and font requests. Actually production may not have been generated — we ran `nuxt build` (SSR), output has public assets. Let me measure on 3200 with playwright and sum content-length (or better use performance API transferSize).
+
+Let me get total transferSize and resource counts on the production home page. Also check whether tool chunks are loaded on home.
+
+Let me also verify whether the `err__common-item` in the production HTML is 1 due to CSS. Not needed.
+
+Let me run a perf measurement on 3200.
+dsh: reasoning:
+Production home: total transfer ~437KB (uncompressed transferSize from dev server? It's the preview server, probably no compression → transferSize = decoded body size). 21 JS, tool chunks not loaded on home → good code splitting. Fonts: only 1 font request measured (the CSS?) because fonts load lazily/subsets; transferSize 124KB (the googleapis CSS). Actual woff2 might load after. Anyway, external Google Fonts remains a dependency.
+
+The two largest JS are 92KB each: `CYl-jWQt.js` and `C4F3HEhw.js`. CYl-jWQt.js contains tools data + error component etc. Let me identify what these are. Let me check the entry and vendor. With gzip they'd be smaller. `.output/public/_nuxt` total 1.5MB. Let me get gzip sizes of top chunks.
+
+Actually, a key performance/architecture question: `tools.ts` (data) is small. The 92KB chunks might be `diff` + `js-yaml` + `qrcode` + `jsqr` + `sm-crypto` bundled into entry? Let me check which lazy tool libs are in the entry chunk vs tool chunks. If heavy deps are in the main entry, initial load is bloated. Let me grep the two big chunks for library signatures.
+
+Let me check:
+- CYl-jWQt.js: contains `getTool`, error component, tools data, and maybe more.
+- C4F3HEhw.js: ?
+- Are `diff`, `js-yaml`, `qrcode`, `jsqr`, `sm-crypto`, `spark-md5` split into their own lazy chunks or bundled in entry?
+
+Let me grep .output/public/_nuxt for signatures. Each tool component imports its deps; Vite should code-split shared deps into separate chunks. Let me list chunks by size with gzip, and grep for library markers.
+
+Let me compute gzip sizes and search for deps.
+
+Also check duplicate dependencies: `npm ls` / package-lock. Let me run `npm ls --all` might be huge. Instead grep lock for duplicate versions. Not critical.
+
+Let me do the chunk analysis.
+dsh: reasoning:
+The `ls -S *.js | head` and filenames starting with `-` (e.g., `-5LnDkBI.js`) break ls. Let me use find/sort. Also grep failed because of the `-` filenames being interpreted as options. Use `grep -l ... -- *.js` or `find`. Let me redo with find and sort.
+dsh: reasoning:
+The library signatures aren't found because minification renames. But the tool chunks should contain deps. The biggest chunk GCZueUgi.js = 160KB raw / 57KB gzip. Let me identify it — likely `diff` library (diff is ~180KB unminified). Let me grep for distinctive strings. Also C4F3HEhw and CYl-jWQt.
+
+Let me check which chunk is loaded on a tool page vs home. On home, two 92KB chunks (CYl-jWQt, C4F3HEhw) loaded. CYl-jWQt is the entry (contains getTool, error component). C4F3HEhw maybe vue vendor? Let me check for "vue" markers. Actually the `importmap` said `#entry: /_nuxt/CYl-jWQt.js`, so CYl-jWQt is the entry. It's 92KB raw / 33KB gzip. C4F3HEhw likely Vue runtime+router+unhead vendor (92KB). GCZueUgi (160KB) not loaded on home → likely `diff` or `js-yaml`, loaded only on relevant tool pages. That's fine.
+
+Let me confirm by checking which route loads GCZueUgi. Actually let me identify via strings: grep for distinctive error messages.
+
+- js-yaml has "duplicated mapping key", "unexpected end of the stream".
+- diff has "diff" / function names minified. 
+- qrcode has "QRCode" maybe minified.
+- sm-crypto has "sm2" strings maybe.
+- jsqr has "jsQR".
+
+Let me grep for distinctive substrings.
+
+Also check duplicate dependencies via package-lock. Let me look for multiple versions of vue or others. `npm ls vue` etc. But `ps` was blocked; npm ls should work.
+
+Let me do both.
+dsh: reasoning:
+Note: package.json declares `"nuxt": "^4.1.0"` but installed is 4.5.2; `"vue-router": "^4.5.1"` but installed inside nuxt is vue-router@5.3.1. Top-level `vue-router` version? Let me check `npm ls vue-router` shows top-level. It says devkit -> ??? Let me get the full top-level. Actually output shows nuxt's tree. Let me run `npm ls --depth=0`.
+
+Important: the vite-tsc invocation used vue-tsc 5.9.3 from /Users/hao/node_modules (global), and there was a warning "vue-router/volar/sfc-route-blocks not defined by exports in vue-router/package.json" — because installed vue-router (5.3.1 under nuxt) lacks that subpath. Minor.
+
+Vue-router duplicate: package.json declares vue-router ^4.5.1 as direct dependency, but npm installed vue-router@5.3.1 (hoisted under nuxt?). Let me check `npm ls vue-router --depth=0` and node_modules/vue-router version. If top-level vue-router is 5.x, that's a major version mismatch from the declared ^4.5.1 — npm would install 4.x at top level and 5.x nested. Let me check.
+
+Also `nuxt` 4.5.2 vs `compatibilityDate: '2026-09-01'` — compatibilityDate in the future relative to actual date? The build system date appears to be 2026-09-20 (from probe timestamp 2026-09-20). OK.
+
+Let me check the chunks:
+- GCZueUgi.js = jsQR (QR decode) — 160KB raw. Loaded only on qrcode tool? But it's a separate chunk, good.
+- BVxAsJrK.js = sm-crypto (sm2/sm3/sm4) — 38KB.
+- D3snemtB.js = js-yaml — 42KB.
+- Where's `diff`? Maybe DT4qmHzz. Let me not dig further.
+
+Now, are heavy deps in the entry? The entry CYl-jWQt contains "sm4" string once and "router" — but that's likely from tools meta/tags (e.g., 'sm4' slug in error.vue common list) and vue-router. So heavy deps are split. Good.
+
+C4F3HEhw.js = 92KB with no signatures → likely Vue runtime + unhead + vue-router vendor. Fine.
+
+So code splitting is good; no evidence of 41 tools all bundled into home. This is a positive finding. But note: the entry chunk is 92KB raw (33KB gzip) plus vendor 92KB — total ~67KB gzip JS for homepage. Reasonable.
+
+Font issue: external Google Fonts. Let me measure actual font transfer in production. Earlier only 1 font resource measured (124KB for the CSS?? that seems the CSS). Actually transferSize 124444 for the googleapis CSS is odd (CSS is small). Maybe the measurement aggregated. Let me check the response sizes. Probably the fonts loaded after networkidle. Not critical.
+
+Now the consistency task:
+- README says dev default 3000; FOUNDATION says dev server at 3100. Inconsistency — but brief explains 3000 baseline and 3100 Pen. FOUNDATION's statement "dev server 已运行在 http://localhost:3100" is a context-specific instruction, not necessarily a doc error. The task explicitly flags "README 说 dev server 默认 3000 但 FOUNDATION 写 3100". I'll report as low consistency issue.
+- README claims "SSR 构建" for `npm run build`; `npm run generate` static. Fine. But README says "纯静态部署" yet uses SSR + external fonts.
+- README claims npm scripts; but no `typecheck` script (task expected). Also no tsconfig.json → `nuxt typecheck` fails. That's a build/tooling gap.
+- README says "41 个工具" — tools.length = 41. Let me verify count. tools array from t01..t41 = 41. Good.
+- README says "结果待更新（stale）模式" — implemented useToolRun. But FOUNDATION says status includes 'running' while useToolRun type lacks it; DkStatusBar supports it. Minor.
+- README says "剪贴板降级" — useClipboard has fallback. Good.
+- README says "跨工具内存传递" — useTransfer exists but has the `from?.slug` bug.
+- FOUNDATION mentions `getTool`? No.
+- FOUNDATION lists component API: `DkField ... secret` etc. Let me verify DkField supports `secret`. And DkEditor props. Let me spot-check a few claims.
+- FOUNDATION says "usePalette.ts" but doesn't mention useTransfer in the composables list (it's in README). Minor.
+- FOUNDATION says dev server 3100, `curl /tools/<slug>`; fine.
+- FOUNDATION says "可用依赖：jsqr `import jsQR from 'jsqr'`" — package name is `jsqr` (lowercase) in package.json. Correct.
+- README says 依赖 `diff ^8.0.2` installed? Let me check.
+
+data/tools.ts tags/alias correctness:
+- t05 alias includes `'encrypt64'` — suspicious; maybe a typo. Actually searching "base64" then "encrypt64". Could be intentional alias? Unlikely. I'll flag as low (odd alias, not harmful).
+- t11 `regex-test` tags ['JavaScript 引擎'] and uses JS RegExp — correct.
+- t36 `http-status` tags ['离线知识'] — static data. correct.
+- t40 `text-encoding` name claims "文本文件编码识别与转换，UTF-8 BOM 与换行符处理". Does it actually identify encodings like GBK? Let me check t40. It may only support UTF-8/UTF-16 and GBK via TextDecoder. Let me inspect briefly.
+- t31 tags ['安全预览'] — verified reasonable.
+- t39 tags ['生成 / 识别'] — uses qrcode + jsqr. Good.
+- t20 tags ['Unix / Quartz'] — uses map.year undefined errors from date parsing; let me check if Quartz actually supported.
+
+Also `getCategory` non-null assertion — if `cat` invalid, runtime crash. Not user-triggerable.
+
+Also `searchTools`: search by tags uses includes; alias exact/starts/includes. Fine. But it doesn't search `slug` or `desc`. README says matches name/alias/category; implementation doesn't search category name despite comment "匹配名称、别名、分类" — actually it doesn't match category at all! Comment says "匹配名称、别名、分类" (match name, alias, category) but code only checks name, alias, tags. So searching "数据格式" (category name) would return nothing. That's a real functional/doc mismatch. Let me verify: searchTools doesn't reference categories. Correct — comment claims category matching but not implemented. Also `help.vue` says search supports "中文、英文、缩写与别名". Category search claim in code comment only. Let me test searchTools('数据格式') returns []. And '国密' returns SM tools via alias. Let me test with node.
+
+Let me test searchTools and also t40 encoding support.
+
+Let me also check `desc` says t40 handles GBK. Let me read t40.
+
+Let me batch: run node test on searchTools; read t40; check DkField secret; check package versions.
+dsh: reasoning:
+Findings:
+- `searchTools` doesn't match category names despite the code comment at tools.ts:312 "匹配名称、别名、分类". Query "数据格式" returns nothing. Also "摘要与加密" etc. This is a real (low/medium) functional mismatch. But is category search claimed in UI? CommandPalette placeholder says "搜索工具：名称、英文、缩写或别名" — does NOT claim category. So it's a code-comment discrepancy, low. Actually `help.vue` says "支持中文、英文、缩写与别名". So no user-facing claim of category search. Still, the comment is wrong; I'll report low.
+
+- Installed typescript is 5.9.3 but package.json says ^5.8.3 — fine (caret).
+- vue-router: top-level 4.6.4 (matches ^4.5.1), nested under nuxt 5.3.1. Nuxt 4.5.2 bundles vue-router 5.3.1 internally. Not necessarily a problem, but duplicate install adds size. Also the vue-tsc warning about `vue-router/volar/sfc-route-blocks` is due to the nested v5.3.1. Minor.
+- nuxt 4.5.2 installed; package.json ^4.1.0 fine.
+
+Now t40: The name/desc says "文本文件编码识别与转换，UTF-8 BOM 与换行符处理". Implementation honestly says GBK output unsupported. Fine. Not a defect.
+
+Now let me finish a few more checks:
+- `useTransfer` bug: `compatibleTargets` doesn't exclude current tool; TS error confirms. Also `deliver` ignores target param except pushing route; consume used elsewhere. Let me check where compatibleTargets/deliver used (SendToMenu). Let me read SendToMenu and check the flow.
+- `useClipboard` correctness.
+- `useToolRun` stale/copy: FOUNDATION says stale disables copy/download. But does every tool pass `:stale`? If some tools don't pass stale, then "result expired but copy still enabled". The task specifically asks about "结果已过期但仍可复制". Let me grep for DkEditor with :stale and check which tools omit it. Also check the copy buttons in toolbar. Let me grep `:stale` across tools and compare with tools that have copy buttons. That's a lot. Let me grep counts.
+
+Let me read useClipboard and SendToMenu, and do the stale grep.
+dsh: reasoning:
+The stale grep is not decisive because some tools use `:stale` on DkEditor but many compute output on the fly (preview tools) or use buttons. The list of tools without `:stale` that have copy buttons includes t02-json-diff, t12-md5-sha, etc. But some may legitimately be preview tools. The task specifically asks whether "结果已过期但仍可复制" is possible. Let me examine a couple of these to determine if they have a stale risk.
+
+Let me check t12-md5-sha (button-triggered digest) — does it disable copy when input changes? If not, that's exactly the bug: after computing a hash, changing input leaves old hash copyable without stale indication. Let me read t12's script/template for stale/copy.
+
+Similarly t02-json-diff (button-triggered), t20-cron, t25-stack-trace, t09-case-convert (preview?).
+
+Let me grep these for useToolRun usage and status handling, and copy button disabled condition.
+
+Let me check t12 and t25 and t02.
+dsh: reasoning:
+These tools DO honor `run.status.value !== 'ok'` or `=== 'stale'` on copy buttons. So the stale pattern is mostly respected. My earlier grep was too naive.
+
+t09-case-convert: `watch(input, execute)` and copy buttons at line 112 — let me check disabled condition. It has `run = useToolRun(sig)` and watch(input). Copy button likely disabled based on status? Let me check line ~110-120. Actually t09 is preview-type (input即算) so status stays ok. Fine.
+
+So no strong stale bug found. But wait, `useToolRun` watcher uses `watch(() => getSignature(), ...)`. For tools that themselves `watch(input, execute)`, when input changes, both watchers fire. Order: the `watch` inside useToolRun is registered at `useToolRun()` call time (line 83 etc.), while the tool's `watch(input, execute)` is registered later. Vue watchers fire in creation order for the same flush. So useToolRun's watcher fires first: sets status='stale'. Then execute() runs and sets status='ok'. Good. If execute is async and awaits, status may be stale during await? For async execute, markOk happens after await; status would be stale in between, but no 'running' status is set. That's acceptable.
+
+However, consider a tool where execute reads input but the `sig` doesn't include all inputs. Then stale won't trigger. Hard to audit all 41. I'll mention as a general risk only if I find a concrete case.
+
+Let me look for a concrete stale bug: a tool that computes on button click, has copy enabled by default (not gated on status), and uses useToolRun. Let me grep for `clipboard.copy` buttons without disabling. Actually, let me systematically check each of the 17 tools without `:stale` for whether their copy control is gated. But many use DkEditor readonly with :stale; those without :stale might put copy in DkEditor which has no stale gate. Let me check the DkEditor component: does it accept `stale` and disable copy/download? Yes per FOUNDATION. Tools that pass `:stale` to DkEditor are fine.
+
+The 17 without `:stale` may not use DkEditor for results. Let me check t09 (case-convert) and t34-url-params, t30-color — these are preview tools. Fine.
+
+Let me instead focus on verifying the two clear composable bugs (getTool, usePrefs) and other concrete issues.
+
+Now, let me check the `useToolRun` "失败后 status 显示成功" concern. In `execute`, if a tool calls markOk then later something throws outside... no. Or if `execute` is async and multiple invocations race: e.g., user clicks run twice quickly; the slower first result resolves after the second and could markOk with stale data. Potential race but speculative. I'll note as a risk (low) without concrete evidence.
+
+Now let me examine t39-qrcode line 63-67 for the debounce timer cleanup and the "generate" async race. Also t38 and t41 timers not cleared on unmount. Let me grep onUnmounted in those files.
+
+Also check the `useToast` setTimeout cleanup (minor).
+
+Let me also verify the offline retry no-op bug conclusively (already reasoned). Let me test it in browser: go offline page, button disabled state = online? On a connected machine, online=true so button disabled. So can't click. If offline, button enabled but retry checks navigator.onLine (false) → no reload. So it's dead. Confirmed by reading. Real medium bug.
+
+Now, let me check `pages/offline.vue` listeners leak: `window.addEventListener` in onMounted, no onUnmounted. Since it's a page component, unmounting on navigation leaves handlers. Each visit adds 2. Confirmed.
+
+Now let's look at `DkEditor` to see whether `stale` actually disables copy/download and whether it uses `v-html` or `innerHTML`. Let me read DkEditor quickly for correctness (copy line numbers etc.) and FileDrop.
+
+Actually time is limited (target 30 min; I've used a lot). Let me prioritize writing the report. But first a few quick high-value verifications:
+
+1. `app/app.vue` — check global setup.
+2. `pages/index.vue` — check for showError/throws.
+3. Check `nuxt.config.ts` ssr + external fonts (already).
+4. Check `error.vue` is the only TS2304; yes.
+5. Check `t24-properties-yaml.vue(35)`: `'line' implicitly has type 'any'` and `uCount` mismatch — these are type errors that might indicate real runtime bugs. Let me quickly look at t24 around those lines.
+
+6. Check `useTransfer` actual behavior: `deliver(target)` pushes route, and target tool must `consume()`. But `compatibleTargets` bug: because `from?.slug` is undefined, current tool not excluded by that function; however SendToMenu also filters `t.slug !== props.from` explicitly at line 17, so the UI does exclude the current tool. So the `from?.slug` bug is masked by SendToMenu's own filter. It's dead/incorrect code but not user-visible. I'll report as low (latent bug / TS error), noting it's masked.
+
+Actually wait: `compatibleTargets` is also possibly used elsewhere. grep. Let me check.
+
+7. Check whether `useState` payload issue also affects usePalette (open state) — `useState('devkit-palette-open', () => false)`. On SSR it's false; client hydration fine. Not user data.
+
+8. `useFavorites`/`useRecent` reload on mount but `useState` keyed globally; the onMounted load always overwrites from localStorage once per app load. Good.
+
+9. Check `ToolPageLayout.vue` visited list never pruned; grows up to 41. Fine.
+
+Let me do the remaining quick greps and read t24 lines and app.vue/index.vue. Then write the report.
+
+Also let me double check the `error.vue` `is404` render inconsistency: title in <head> says "页面不存在" (from useSeoMeta reading n.value), but body `.err__title` shows "页面出现了错误" (is404 false). Wait, both use `is404`. If is404 were true, body would show 404 text. The head title uses `is404` too. Probe's title = "页面不存在 · DevKit" → is404 true in head. But body shows generic. That's contradictory within the same render. Unless the body we see was server-rendered with a different error object than the head from client. Actually the probe title is set client-side by useSeoMeta, while `.err__title` DOM was server-rendered. SSR's `error.statusCode` might be 500/undefined while client's is 404. This suggests the error prop differs between SSR and client, or SSR error handling. Either way, it's part of the error.vue bug.
+
+Actually, I realize the likely full picture: During SSR of the error route, `getTool` is undefined → setup throws → Nitro catches and returns the 500 error page? But the HTML title was "页面不存在". Hmm. On the client, hydration re-runs and getTool... 
+
+Let me just present the concrete evidence: TS2304; dev-compiled module has no getTool binding; 404 page common-tools grid empty; console logs NUXT_E1005 and dev overlay; the `.err__title` shows the generic branch while `<title>` shows the 404 branch (inconsistent). That's plenty.
+
+Let me do the final quick checks.
+dsh: reasoning:
+Good: timers ARE cleared in t38/t39/t41/t11. So no timer leak there. Only offline.vue listeners leak. Good.
+
+t24 type errors: `logicalLines` at line 35 — `let line = pending !== null ? ... : raw` — TS7022 'line' implicitly any because of circular? That's odd. `pending` is `string | null`; `line` should be string. The TS error says implicitly any due to self-reference — likely because `pending` type inference. Actually `let line = pending !== null ? pending + raw.replace(...) : raw` — `raw` is string, so line should be string. Hmm, maybe TS error is a false positive from vue-tsc 5.9.3 vs TS version. But `errors` property mismatch at line 121: `propUnescape(keyRaw, decodeUnicode.value, res)` where `res` is `ParsePropsResult` but propUnescape expects `{ errors: string[]; uCount: number }` while ParsePropsResult has `unicodeDecoded` not `uCount`. That means `res.uCount` is never incremented — the unicode decode count tracking is broken! Let me verify: `ParsePropsResult` interface has `unicodeDecoded: number`, but `propUnescape` expects `uCount`. At line 121 they pass `res` (which lacks uCount). Inside propUnescape, `res.uCount++` would operate on `undefined` → NaN. So the "unicode decoded" count is wrong (NaN or undefined) and never displayed correctly. Let me read propUnescape and where unicodeDecoded is displayed.
+
+Let me look at t24 lines 45-100 and the result usage. This is a concrete real bug (type mismatch indicates field name mismatch). Let me confirm.
+dsh: reasoning:
+Confirmed real bug in t24:
+- `ParsePropsResult` has `unicodeDecoded` (initialized to 0), but `propUnescape` increments `res.uCount`, which is NOT a property of the object → `res.uCount` is `undefined`, `undefined++` → NaN (actually `res.uCount++` reads undefined, sets NaN). At runtime no crash, but `unicodeDecoded` remains 0 forever.
+- Consequence: line 424-425 note "已按选项解码 N 处 \uXXXX 转义" never shows (since unicodeDecoded=0), and `res` gets an extra `uCount: NaN` property. Typecheck flags TS2345 at lines 121,122.
+- This is a genuine functional defect (feature silently not reported). Severity 中.
+
+Good catch. I can also verify with node by extracting parseProperties... that's a lot. The type error + code reading is strong evidence. I'll cite lines.
+
+Also `logicalLines` TS7022 'line' implicitly any — might be a real inference issue but runtime OK.
+
+Now, I have plenty. Let me also quickly check `t19-uuid.vue` type errors (Object possibly undefined) — likely crypto.getRandomValues returns Uint8Array, indexing b[6] etc. Type errors only, runtime fine. Not worth reporting individually beyond the aggregate.
+
+Now let me check a11y focus-visible in main.css, and whether `reduce-motion` is actually applied (the class `.reduce-motion`). Let me grep main.css.
+
+Also check `@media (prefers-reduced-motion)` handling.
+
+Let me quickly grep.
+dsh: reasoning:
+Global `:focus-visible` exists at main.css:257, so focus visibility is globally handled. Good.
+
+DkEditor `:stale` disables copy/download (lines 81, 89). Good. So tools passing `:stale` are fine.
+
+The a11y issues remaining: DkSwitch no accessible name (real), DkSelect no label, DkSegmented role=tab misuse/no arrow nav, CommandPalette no focus trap/restore. Let me verify DkSwitch buttonsNoName: probe settings showed 3. Confirmed.
+
+Let me quickly check if there's any `<img>` without alt (probe says 0) and buttons without name on other pages (0). Good.
+
+Now let me verify the `offline` retry bug and listener leak are real (code reading sufficient).
+
+Let me also check `pages/[slug]` SSR throw for invalid tool: `throw createError({statusCode:404,...})` at setup top-level — this is the standard Nuxt pattern, fine. But `tool` computed may be undefined on first SSR? route params available. Fine.
+
+Now, consistency README/FOUNDATION:
+- README lists composables `usePalette` etc. FOUNDATION composables list omits useTransfer (README includes it). Minor.
+- README says "SSR 构建" and default port 3000. FOUNDATION says dev server 3100. I'll note.
+- README claims "纯静态部署, 无账号、无云端历史" but `nuxt.config.ts` loads Google Fonts from CDN → not fully self-contained/offline. Also README says "支持静态部署、离线" (index.vue says 离线使用). With external fonts, offline won't have fonts (falls back). And `/offline` page. This is a moderate consistency issue: "离线使用" claim vs external font CDN. Also privacy claim "输入内容不会上传" holds, but font requests leak IP to Google.
+- `FOUNDATION.md` says `status: idle|ok|error|stale|running` but `useToolRun` RunStatus has no 'running'; tools like t12 set `:status="busy ? 'running' : run.status.value"` manually. So the shared composable doesn't model running. Inconsistency (low).
+- `FOUNDATION.md` says "dev server 已运行在 3100（日志 /tmp/devkit-dev.log）" while README says default 3000 — and the audit baseline is 3000. Low.
+- `package.json` has no `typecheck` script and no `tsconfig.json`; README's quick start doesn't mention typecheck. But the task asks to run it. This is a real gap.
+- `nuxt.config.ts` has no `typescript.typeCheck` config; build doesn't typecheck (build passed despite 51 type errors). So type errors ship silently. That's a process/quality issue.
+
+Now performance: external Google Fonts is the main one. Also `nuxt.config.ts` has no `app.head` preconnect for fonts. Render-blocking CSS from Google. Also no compression config? irrelevant.
+
+Also check: The homepage loads 21 JS in production with 2 large ~92KB chunks. Fine.
+
+Let me also check whether `jsqr`/`qrcode`/`sm-crypto` are only loaded on their tool pages (code splitting) — GCZueUgi (jsQR) 160KB raw is a separate chunk. Good. But is it loaded on the qrcode page or on all pages? Let me check which page loads it. Actually, tool chunks are lazy via defineAsyncComponent + import.meta.glob; but Vite may still preload. On home, toolChunks was empty. Good.
+
+Now let me check the 404/error page in the production preview to describe the bug accurately. We saw production 404 HTML 5475 bytes with `err__common-item` 1 (likely CSS) and no Chinese text. Let me check the production 404 with Playwright for the grid and console, to see if production also breaks. Let me run.
+
+Also, I should kill the preview server when done.
+
+Let me also verify `getTool` issue in production by evaluating window. Let me run a quick playwright on 3200.
+dsh: reasoning:
+Production 404: no `.err` rendered at all (hasErr false), grid 0, and `[NUXT_E1005]` error. So in production the custom error page fails entirely (blank/fallback). This confirms the `getTool` bug breaks the error page in production too, and more severely (no custom error UI). 
+
+Actually `errorTitle: null` means the whole `.err` is absent — likely the component setup threw and Vue rendered nothing/fallback. So the 404 page shows mostly empty content (just layout). That's a high-severity bug.
+
+Now I have abundant evidence. Let me also double check the dev 404 `.err` rendering: dev showed `.err` present because Vite dev has the error overlay and maybe renders the SSR HTML (which had `.err`). But common grid empty. Fine.
+
+Let me now check remaining items quickly:
+- `nuxt.config.ts` external font: cite file:line.
+- `getCategory` non-null assertion (tools.ts:305) — low.
+- `searchTools` comment mismatch (tools.ts:312) — low.
+- `t05` alias 'encrypt64' — low/建议.
+
+Let me also check a potential issue in `DkEditor`: copy of readonly result uses `props.modelValue` — includes no line numbers? The editor may show line numbers separately, so copy is clean. The README claims "复制内容不含行号". Likely fine.
+
+Let me check `bytesToBase64` uses spread on subarray chunks of 0x8000 — safe.
+
+Let me verify `bytesToText` BOM behavior: returns BOM char. The t40 tool handles BOM separately. Not a bug.
+
+Let me verify `json.ts` `wrapNumbers` bug with strings starting `@@raw:` and ending `@@` — confirmed. Also `detectDuplicateKeys` path labels `{}.b` — confirmed. Also `jsonErrorPosition` wrong column due to wrapping — confirmed. Also returns null for newer V8 messages — confirmed.
+
+Let me also test `stringifyJson` with indent '\t': pad uses `indent.repeat(depth)`. Works. But `padClose` duplicates pad; fine.
+
+One more json bug: `unwrap` will also convert strings inside that begin with `@@raw:` and end `@@` — confirmed. Also, what about a *key* that is `@@raw:1@@`? JSON keys are strings; unwrap is called for keys too. If a key is `"@@raw:5@@"`, unwrap returns RawNumber → `Object.keys` on the parsed object would be... Actually JSON.parse reviver receives key as first arg (the key string), not the value; unwrap only inspects `value`, so keys aren't converted. Good.
+
+Another: numbers in value position after a key string with escaped characters — regex handles.
+
+Another potential bug: `wrapNumbers` valuePos check uses `lastMeaningful` set to '"' when a string starts, but after a string ends, lastMeaningful remains '"'. Then if a number immediately follows a string (invalid JSON), it won't wrap. Fine.
+
+What about numbers immediately after `[` inside nested? handled.
+
+What about `-` followed by number with leading zeros like `01`? regex `(0|[1-9]\d*)` matches `0` then stops at `1`, leaving `1` as raw char → `"@@raw:0@@"1` → JSON.parse error. But `01` is invalid JSON anyway. Fine.
+
+What about the regex matching a number prefix of a longer token, e.g. `1abc`? It matches `1`, wraps, then `abc` remains → parse error. Invalid JSON anyway.
+
+Big issue: hex-like `0x10` invalid JSON. Fine.
+
+Now `minifyJson`/`stringifyJson` convert `undefined`/functions to 'null' in arrays? walk default returns 'null'. In arrays, JSON.stringify(undefined) → null. Consistent.
+
+OK.
+
+Let me also check `DkEditor` for the `show-stats` uses lineCount which counts trailing newline as extra line. Minor.
+
+Let me now check whether there's an `npm run generate` issue (static). The task says "必要时 npm run generate 检查静态产出". That would take time and write `.output` (already there). Probably not necessary. I can mention that `ssr: true` with `nuxt generate` still works. Skip.
+
+Let me finalize the a11y checks:
+- probe settings buttonsNoName 3 → DkSwitch.
+- probe favorites/svg inputsNoLabel 1 each → DkSelect / probably DkEditor textarea? Let me quickly identify which input in /favorites is unlabeled. /favorites has DkSelect at line 32. Let me confirm DkSelect has no label association. Yes. So 1 unlabeled select. For /svg, 8 inputs: 5 checkboxes (inside label → labeled) + textarea? DkEditor might render a textarea with placeholder; probe treats placeholder as label so not counted. The unlabeled one might be a range or a checkbox. Let me not over-specify; I'll cite DkSelect for favorites and note /svg has 1 unlabeled input (likely a DkCheckbox where label association fails or a range). Let me quickly query the page to identify. Actually let me just do a quick playwright to list unlabeled inputs on /svg and /favorites.
+
+Also check focus trap in CommandPalette and DkModal via keyboard.
+
+Let me do one combined a11y script.
+dsh: reasoning:
+Big finding: `after Esc: {"open": true, ...}` — the command palette did NOT close on Escape! Why? Because the keydown handler is on the input; after Tab, focus moved to a button inside the palette. The palette's `onKeydown` is only bound to the `<input>`, not the dialog. So Escape only works while the input is focused. When focus is on the result buttons (after Tab) or anywhere else in the dialog, Escape does nothing. That's a real keyboard accessibility bug. Also ArrowUp/Down only work from the input.
+
+Also no focus trap: after Tab, focus stays inside palette (there are many buttons), but eventually would escape to background. Let me test more Tabs to confirm focus escapes. Let me also confirm Escape when input focused closes.
+
+Also the file input for FileDrop is hidden but unlabeled (minor).
+
+Let me refine: The palette Escape bug is solid: after Tab, Escape doesn't close. Let me verify with input focused: press Ctrl+K then Escape. And confirm focus escape after several Tabs.
+
+Let me run a focused test.
+dsh: reasoning:
+Confirmed:
+- Focus escapes the command palette after 3 Tabs (no focus trap), even though `aria-modal="true"`. Tab reaches the background TopNav brand link.
+- Escape closes only when the input has focus; when focus is on a result button, Escape does nothing.
+- No focus restore to the trigger after close (need to check, but Escape from input then focus... the trigger was the search button; after close focus likely goes to body). Minor.
+
+Also `aria-modal="true"` with focus escaping is a contradiction. This is a real a11y defect (中).
+
+Now I have a comprehensive set. Let me also quickly verify the `DkModal` focus trap (it has tabindex=-1 and focuses panel, Escape on panel works while focus inside; but no trap). Not as critical; I'll fold into the same finding.
+
+Let me also test the `offline` retry dead button quickly (navigator.onLine is true so disabled). Code reading is enough.
+
+Now let me check the `jsonErrorPosition` column bug demonstration numbers precisely for the report. `{"a":1,}` → real error at column 8 (0-based index 7), jsonErrorPosition returns column 9. Let me also compute: original text length 8, wrapped error position 17 → min(17,8)=8 → column 9. Real error position: index 7 → column 8. Off by +1 (the +9 chars shift minus clamp). I'll state it.
+
+Also demonstrate the string-corruption bug: `{"a":"@@raw:123@@"}` round-trips to `{"a": 123}` (string→number). Confirmed.
+
+Now let me write the report. Before that, let me get exact line numbers for key findings:
+- error.vue:11 `getTool`
+- usePrefs.ts:33 (useState), :63-68 (onMounted no reload), :21-30
+- useTransfer.ts:56 `from?.slug`
+- offline.vue:11-12 listeners no cleanup; :31-35 retry
+- json.ts:11-13 RAW_PREFIX, :61-66 unwrap, :197-209 jsonErrorPosition, :138-194 detectDuplicateKeys
+- bytes.ts:108-116 looksLikeText (b>=128 counts as text — so any binary with high bytes looks like text; minor), :43-48 formatBytes negative
+- t24-properties-yaml.vue:26/49/70/95/424-425 unicodeDecoded/uCount
+- DkSwitch.vue:7-15 no accessible name
+- DkSelect.vue:17 no label
+- CommandPalette.vue:42-56 keydown on input only, no focus trap, :67 aria-modal
+- DkSegmented.vue:16-29 role=tab
+- nuxt.config.ts:26-29 external fonts
+- package.json no typecheck/tsconfig
+- tools.ts:312 comment, :305 getCategory assert, t05 alias line 73
+- FOUNDATION vs README dev port
+- useToolRun.ts:1 type lacks running; FOUNDATION line ~ "status: idle|ok|error|stale|running"
+- timers fine (positive)
+- code splitting good (positive)
+
+Let me confirm nuxt.config line numbers for fonts. It was lines ~26-30. Let me get exact.
+
+Also need `tsconfig.json` absence evidence.
+
+Let me grab line numbers.
+dsh: reasoning:
+I have everything. Let me also quickly count how many of the 41 tool components lack `defineProps<{ tool: ToolMeta }>()` / convention, and check for `any` usage. Task asks about TS `any` abuse and unused vars/dead code. Let me grep for `: any`, `as any`, `any[]`, and unused `lastSig`.
+
+Let me do a final grep batch:
+- `: any`, `as any`, `<any>`
+- `lastSig` usage
+- eslint/prettier config presence
+- `console.log` left in code
+- TODO/FIXME
+
+Then write report.
+dsh: reasoning:
+82 "any" hits but many are false positives from `overflow-wrap: anywhere` and `\uXXXX` strings. Real `as any` occurrences are the DkSegmented `@update:model-value="$event as any"` pattern — needed because DkSegmented emits string but prefs typed union. This is type-safety erosion: e.g., settings.vue `update({ theme: $event as any })` means an invalid theme string could be stored without type checking. Low.
+
+`lastSig` is written but never read → dead code in useToolRun. Low.
+
+No eslint/prettier config, no typecheck script, no tsconfig.json.
+
+Now I'm ready to write the report. Let me organize by severity:
+
+**阻断 (blocker)**: none strictly blocking the whole app, but I'll rate the 404 page as 高 not 阻断 since normal tool usage works. Actually, "阻断" could apply to `nuxt typecheck` failure? No. I'll use 高 for the error page and prefs.
+
+Ranking:
+1. 高: 错误页/404 页 `getTool` 未导入 → 常用工具区为空；生产 404 页整个 `.err` 不渲染 + NUXT_E1005. (error.vue:11, TS2304)
+2. 高: usePrefs 持久化偏好刷新后失效 (usePrefs.ts:33 + no onMounted reload). Evidence.
+3. 中: 无根 tsconfig.json → `nuxt typecheck` 直接失败；且项目无 typecheck 脚本、无本地 vue-tsc，build 不做类型检查（51 个类型错误被构建忽略）。
+4. 中: t24 unicodeDecoded/uCount 字段错配 → \uXXXX 解码数量永远为 0（功能静默失效），TS2345。
+5. 中: json.ts 大整数安全实现的 3 个问题：字符串 `@@raw:...@@` 被误转为数字（往返破坏）；错误定位列号因包裹后偏移而不准；新版 V8 错误消息无 position 时返回 null。
+6. 中: 404 页 `is404` 在 SSR/客户端不一致（head 显示 404 文案，正文显示通用错误）— 与 #1 关联；可合并。
+7. 中: 键盘可达性：命令面板 Esc 仅在输入框聚焦时有效；无焦点陷阱（3 次 Tab 焦点逃逸到背景，aria-modal 形同虚设）。
+8. 中: DkSwitch 无无障碍名称（settings 3 个按钮无名称）；DkSelect 无 label；DkSegmented 误用 role=tab 且无方向键导航。
+9. 中: offline 页重试按钮在离线时是空操作（disabled=online，但 retry 仅 online 时 reload）；且 online/offline 监听未在卸载时移除（内存泄漏）。
+10. 中: 外链 Google Fonts（nuxt.config.ts:23）与“纯静态/离线/隐私”声明不一致，且中文子集字体体积与网络依赖。
+11. 低: useTransfer `from?.slug`（应为 `from.value?.slug`）→ 当前工具未过滤（被 SendToMenu 二次过滤掩盖），TS2339；useTransfer 未被列在 FOUNDATION composables。
+12. 低: detectDuplicateKeys 路径显示为 `{}.b` 而非实际键路径。
+13. 低: searchTools 注释声称匹配分类但未实现；"数据格式" 搜索无结果。
+14. 低: bytes.ts 边界：hexToBytes 忽略所有空白（包括非法换行）；formatBytes 负数输出；looksLikeText 将 >=0x80 全算可打印（非 UTF-8 二进制易误判为文本）；lineCount 尾换行多算一行。
+15. 低: useToolRun lastSig 写入未使用；RunStatus 缺 'running' 与 FOUNDATION:103 不符。
+16. 低: `as any` 82 处（含 DkSegmented 事件）；无 lint 配置。
+17. 建议: README 3000 vs FOUNDATION 3100；getCategory 非空断言；t05 alias 'encrypt64'。
+18. 存疑: Chromium sandbox 警告（iframes allow-scripts+allow-same-origin）来源不明，可能是 Nuxt devtools/错误覆盖层；非项目代码直接产生。
+
+Positive findings:
+- Build succeeds, tool code-splitting verified (home loads no tool chunks; jsQR/js-yaml/sm-crypto in separate lazy chunks).
+- Timers cleared (t38/t39/t41/t11), most listeners cleaned; only offline leaks.
+- No eval/new Function; only v-html is static icon table (safe); external link has noopener noreferrer.
+- SSR: all window/document/navigator usages are in onMounted/handlers; no setup-top-level SSR violations found.
+- localStorage stores only prefs/favorites/recent/visited (no input text/keys/tokens) — matches privacy claims.
+
+Now let me write the report file. I'll include a coverage table and evidence snippets. Also must end with `DONE: <abs path>`.
+
+Let me make sure the reports dir exists (it does). Write with the write tool.
+
+I should be careful to include file:line and command evidence. Let me compose a thorough Chinese markdown report.
+
+Let me also double-check exact line for usePrefs useState: line 33. And onMounted block 63-68. Good.
+
+Also for the "no tsconfig" evidence: `npx --no-install nuxt typecheck` output. And the vue-tsc run against `.nuxt/tsconfig.json` produced 51 errors.
+
+Let me get the exact count of errors by file for the report (already have).
+
+Also mention the vue-tsc used was global 5.9.3 (not project-pinned) — a caveat.
+
+Let me write the file now.
+
+One more: the error page's `<head>` title "页面不存在 · DevKit" but body generic — I observed `.err__title` = "页面出现了错误" while `useSeoMeta` title = "页面不存在 · DevKit". I'll mention as part of #1 evidence.
+
+Also production 404: `.err` absent entirely. Let me include.
+
+Let me also include the `jsonErrorPosition` concrete outputs.
+
+Write report.
+dsh: reasoning:
+Report written. Let me verify the last line and file. Also update todos.
+
+Let me check the file exists and final line.
+审核完成，报告已写入 `/Users/hao/WebstormProjects/web_tools/audit/reports/r6-code-quality.md`（409 行，30.9KB），未改动任何项目源码。
+
+## 核心发现（全部带命令/文件证据）
+
+**高严重度**
+1. **错误页 `app/error.vue:11` 引用未导入的 `getTool`**（TS2304）。开发 404 页“常用工具”列表渲染 0 项 + `[NUXT_E1005]` + dev 错误覆盖层；生产构建（`.output` 起在 3200 验证）404 页整个 `.err` 不渲染。已证明客户端 chunk 中 `getTool` 仅出现 1 次、无定义/无 import。
+2. **偏好设置刷新即失效**：`usePrefs.ts:33` 用 `useState(..., loadPrefs)` 导致 SSR payload 覆盖客户端 localStorage 读取，且不像 favorites/recent 那样 `onMounted` 重载。实测存 `theme:dark, codeFontSize:18` 后 reload → 仍浅色/13px。
+
+**中严重度**
+3. 无根 `tsconfig.json` → `npx nuxt typecheck` 直接失败；无 typecheck 脚本/本地 vue-tsc；`nuxt build` 无视 **51 个类型错误**照常成功。
+4. `t24-properties-yaml.vue` `unicodeDecoded` 与 `uCount` 字段错配 → `\uXXXX` 解码计数永远为 0（功能静默失效，TS2345）。
+5. `json.ts`：字符串 `"@@raw:123@@"` 被误转成数字（往返破坏）；错误列号按包裹后文本偏移（`{"a":1,}` 报第 9 列，实际第 8 列）；新版 V8 短消息返回 `null`。
+6. 命令面板 Esc 仅输入框聚焦时有效、3 次 Tab 焦点逃逸（`aria-modal` 形同虚设）；`DkSwitch` 无名（settings 3 个）、`DkSelect` 无 label。
+7. `offline.vue` 重试按钮在离线时是空操作，且 online/offline 监听未清理。
+
+**正面实测结论**：41 工具按路由拆包（首页不加载任何 `tXX` chunk，jsQR/js-yaml/sm-crypto 独立懒加载）；SSR 顶层无浏览器 API 违规；唯一 `v-html` 是静态图标表；无 `eval/new Function`；外链 `noopener noreferrer`；localStorage 未存输入/密钥，符合隐私声明。
+
+DONE: /Users/hao/WebstormProjects/web_tools/audit/reports/r6-code-quality.md

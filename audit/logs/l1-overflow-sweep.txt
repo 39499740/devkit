@@ -1,0 +1,2 @@
+BAD: none
+checked widths: [961, 1024, 1100, 1240, 1680, 2000, 3840] pages: ['home', 'category', 'favorites', 'recent', 'settings', 'privacy', 'help', 'offline', 'tool']

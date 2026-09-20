@@ -1,0 +1,1063 @@
+dsh: reasoning:
+Let me start by reading the brief.
+dsh: reasoning:
+Let me look at the tools available and start. Given the scope (G01-G08, C01-C15, many components), I should use subagents to parallelize. But I also need to be careful about context. Let me first do reconnaissance.
+
+Let me check pen.py, the design task doc sections, and the code.
+dsh: reasoning:
+Now let me look at the code structure and the pen tool usage. This is a large audit. Let me set up a plan and delegate some work to subagents while I dig into the critical items myself.
+
+Let me check the pen.py tool capabilities and dump some nodes. Also look at the code components.
+
+Given the huge scope (23 G-frames + 15 components + ~22 code files), I should parallelize. But subagents don't share my context; I need to give them detailed instructions. Let me first do reconnaissance so I can write good prompts.
+
+Let me look at the components directory and main.css.
+dsh: reasoning:
+Big scope. Let me plan. I'll do deep dives myself on the critical functionality (G04 stale, G01 transfer, G03 clipboard, G08 SVG isolation, red lines), and delegate component design-vs-code CSS comparison to subagents.
+
+Actually, given the time budget and context, let me use parallel subagents:
+- Subagent A: C01-C15 design component boards vs code CSS/API numeric diff. But they need pen.py and file reads. They can do it.
+- Subagent B: G02/G05/G06/G07 design states vs implementation.
+- I do: G01/G03/G04/G08 + red lines + composables.
+
+But subagents' quality matters. Let me instead do more myself, since I have good tools. Actually context could blow. Let me delegate 2-3 focused subagents with precise prompts and do the critical functional verification myself.
+
+Let me first quickly read the key code files so I can write precise prompts and verify.
+
+Let me read the composables and main.css and key components.
+dsh: reasoning:
+Note useTransfer bug: `compatibleTargets` uses `from?.slug` but `from` is defined below — hoisting: `const from = computed(...)` is declared after `compatibleTargets` function definition but function is called at runtime after setup completes, so `from` is initialized. That's fine. But wait: `compatibleTargets` is a function defined within setup; when called it references `from` in closure. Since `const from` declared later in same scope but function called after setup finishes, it's fine. Unless called during setup before `from` initialized. Probably not.
+
+Bigger issue: `send()` doesn't filter by kind; compatibleTargets filters by kind. Also `deliver` just router.push without marking anything; consume happens on target page. Need to check.
+
+Also `pending` is module-level, so it survives SPA route changes but lost on refresh. Fine per design.
+
+Now let me read main.css and key components. Let me also check the components' styles. I'll dump them.
+dsh: reasoning:
+Now I need the design's variable board (C15 / e8RFz / LYFe2) to compare tokens. Let me dump some design nodes.
+
+Let me be efficient: launch subagents for the big parallelizable design-vs-code comparisons, while I do the functional checks.
+
+Subagent 1: C15 变量板 + C01/C02/C03 topnav/sidenav/toolcard — compare design variable values (colors, sizes) to main.css tokens. Also C05 button, C06 field, C07 segmented, C08 editor, C09 statusbar, C10 file, C11 toast, C12 modal, C13 tree, C14 collapse specs vs component CSS.
+
+Actually that's a lot for one subagent. Split:
+- Subagent 1: C15 variables + C01/C02/C03 (nav, sidebar, card) vs code.
+- Subagent 2: C04-C09 (palette, button, field, segmented, editor, statusbar) vs code.
+- Subagent 3: C10-C14 (file, toast, modal, tree, collapse) vs code.
+
+And I handle G01-G08 functional checks. But the G design states also need design-vs-implementation. Hmm. G01-G08 are "shared interactions" — many are implemented via components/composables, not standalone frames. The task says verify functionality in browser/code layer. I'll do that.
+
+Actually let me delegate G02/G05/G06/G07 design-state coverage check too, and I focus on G01/G03/G04/G08 and red lines.
+
+Let me be careful with subagent prompts: they need complete standalone info: paths, tools, constraints (read-only, no writes except report? They shouldn't write; they report back). Tell them to use pen.py, read files, give file:line evidence, and NOT modify anything.
+
+Let me also check the pen.py syntax for dump/node. Let me look at a sample dump quickly.
+dsh: reasoning:
+pen.py help didn't output. Let me check pen.py source quickly for commands. Also GetVariables to get actual variable values. Let's use MCP `GetVariables()`.
+dsh: reasoning:
+MCP times out. Skip. We have design.pen JSON; variables likely stored in the file under "variables". Let me check the top-level keys.
+dsh: reasoning:
+Great — I can directly compare variables. Let me write a small python comparison of design variables vs main.css. That's fast and decisive.
+
+Let me extract all design variables and compare with CSS :root and .dark.
+dsh: reasoning:
+The "soft" colors: design uses 8-digit hex with alpha 1A = 26/255 = 0.102 ≈ 0.1 → rgba equivalent. Dark uses 26 hex = 38/255 = 0.149 → 0.15. So the rgba values match exactly (0.1 and 0.15). My comparison is just format. So no real diff. Good — CSS tokens fully match design.
+
+Note: CSS is missing `--accent-hover`? It has it, design may not define accent-hover. Fine. CSS also has extra: accent-hover, code-null, editor-*, diff-* which aren't in design variables (design may encode them inline). Let me check design variables for code-null, diff etc. Not present. So code has extras. Not necessarily a problem.
+
+Let me check the extra variables: design has font-ui/font-mono; CSS has them. CSS extras: --accent-hover, --code-null, --editor-bg, --editor-line-highlight, --diff-add, --diff-add-strong, --diff-del, --diff-del-strong, --diff-add-text, --diff-del-text, --radius, --radius-sm, --shadow-*, --topnav-h, --sidenav-w, --code-font-size, --reduce-motion. Design doesn't have radius/shadows as variables. Need to check design actual values for radii/heights.
+
+OK. Now the main work. Let me structure with todo and launch subagents.
+
+I'll write detailed prompts. Subagents work in background; I do G01/G03/G04/G08 myself.
+
+Let me define:
+
+Subagent 1 (components C01-C08 design vs code): topnav C01 (G3nZP, PQJ6y), sidebar C02 (VAmOT, vxMha), card C03 (ygdCz, I1Bhp), palette C04 (k9Lv8, o7OL6), button C05 (EWi3O, Pet6k), field C06 (ZxvS8, x1e6C), segmented C07 (LAxbr, tPt2l), editor C08 (I2CTz, WJkbJ). Compare to code files.
+
+Subagent 2 (C09-C14): statusbar C09 (uzR1p, yvE1y), file C10 (iMTIx, kWQyu), toast C11 (aF5zK, R4IbS7), modal C12 (BzEcd, CerYs), tree C13 (B6Lakz, MBSI5), collapse C14 (B1X7fF, M5DyY).
+
+Subagent 3 (G05, G06, G07 design states coverage): check design frames YBa6g/uuExn/yDpMe; iy2nr/Pl3Np/AkkM9; hTluV/X8miW. Verify code implementation.
+
+I'll do G01/G02/G03/G04/G08 + red lines + composables + runtime probe.
+
+Let me create the todo list and launch. Note subagents need to report back to me (not write files). I'll incorporate.
+
+Actually, subagents can be given permission to write to a scratch file in audit/raw? They said only report read-only; writing scratch is a write op but BRIEF says don't modify project source/design. Writing to audit/ is fine (my report goes there). But simpler: have them return findings as final text. Large though. Let me ask them to write to `audit/raw/r5-*.md` and return a summary. That keeps my context small. audit/raw exists.
+
+Let me check audit/raw and tools.
+dsh: reasoning:
+Good, server up. Let me launch subagents now. Then I do my own work.
+
+Let me write the todo first.
+dsh: reasoning:
+Now launch 3 subagents in background with detailed prompts.
+
+I must give them complete context. Let me write the prompts.
+dsh: reasoning:
+Now I do my own portion. Let me look at G01-G04, G08 designs and the relevant code.
+
+First G01: design frames VZOQn (target menu), NxIkX (replace confirm), cqTLs (entered target). Let me text those. Also SendToMenu.vue and how tools consume transfer.
+
+Let me read SendToMenu.vue and grep for useTransfer usage.
+dsh: reasoning:
+Interesting: only t01, t02, t03, t04 receive transfer (consume/peek), but transferTargets lists 10 targets. Let me check: compatibleTargets uses `from?.slug` where from is derived from route; but send doesn't include a way for target to know it should skip. The target lists: json-format, json-diff, text-diff, json-yaml, base64, url-encode, text-dedup, regex-test, sm3, md5-sha. Only t01 (json-format), t02 (json-diff), t03 (json-yaml), t04 (csv-json) implement receive. Let me grep which tools have `peek()` — only those 3. So 6 of 10 targets advertised would deliver nothing. That's a real bug: menu lists targets that don't consume.
+
+Wait, t04 csv-json doesn't import useTransfer but has SendToMenu. Let me verify. grep shows t04 only SendToMenu. So t04 can send but not receive. And targets base64/url-encode/text-dedup/regex-test/sm3/md5-sha never consume. Let me confirm slugs map to tools.ts.
+
+Also note: SendToMenu filters `t.slug !== props.from` in addition to compatibleTargets which already filters from?.slug — fine.
+
+Now G01 design: check replace-confirm design (NxIkX). Does any receiving tool implement replace confirmation? Let's check t01/t02/t03 for confirmation dialog when existing input present. Let me read those snippets.
+dsh: reasoning:
+Critical bug: `onMounted` in target page: `transfer.peek()` returns pending but never calls `consume()`. So pending stays in memory forever. Also, the tool's onMounted runs when navigating; but the pending payload persists. `peek` doesn't clear. So:
+1. Going to a target tool: onMounted peeks, applies... but never consumes. So if you navigate away and back, it will re-apply again (stale pending). Also if you open a *different* target later, old payload still there → unintended transfer. That's a real bug (state leak). Actually deliver() does router.push; consume never called. `consume()` is defined but never used anywhere (grep confirmed only definition). So memory payload never cleared → repeated re-application.
+
+Let me verify by grepping consume( usage again: only useTransfer.ts:45. Yes, never called. Bug.
+
+2. The `onMounted` in t01 checks `input.value.trim()` — but input starts empty on fresh navigation, unless the tool page is kept alive. So replaceAsk only triggers if input already had content. But since route navigation within same component? Nuxt page for /tools/[slug] — the page component is `tools/[slug].vue` which likely renders different components dynamically. Going from one tool to another may reuse... Actually replaceAsk check at mount time: input is empty always at mount (fresh component). So the "替换确认" (replace confirmation) basically never triggers in practice, because receiving tool component is mounted fresh with empty input. Let me verify the architecture: `pages/tools/[slug].vue`.
+
+Let me check.
+dsh: reasoning:
+Right — navigating between tools changes `view`, and Vue will create a new component (async component), so mounted fresh with empty input. Thus the "replace confirmation" would never appear in real navigation (unless the tool's input is pre-filled with a sample on mount? Let's check if any tool prefills. t01 input starts ''). Actually wait: when you're on tool A and use SendToMenu to go to tool B, the current page is tool A. Tool B mounts fresh. Input empty → applyIncoming directly, no confirm. So G01 "替换确认" (NxIkX) is unreachable via real flow. That matches design requirement "目标已有未保存输入时的替换确认" — but there's no persistence of unsaved input across tool navigation (which is arguably correct since inputs aren't persisted). So the replaceAsk branch is effectively dead code. Hmm, but is there a scenario? If the same tool component is already mounted and you deliver to the same slug? deliver filters same slug out. So no.
+
+Actually there's a subtlety: Vue may reuse the async component instance if the same component is used? No, different tools → different component. Unless navigating from /tools/json-format to /tools/json-format again. Not via menu.
+
+So finding: replaceAsk confirm UI exists in template? Let me check t01 template for replaceAsk rendering. Let me grep.
+dsh: reasoning:
+Confirmed: only 3 tools implement receiving; 6 advertised targets (text-diff, base64, url-encode, text-dedup, regex-test, sm3, md5-sha) don't. Let me verify slugs in tools.ts map and check whether those tools have any transfer logic. grep "useTransfer" only t01,t02,t03,t04. t04 has SendToMenu but no receive. So targets text-diff (t10?), base64, url-encode, text-dedup, regex-test, sm3, md5-sha — none consume. That's a serious G01 defect: menu advertises incompatible/unimplemented targets; clicking delivers nothing (payload stays pending and may leak into a later visit to t01/t02/t03).
+
+Actually worse: the payload stays pending after clicking to a non-consuming tool. Then later, if the user navigates to json-format for any reason, the stale payload from long ago gets injected silently (if input empty) and auto-executes. Real bug.
+
+Let me verify pending leak with a browser test. Let me use probe or a quick playwright script. Actually probe.py might not do multi-step. Let me write a quick playwright script in /tmp (allowed? writing to /tmp may be allowed since workspace-write; platform temp areas writable). Let me write to audit/raw instead to be safe. Actually a script is a write; I can use `python3 - <<'PY'` heredoc without writing files. Good.
+
+Let me do a browser test of G01 flow and G04 stale. And G03 clipboard fallback. And G08 SVG.
+
+But first, let me read remaining design frames text for G01-G04, G08 to know expected copy/state. Let me batch text extraction.
+dsh: reasoning:
+The G-frames at depth 2 in batch A4 have children nested deeper; `text` command maybe only handles specific structure. Actually `text` returns [] for others — maybe those frames have a different node structure (the frame contains a screenshot/render?). Let me check one: node VZOQn.
+dsh: reasoning:
+`dump` depth 3 stops. `text` returned [] maybe because text nodes are deeper than its recursion limit. Let me use dump with bigger depth. Let me try depth 8. Actually the text command likely has a depth cap. Let me check pen.py text function.
+dsh: reasoning:
+`text` uses iter_nodes over root children recursively (no depth limit) — should work. But returned [] for VZOQn. That means these frames' children are `ref` nodes (references) not inlined — the frame references other component instances but the actual text may live in the ref target or the ref node has no children. Wait dump shows refs like '顶部导航' with no children. So the shared-state frames reuse component instances via refs. The text content may be inside a `ref` node's resolved content? In .pen format, `ref` nodes have `ref` pointing to component id; the text lives in the referenced component. But VZOQn's own content frames (yBYLx etc.) should be inline.
+
+Hmm, but `text` recursion: iter_nodes yields root then children. For VZOQn, should find text. Unless content is nested under nodes with type 'ref' and the frame uses `ref` with `overrides`? Let me just dump with maxdepth 12 and grep content.
+dsh: reasoning:
+This is very informative. Design menu shows:
+- Menu title: "发送到兼容工具 · 内容识别为 JSON"
+- Items with name + description + arrow, height 40, cornerRadius 6, and **incompatible items shown but disabled with "不兼容" label** (SM4, 图片压缩). The design shows incompatible targets as disabled rows, not hidden.
+- Code SendToMenu only lists compatible targets and hides others (`v-if="!targets.length"`). So missing "disabled incompatible rows" (设计有代码无). Also code menu items height 30 vs design 40; item has no description line; design has 2-line name+desc.
+- Design item descriptions differ per target ("按当前文本直接打开并格式化", "作为差异比较的左侧输入", "检测到 JSON，可转为 YAML"). Code has none.
+- Menu title differs.
+- SendToMenu button: design "发送到…" height 30 fill=$accent-soft, fontSize 13, cornerRadius 6; code .sendto__btn height 24, font-size 12, transparent background (no accent-soft). Difference.
+
+Also design's menu is in a page (Base64 tool) — but actual code the SendToMenu used on json-format etc.
+
+Now, the target list: design shows JSON格式化, 文本差异比较, JSON/YAML转换, URL编解码 (compatible) and SM4, 图片压缩 disabled. Code targets include json-diff, base64, text-dedup, regex-test, sm3, md5-sha. So design's compatible set for a JSON content: json-format, text-diff, json-yaml, url-encode. Code adds json-diff, base64, text-dedup, regex-test, sm3, md5-sha for 'json' kind. And code doesn't show 图片压缩/SM4 disabled rows.
+
+Now key functional bug: 6 advertised targets don't implement consume. Let me verify each target slug existence and receive. Let me map slugs and grep.
+
+Actually text-diff, base64, url-encode, text-dedup, regex-test, sm3, md5-sha. Which tool ids? Let me check tools.ts. Then confirm no `useTransfer` in them. Already grep whole app for useTransfer showed only t01-t04. So yes.
+
+Now let me check NxIkX (replace confirm) and cqTLs text. Let me dump those. Also G02/G03/G04 frames. Let me get them in a compact way using a python script that extracts text with content for a list of frames.
+dsh: reasoning:
+Excellent, rich detail. Key design requirements:
+
+G04 (ogroI): stale state must show:
+- inline note "输入已修改：abc → abcd（3 字节 → 4 字节）"
+- banner "以下为修改前的旧结果，已不再对应当前输入"
+- "重新计算" primary button
+- result label "SHA-256 · 旧结果（输入 abc）"
+- stale result value shown in $text-tertiary (grayed)
+- 复制/下载 shown but disabled (text-tertiary)
+- status bar "结果待更新" $warn
+- "旧结果可查看，重新计算成功后恢复复制与下载"
+
+Code useToolRun only sets status='stale', staleNote='输入或参数已修改，结果待更新'. No diff detail (abc→abcd), no banner, no old-input label. Need to check tools actually implement the disabled copy/download and 重新计算 button. Let me check DkStatusBar and a few tools (md5-sha) and ToolPageLayout for stale UI.
+
+G03 clipboard-unavailable design (x7KTGF): after failure, shows:
+- toast/warn "浏览器未授予剪贴板权限，无法自动复制" with "重试授权"
+- a manual-selection panel: "请手动选中下面的文本后复制（Ctrl/⌘ + C）。文本已为你全选，工具不会替你把内容写入剪贴板。"
+- the text shown pre-selected.
+
+Code useClipboard: on failure, `toast.error('剪贴板不可用，请在结果框中手动选择并复制')` — toast only, no "重试授权", no auto-select of text. Note useClipboard's fallback uses execCommand; if that fails it toasts. There's no auto-select. Design says "文本已为你全选" — not implemented. Also design says "重试授权" (retry permission). Not implemented.
+
+But note: toast.error signature only accepts message (no action) in useToast.error: `error: (m: string) => show('error', m)` — so no action button possible even though ToastItem supports action. Actually `show` supports action but `error()` wrapper drops it. `success` accepts action. So error toasts can't have action. Design requires "重试授权" action in the warn toast. Missing.
+
+Also G03 design distinguishes warn (permission) vs error (fail). Code uses error for both. Minor.
+
+Download feedback: design amLL3 shows "下载准备完成" with "已准备 result-sha256.txt（96 B）", "保存文件"/"取消". S4Xf7k shows download failed with "重试下载" and reason. Let me check code: is there a download composable? grep for download / Blob / createObjectURL. useClipboard only does copy. Let me check tools for download implementation.
+
+G04 stale mechanism: watch on signature. Need to confirm signature includes all output-affecting fields for 3-5 tools. Let me grep `useToolRun(` and the sig definitions across tools.
+
+Let me do that now.
+dsh: reasoning:
+41 tool files, 40 use useToolRun. t36 is missing? Let me check. tools are T01-T41 = 41. Filenames: t01..t41. Missing from grep: t36. Let me check which file, and whether it uses run. Also t33 has special.
+
+Let me list files and find t36.
+dsh: reasoning:
+t36-http-status.vue has no useToolRun at all — likely a pure static reference table (HTTP status codes). That's arguably fine (no computation). Let me confirm it's a lookup table. Later.
+
+Now extract sig definitions for several tools. Let me grep lines with `const sig`.
+dsh: reasoning:
+Now I need to find output-affecting fields NOT in the signature (3-5 tools). Let me examine specific tools carefully.
+
+Candidates:
+- t12-md5-sha: sig line 29-30 truncated. Let me read.
+- t38-image-compress: sig line 30-31.
+- t15-sm2, t17-sm4, t22-json2java, t24.
+- t30-color: sig includes fg/bg text and alpha but maybe mode/tab or output format not included. Let's check.
+- t29 includes all.
+- t31-svg: includes all options.
+- t05-base64: line31 multi.
+- t08-text-dedup.
+- t14-aes.
+- t17-sm4.
+- t33-jwt: decode sig only token; verify separate.
+
+Let me read the sig definitions with a few lines of context.
+dsh: reasoning:
+Let me check t22 and t38 fully. Also I should look for actual missing fields. Let me use a targeted approach: for each tool, find fields referenced in execute() that affect output but aren't in sig. That's labor-intensive. Instead check a handful.
+
+Let me read t22 sig full and its output-affecting refs.
+dsh: reasoning:
+t22 and t38 look comprehensive. Let me look at t30-color: sig only fg.text, bg.text, compBg.text, alpha. But color tool likely has output format / contrast threshold etc. Let me read t30 to see output-affecting fields not in sig.
+
+Also t36-http-status has no run.
+
+Let me look for sig fields and compare with refs used in execute/template. A quick heuristic: grep for `ref(` in each file and compare. Let me pick a few likely suspects:
+- t19-uuid: sig includes tab, version, count. Are there other options like uppercase/hyphens/namespace? Let me read.
+- t20-cron: sig includes dialect, expr, tz, startLocal. Fine.
+- t26-maven-gradle: sig input, source, target. Maybe has classifier? 
+- t29 includes many.
+- t33-jwt: decode sig only token — verify has separate. But the tool likely has a `verify` toggle; the results displayed for decode include header/payload. Fine.
+- t39-qrcode: sigGen text,size,ecc. May have margin/color options?
+- t41-file-base64: runF sigF and runD sigD.
+- t07-unicode-bytes: sig conv, hexDir, escapeAll, input. May have uppercase option?
+
+Let me grep all ref() declarations to spot options. Let me write a script that for each tool file lists `const X = ref(` names and the sig line text, then I can eyeball.
+
+Actually, more efficient: I can programmatically test the stale behavior in browser for 3-5 tools. But to find missing signature fields, static analysis is needed.
+
+Let me read t30-color, t19-uuid, t39-qrcode, t26, t41.
+dsh: reasoning:
+Found: t19-uuid sig does NOT include `upper` and `hyphens`! Those affect displayed output. `display(u)` uses upper/hyphens. So changing 大写 / 连字符 won't mark result stale → copy would still be allowed and old output copied. That's a G04 violation. Let me verify display function and whether copy uses displayList.
+
+Also t30-color: outputs computed from parsed; sig includes text and alpha for fg/bg/compBg. What about `outputs(fg)` — does it depend on a format toggle? Let me check. Also the "compBg" affects contrast only, but compBg.text is in sig. Fine.
+
+t41 sigD only `input`. But decode has `fileName`? fileName is output target for download, not computation. Fine.
+
+t19 is a clear one. Let me confirm by reading t19 display and copy.
+dsh: reasoning:
+Confirmed: t19 copy is disabled only when status==='stale'. Since `upper`/`hyphens` not in sig, toggling them won't set stale, so copy/download remain enabled and the result is actually correct (displayList recomputes live), so functionally output is consistent. But the note says "实时作用于列表、复制与下载" — so it's intentional that display options are live-updating, not requiring re-run. Hmm. Then is it a stale bug? The G04 rule says "用户修改输入或影响计算的参数后，旧输出进入待更新". Display options don't affect the *generated values*, only formatting, and displayList recomputes reactively so the output shown is up-to-date. So arguably not a bug. But wait: the design/G04 requires stale when output-affecting. Since displayList is computed, output always matches. So no stale needed. I should be careful and not report as bug. However, the status bar says "已生成" and status ok; the output is live. Fine.
+
+But there is a subtle problem: `run.markOk` note says generated count; `staleNote` etc. Not an issue.
+
+Let me find a real missing signature field. Look for tools where an option affects a non-computed output but isn't in sig.
+
+Let me systematically extract ref names and compare against sig string. I'll write a script: for each tool, get all `const NAME = ref(` (and reactive object fields) and check whether NAME appears in the sig line(s). Then manually filter false positives (error refs, ui state).
+
+Let me do it.
+dsh: reasoning:
+Many are outputs (fine) or UI. Let me examine the genuinely suspicious ones:
+- t34-url-params: sig is `JSON.stringify([urlInput.value])` but refs include urlInput itself (it IS in sig, just inline — regex missed because sig was inline not arrow). So false positive.
+- t19: hyphens/upper (discussed, live display).
+- t10-text-diff: `syncScroll` (UI), `current`, `stats`.
+- t29-css-units: `batchCount`, `batchOutput` are outputs.
+- t31-svg: outputs.
+- t33: collapseKey (UI), verifyKey — verifyKey is in sigVerifyRun. fine.
+- t40-text-encoding: `text` — sig? Let me check t40 sig. refs list 'text' missing from allsig. That could be a real bug: t40 sig line 42 (from grep earlier: t40-text-encoding.vue:42 `const run = useToolRun(sig)`). Let me check its sig definition. The regex only matched `const sig... = () =>`. Maybe t40 sig is defined differently (e.g., `const sig = () => JSON.stringify([...])` should match). Hmm 'text' not found — maybe the input ref is named `input` and `text` is a different ref affecting output (e.g., encoding direction). Let me read t40.
+- t41: `b64`, `fileName`, `thumbUrl` outputs.
+- t37: `running` UI.
+- t39: scanText etc — QR scanner? outputs of separate scan feature.
+- t12: not listed, so fine.
+- t05: decodedBinary/outName outputs.
+
+Also t19: `parseInput` is separate parse feature (no run).
+
+Let me check t40-text-encoding.
+dsh: reasoning:
+`text` in t40 is an output (decoded text), not input. So the input is the file. Fine.
+
+So G04 signature coverage looks generally solid. My suspicion is low. Let me look at t18-timestamp: `batch` missing. Let me check whether batch affects output and if it's in sig. sig = [dir, unit, tz, tsInput, batchInput, dateInput]. `batch` might be output. Let me check quickly. Likely output.
+
+t11: lastMs, running — UI.
+t25: stats output.
+t28: output.
+
+OK. So G04 signature coverage: mostly complete. t19 display-only. I'll mention t19 as low/存疑.
+
+But more important for G04: does the UI actually implement design's stale presentation? Let me check ToolPageLayout, DkStatusBar, and a representative tool (t12 md5-sha since design uses it). Let me read DkStatusBar.vue, ToolPageLayout.vue, and t12's stale UI.
+dsh: reasoning:
+Now check t12 (md5-sha) for G04 stale UI implementation: the design shows old result label, disabled copy/download, 重新计算, banner, note. Let me read t12 template + stale handling.
+dsh: reasoning:
+Let me read t12 template around 200-270 for stale. Also check whether copy/download disabled when stale and whether old result remains. The bar has retry? DkStatusBar needs `retry` prop, and code passes only status/message. Let me check if `:retry` provided. grep "retry" in t12.
+dsh: reasoning:
+Observations for G04 in t12:
+- DkStatusBar gets `:retry="execute"`, so status bar shows 重新执行 when stale. Good.
+- Copy disabled when stale (line 264). Good.
+- But there's no download button in t12 apparently (grep showed no download function). Let me check. Design G03/G04 uses MD5/SHA with 下载 button. Code t12 has no download. That's a missing feature (设计有代码无). Let me confirm grep "downloadText" in t12. grep earlier for t12: only copy. Let me check all tools for download.
+
+Also design ogroI requires:
+- inline note "输入已修改：abc → abcd（3 字节 → 4 字节）" — code staleNote is generic "输入或参数已修改，结果待更新" (useToolRun.ts:21). No diff detail.
+- banner "以下为修改前的旧结果，已不再对应当前输入" — not present.
+- old result label "SHA-256 · 旧结果（输入 abc）" — not present; results list unchanged.
+- stale value shown grayed — not implemented (no styling for stale).
+- status bar "结果待更新" — implemented via DkStatusBar stale.
+- "旧结果可查看，重新计算成功后恢复复制与下载" — copy disabled, yes; but result not visually marked stale.
+
+But wait — is the design's MD5/SHA tool the same as code's t12? Design G04 uses MD5/SHA 摘要. Code t12 output is per-algorithm rows with copy buttons, not a single big result. Different layout but that's a separate concern (subagent covers components).
+
+Now, importantly: does the code keep the old result on stale? Yes, `results` unchanged. Copy disabled. But is download disabled? No download. And there's the question: does t12 disable copy only for `stale`, not for `error`? If status error, results may be from previous run (markFail doesn't clear results?). Let's check: on markFail, does it clear results? Let me check t12 execute error path. Actually the output row remains visible after a failed run and copy is only disabled for stale, not error. If execute fails (e.g., invalid hex), results still show old values and copy remains enabled while status bar says 失败. That's a real gap: rule 4 says after input change old output becomes stale; but if input change triggers execute and fails, status becomes 'error' (not stale), leaving old output copy-enabled. Let me verify t12 execute: at start, maybe results cleared. Let me read execute.
+dsh: reasoning:
+In t12, on failures results are cleared. So no stale-copy issue. But the catch path `markFail` after partial? Results not cleared in catch, but out is local; results.value only set at end, so old results remain if exception thrown mid-loop while results previously set. E.g., recompute after changing algorithm and crypto.subtle.digest throws → old results remain, status error, copy enabled (only disabled for stale). Edge case; low severity. Actually this applies broadly: `markFail` doesn't clear or mark output stale. In general if execute fails, old output stays visible and copy remains enabled. Design G06 says on failure "保留输入" but for output? Rule 4: after user modifies input, old output stale. If user modifies input and then execute fails, `markFail` sets armed=true and status=error; the watcher had already set stale? Sequence: watcher fires on input change → status stale; then execute → markFail → error. Output stays old, copy enabled. That's a real rule-4 violation in failure path. But is copy enabled generally on error? Most tools only disable on stale. Let me check a couple. This is a systemic issue.
+
+Actually the watch sets stale immediately upon input change (before user clicks execute). So while stale, copy disabled. If user then clicks execute and it fails, status=error and copy becomes enabled again with old/partial output. Design ogroI's copy disabled is keyed to stale; error state design (G06) doesn't explicitly say disable copy. Rule 4 focuses on input change. But after a failed recompute, the old result no longer corresponds to current input — showing it copyable is wrong. I'll report as medium with t12 evidence and note the general pattern.
+
+Let me now check whether design G04's "重新计算" and stale visuals are implemented broadly. DkStatusBar has retry. But do tools pass :retry? Let me grep `:retry`.
+dsh: reasoning:
+Wait, 43 DkStatusBar usages? grep counts lines matching either pattern including `:retry=`. Let me redo: number of files with DkStatusBar. Actually 41 tools + maybe more. Let me count files with DkStatusBar. Also check whether retry absent matters.
+
+Let me check t18-21, t41 - do they need retry? They have stale status. Design G04 requires "提供重新计算". If no :retry, the status bar won't show retry button. Let me verify.
+
+Also let me inspect download helper and which tools have download buttons; design G03 requires "下载准备完成" flow with confirm. Let's look at downloadText.
+dsh: reasoning:
+So download implemented as a direct `a.click()` with no "下载准备完成" confirmation step (design amLL3) and no download-failure feedback (design S4Xf7k). `downloadBlob` has no try/catch, no failure toast. So G03 download feedback states are NOT implemented — no prepare step, no failure feedback. That's a design-defined interaction missing.
+
+Now G04 retry: 5 tools have DkStatusBar but no :retry. Let me check whether those tools use stale meaningfully and whether they provide a recompute button elsewhere. E.g., t18-timestamp may have an execute button always visible. Design says "提供重新计算" — a recompute button exists (the primary action button). So missing retry in statusbar is a minor design diff, not necessarily functional. I'll note low.
+
+Now G08 SVG isolation. Let me read t31-svg.vue.
+dsh: reasoning:
+t31-svg renders preview via `<img :src="data:image/svg+xml,...">`. Images don't execute scripts or load external resources (browsers block script execution in SVG-as-image, and external resource loading is blocked). So it is genuinely isolated, no iframe needed. Design says "隔离容器/隔离预览". Using img data URL is a valid isolation. Good. But design Hzx75/mBf4B says "隔离预览" with "仅源码" toggle and a preview area. Let me check if there is a "仅源码 / 隔离预览" toggle. grep showed no iframe; there's `t31__preview`. Let me check template for view toggle and safety text. Also mBf4B text showed "安全预览", "隔离预览", "仅源码", "关闭". Let me read template 215-320.
+
+Also note potential issue: design says "不允许设计中的预览访问远程资源或自动运行用户代码". img data URL: SVG loaded as image cannot run script; external references in `<image href=http>` — actually SVG-as-image does NOT load external resources per spec. Good.
+
+But: `previewUrl = 'data:image/svg+xml,' + encodeURIComponent(clean)` — if `clean` doesn't have xmlns it may fail; @error clears. Fine.
+
+Let me read the rest of t31 template.
+dsh: reasoning:
+G08 is largely well implemented. Missing: design "仅源码 / 隔离预览" toggle (view switch), safety warning banner "安全提示". The `t31__removed` notice covers "预览无法完整还原时提示". Design mBf4B showed "安全预览"/"隔离预览"/"仅源码"/"关闭" — a segmented toggle between 隔离预览 and 仅源码 plus a safety hint bar. Code has no toggle; it always shows img preview + source editor side by side. That's a design-implementation difference, medium/low.
+
+Also important: does the `<img src="data:image/svg+xml,...">` truly not load external resources? Browsers: SVG images loaded via <img> do not execute script; external resources... The SVG spec says external resources are not loaded in image mode (for SVG as image, external references are disabled in secure static mode). Chrome blocks external resource loading in SVG-as-image. So safe. But `foreignObject` removal is extra. Reasonable.
+
+Now G02 FileDrop. Let me read FileDrop.vue.
+dsh: reasoning:
+G02 findings:
+- FileDrop has dragging highlight, accept attr, maxSize check with clear limit text. Good.
+- But no progress/reading state, no cancel, no failure UI in component itself (tools show "读取中…" text). Design G02 defines six states: 拖入高亮/读取中/计算进度/取消完成/读取失败/超出当前限制. FileDrop covers only drag highlight + size limit. Reading progress is ad hoc in tools; cancel not implemented (no AbortController in file reading). Let me check for cancel across tools.
+- `accept` is passed to `<input>` but **not validated** on drop! Browser accept only filters the file picker; drag-drop bypasses accept. `emitFiles` doesn't check `props.accept`. So dropping a non-matching file is accepted. E.g., t31 accept=".svg,image/svg+xml" but dropping a .txt would be accepted (then parsing fails). Real defect (medium). Also tools like t12 don't pass accept at all, relying on MIME check in onFiles. Inconsistent.
+- `maxSize` reject: only rejects the first too-big file and silently ignores the rest; message is good.
+- No `@dragenter`/counter for nested dragleave flicker. Minor.
+- Accessibility: role=button, tabindex, keydown. Good. But no `aria-disabled`.
+
+Let me grep for 取消/AbortController in tools for G02 cancel.
+dsh: reasoning:
+G02: cancel is implemented only in t37 file-digest (per-file cancel). No AbortController. File reading in t12/t16/t38/t41 etc. cannot be cancelled. Design G02 "取消完成" state implies cancel for file processing. Partially implemented (only t37). Story: G02 is a shared interaction, code implements reading state ad hoc per tool, cancel only in t37. Also "计算进度" — is there progress indicator? t37 processes files sequentially with counts; maybe no progress bar. Let me check t37 for progress. Also design says "进度不确定时不编造百分比" — check code doesn't fake percentages. t38 image compress maybe progress. Let me grep `%`/progress.
+
+Let me check t37 progress and t38.
+dsh: reasoning:
+Good — t37 has real read progress and cancel. So G02: 读取中/计算进度/取消完成/读取失败/超出限制 implemented in t37 (file queue tool). But the design G02 uses "文件摘要" as example, so t37 is the primary. The shared FileDrop component itself doesn't carry these states; they're per-tool. Since design G02 is a shared state, having it implemented in the file tool may suffice. But other file tools (t05, t12, t16, t38, t40, t41) lack cancel and progress; they just show 读取中…. The requirement G02 says "以文件摘要为例绘制…六个状态小画板" — design is about shared patterns; code coverage is partial. I'll note.
+
+Now G03 clipboard fallback test. Code path: if navigator.clipboard && window.isSecureContext → writeText; catch → fallback execCommand; if fails → toast error. In non-secure context (http://localhost is considered secure context actually; localhost IS a secure context). To test fallback, I can construct a page override. Let me just verify code logic: if clipboard unavailable, it throws, then fallback textarea+execCommand. If execCommand returns false → toast error "剪贴板不可用，请在结果框中手动选择并复制". Design wants: manual-selection panel with text pre-selected + "重试授权". Code has no pre-selection and no retry action. Also `toast.error` wrapper can't carry action. So G03 not fully implemented. Also note: there's no "复制成功" state beyond toast — design TRsUU shows "已复制" inline + note "复制内容为纯摘要文本，不含行号与单位说明". Code just toast "已复制{label}". Minor.
+
+Important rule 6: copy content must not include line numbers/offset. Need to check tools' copy functions for line-number prefixes. Let me grep copyAll / copy( calls with joins that might include index/line numbers. Let me search for `\`${i+1}` or `padStart` near copy.
+
+Let me grep for copy with line numbers.
+dsh: reasoning:
+t02-json-diff line 332: copies `${String(i + 1).padStart(2, ' ')}. ${reportLine(d)}` — includes a line number prefix " 1. ". Rule 6: "复制内容不包含行号、地址偏移、语法提示或展示性换行". This is a diff report, so it may be a "report" format. But rule 6 explicitly forbids line numbers in copied content. The copy label is '差异报告'. Hmm, a diff report arguably legitimately contains line numbers, but the red line says copy content must not include line numbers. This is a candidate violation. But is it a "展示性" line number? The design comment for copy says "复制内容为纯摘要文本，不含行号与单位说明". For diff, line numbers might be considered intentional content. I'll flag as 中 with the caveat.
+
+Also t25-stack-trace line 308: copies `input.value` raw — good (preserves original). line 311 buildTidy — that's a transformed text, intended.
+
+Now rule 6 also "对需要真实换行的文本保留原文换行" and "不静默 trim". Let me check for `.trim()` applied to input silently. Search for input.value.trim() in execute that alters output. Many tools check emptiness with trim but don't mutate. Let me grep for `= input.value.trim()` or `.trim()` assignments that change data.
+
+Rule 3: 不静默 trim、改变换行、替换字符编码或损失大整数精度. t01 uses parseJson preserving big integers? Let me check utils/json.ts. The design says JSON格式化 preserves big integers raw. Let me inspect parseJson/stringifyJson.
+dsh: reasoning:
+json.ts is big-integer safe for t01. But what about other JSON tools (t02 json-diff, t03 json-yaml, t04 csv-json, t22 json2java, t27 json2ts, t35 curl)? They use `JSON.parse` presumably losing big ints. Red line 3 says "不损失大整数精度". The design T01 explicitly mentions 保留大整数原始数字文本. For other tools it might be acceptable but rule 3 is global. Let me check t02's use of parseJson vs JSON.parse. Earlier grep t02 line 70 uses `minifyJson(v)` from utils. Let me check imports.
+
+Let me check which tools import parseJson/stringifyJson (big-int safe) vs raw JSON.parse.
+dsh: reasoning:
+No raw JSON.parse in tools. Good. t35 curl-convert? grep earlier didn't show. Let me check t35's JSON handling: `sourceFmt` curl→ maybe JSON.parse via parseJson? Not in list. Let me grep t35 for JSON parse. Also t32 html-format. Actually t35 might convert curl to JSON body via string manipulation. Let me check imports of t35.
+
+The grep for `JSON.parse` in tools returned nothing — so all use utils. But t35 imports? Let me verify quickly.
+dsh: reasoning:
+Good, big-int safe broadly.
+
+Now let me do runtime browser verification for G04 stale + G01 transfer + G03 clipboard fallback. Let me write a heredoc playwright script. I'll test:
+
+1. /tools/json-format: type input, click format, change input, verify copy disabled + stale text. Then click 发送到… → menu shows targets; click 文本差异比较 (text-diff) → should navigate and ideally load. Verify whether pending leaks.
+
+2. G04: /tools/md5-sha: input abc, click 计算摘要, then edit to abcd, check status text contains 待更新, copy button disabled.
+
+3. G03: /tools/md5-sha copy with clipboard permission denied → check toast text. Actually default headless Chromium may grant clipboard? `navigator.clipboard.writeText` requires permission; in headless without user gesture it may reject. Playwright context can deny permissions via `context.grant_permissions([])` — default denies. We can also override `navigator.clipboard` to undefined via addInitScript to force fallback.
+
+Let me write the script. I'll use sync_playwright.
+
+Also verify G01 target list count and whether text-diff receives.
+
+Let me first check tools.ts slugs for the target names to map. Actually not needed; the browser test will show.
+
+Let me write one comprehensive script and save output to /tmp.
+
+Important: probe.py uses sync_playwright; good.
+
+Let me craft the script carefully. I'll test json-format page structure by inspecting buttons by text.
+
+Let me first get a quick DOM snapshot of json-format to know selectors. Use probe.py.
+dsh: reasoning:
+Let me see probe output keys.
+dsh: reasoning:
+Now write the comprehensive browser test. Let me do it in a heredoc. I need to be careful with time. Let me test the specific flows.
+
+Script plan:
+- launch chromium, context with permissions denied (default). new page.
+- goto /tools/md5-sha, wait networkidle.
+- find textarea/editor. DkEditor likely renders a textarea or contenteditable. Let me check DkEditor.vue quickly to know selectors.
+dsh: reasoning:
+DkEditor has `wrap` prop, default true. Design G07 says "长行横向滚动、自动换行、左右分栏调整、只看输入/只看输出、编辑器内查找". Let me check whether tools pass `:wrap="false"` anywhere and whether there's a wrap toggle. grep.
+dsh: reasoning:
+Let me read DkEditor around 200-260 to see wrap behavior and toolbar.
+dsh: reasoning:
+G07 key findings:
+- DkEditor has `wrap` prop, default true (soft wrap). When wrap=false, textarea uses `wrap="off"` + `white-space: pre` + overflow auto → horizontal scroll works. But **no tool sets `:wrap="false"`** (grep found none). So the default is wrap-on everywhere; the horizontal-scroll mode exists in the component but is never reachable in the UI (no toggle). Design G07 requires "横向滚动 / 自动换行" both. Missing a user-facing toggle → 设计定义了但代码没有的交互.
+- **编辑器内查找 (Ctrl+F)** not implemented anywhere. DkEditor has no search. Design G07 X8miW requires 编辑器内查找. Missing (high for G07).
+- 只看输入/只看输出 not implemented (grep no matches). Missing.
+- SplitPanes provides resizable panes — need to verify SplitPanes drag. Let me check.
+- line number gutter: uses `v-for n in lines` with fixed height per line; when wrap is on, wrapped lines create visual continuation but gutter shows one number per logical line and the gutter line height matches line-height, so the gutter will misalign once a line wraps (because textarea wrapped line occupies 2 visual rows but gutter row is 1). This is exactly design's warning "行号和折行不混淆". With default wrap=true, gutter misalignment is real. Let me verify visually with a screenshot or compute. Actually textarea scroll sync only `scrollTop`; if wrapped, scrollTop mapping differs but both scroll in same pixel units if the gutter's total height equals textarea content height. Gutter total height = lines * (13*1.6=20.8px). Textarea content height with wrapping = number of visual rows * 20.8. If any line wraps, textarea content taller than gutter → numbers drift. This is a real bug (行号与折行混淆), matching rule G07. I can verify in browser by entering a long line and screenshotting, or by checking scrollHeight vs gutter height.
+
+Also the gutter caps at `Math.min(lines, 100000)` — for >100000 lines numbers stop, but textarea shows all. Minor.
+
+Let me verify the gutter misalignment with playwright measurement. That's a strong, concrete finding.
+
+Also check SplitPanes drag and the note "左右分栏调整".
+
+Let me now run the big browser test. I'll write a script that does multiple checks and prints JSON.
+
+Test A (G04): /tools/md5-sha
+- fill textarea with 'abc'
+- click button containing 计算摘要
+- wait, read statusbar text
+- change textarea to 'abcd' via fill
+- wait, read statusbar text + whether copy row button disabled
+- also check `.editor__stats`
+- measure gutter alignment: set a long line and compare textarea scrollHeight vs gutter scrollHeight/height.
+
+Test B (G01):
+- goto /tools/base64 (t05) maybe has SendToMenu? Earlier SendToMenu used in t01,t04 only? grep showed t01:167, t04:463. Let me check t04 CSV has SendToMenu and t01. Actually output of grep: t04-csv-json.vue:463 SendToMenu, t01:167. So only 2 tools have SendToMenu button! Design G01 shows Base64 tool with 发送到… button. So G01 entry point missing in most tools. Let me confirm: grep SendToMenu count.
+
+Let me grep.
+dsh: reasoning:
+Only 3 tools have the SendToMenu entry (t01, t03, t04). Design VZOQn is Base64 tool with 发送到… button. Base64 (t05) has no SendToMenu → design-defined entry missing in the tool shown in design. That's 高.
+
+Also t02 json-diff has useTransfer (receiver) but no SendToMenu sender. Fine (diff output not sendable).
+
+Now let me run browser tests. Let me write the script. I'll be careful with selectors:
+- textarea: `.editor__area`
+- primary button: text "计算摘要"
+- statusbar: `.statusbar`
+- copy button row: `.t12__row .dk-iconbtn` — let me use title="复制该摘要".
+
+Let me run.
+dsh: reasoning:
+Interesting results:
+1. G04 stale works: status becomes 结果待更新, copy disabled, 重新执行 button appears. Good.
+   - But the old result label is unchanged; no "旧结果" banner; stale value not grayed. Design divergence (medium).
+   - staleNote is generic; design wants "输入已修改：abc → abcd（3 字节 → 4 字节）". Divergence (low/medium).
+2. Gutter alignment: areaScrollH 103 vs gutterScrollH 62, with 2 logical lines and a long wrapped line. This confirms gutter/line-height misalignment: textarea content is 103px (wrapped long line ~4 visual rows) while gutter is 62px (2 rows). So the line numbers do NOT align with wrapped text — exactly design G07's "行号和折行不混淆". Real bug. With default wrap=true everywhere, every editor has this. High.
+
+   Wait—the textarea had long line + abc: 400 x's wrap into ~5 rows + abc = 6 rows * 20.8 = 125? It shows 103. gutter 2 rows = 41.6? shows 62. Anyway clearly mismatched.
+
+3. Clipboard: `已复制MD5 Hex` toast even with clear_permissions(). In headless Chromium, clipboard write may be allowed without permission? Actually Playwright's `clear_permissions` doesn't deny; default context may auto-grant. Or execCommand fallback succeeded. Either way, we can't easily test failure. The toast shows success. To test unavailable path, override navigator.clipboard and document.execCommand. Let me do an addInitScript to force both to fail and observe toast text/no manual panel.
+
+Let me test that. Also test G01 flow and G02 accept bypass.
+
+G02 drop bypass test: create a DataTransfer with a .txt file dropped on t31's FileDrop and see if it accepts (emits files). Hard to simulate file drop in playwright; can use `page.dispatch_event` with DataTransfer built via JS. Let me instead reason from code: accept not checked on drop — that's clear from FileDrop.vue:21-32 (no props.accept validation). I'll cite code.
+
+Let me test clipboard failure override and G01.
+dsh: reasoning:
+Confirmed critical G01 bug:
+- Clicking "文本差异比较" navigates to /tools/text-diff, but the target does NOT consume the payload (left input empty, status 未执行). So the transfer silently fails for 6 of 9 advertised targets. The menu offered it as compatible.
+- The pending payload was not cleared, but the leak test to json-format showed empty input — because t01's `transfer.peek()` returned payload but `p.from !== 'json-format'`? from was 'json-format' since we sent from json-format. So it skipped! Right, t01 skips if from === own slug. So the leak into json-format was avoided due to from check. But the pending remains. If we had sent from base64 to json-format later, it would apply. Let me test leak: send from json-format to text-diff (non-consumer, pending remains), then navigate to json-diff (t02, consumer) — it should inject stale payload even though user didn't request. Let me verify. Actually from is computed from route at consume time? In t01 onMounted, `p.from` is the payload's from, fine.
+
+Let me test: from json-format, send to text-diff (pending not consumed), then manually navigate to /tools/json-diff. t02 onMounted peeks; p.from='json-format' != 'json-diff', input empty → applyIncoming → injects. This is a real unintended injection. Let me confirm.
+
+Also clipboard failure: toast text matches code, but no manual panel and no retry button — design G03 x7KTGF requires "请手动选中下面的文本后复制" panel + "重试授权". Confirmed missing.
+
+Let me test the leak.
+dsh: reasoning:
+Hmm, interesting: sending to json-diff DID work (left input got the JSON). So t02 json-diff consumes. Earlier I thought only t01/t03/t04 consume, but grep showed t02:6 imports useTransfer and t02:352 peek. Yes t02 does. I mistakenly earlier listed t01,t02,t03 (plus t04 no). So consumers: t01, t02, t03. Advertised targets: json-format(t01), json-diff(t02), text-diff(t10), json-yaml(t03), base64(t05), url-encode(t06), text-dedup(t08), regex-test(t11), sm3(t16), md5-sha(t12). So missing receivers: text-diff, base64, url-encode, text-dedup, regex-test, sm3, md5-sha = 7 targets.
+
+But why did yaml_input end up empty? Because after sending to json-diff, t02 consumed? No — `consume()` is never called. Actually t02 uses peek, doesn't clear. So pending should remain. Then navigating to json-yaml → p.from='json-format', input empty → applyIncoming → should inject. But output shows empty. Why?
+
+Wait: after clicking json-diff, then goto json-yaml. But the pending payload... t02's onMounted peek didn't clear. Unless the SendToMenu's `go` -> `transfer.send` then `deliver` -> router.push. pending set. t02 mounts, peeks, applies. pending still set. Then goto /tools/json-yaml triggers a full page load (pg.goto) — a full navigation reloads the SPA, which **clears module-level memory**. So pending is lost on reload. My test used pg.goto (full reload), not client-side navigation. So no leak observed. To test leak, must navigate client-side (via clicking a sidebar link). But regardless, the stale pending persisting across client-side navigation is a latent bug. Since consumers never call consume(), if a user sends to a non-consuming target (7 of 10) then clicks a consumer tool in the sidebar, the payload injects. Let me verify with client-side navigation by clicking a link.
+
+But actually a more direct bug: after the payload is applied by t01/t02/t03, it remains in memory. If the user navigates (client-side) to another consumer, it re-applies. Let me test: send from json-format to json-diff (works), then client-side navigate to json-yaml via sidebar link, see if it injects. Let me find a sidebar link. SidNav has links. Let me use `page.click('a[href="/tools/json-yaml"]')`.
+
+Let me test.
+dsh: reasoning:
+Confirmed the latent leak: after sending to a non-consuming target (text-diff), navigating client-side to json-diff injects the stale payload. This is because `consume()` is never called. Real bug, medium/high.
+
+Also note the `text-diff` page shows nothing received. So 7 advertised targets fail silently.
+
+Now G02 accept bypass — code-level enough. Let me also check FileDrop reject flow: FileDrop emits 'reject'; tools use `@reject="(reason)=>toast.warning(reason)"`. But the size check only finds first too-big; fine.
+
+Let me verify the G08 preview actually renders and doesn't execute a script. I can load t31, click 不安全示例, click 解析并优化, then check that no `window.__xss` set and the img src is data URL. Also test an SVG with an external image href to see if request attempted (network). Since it's an img data URL, no external request should fire. Let me test by monitoring requests. Good strong evidence.
+
+Let me run.
+dsh: reasoning:
+Subagent 1 reported. Note: it created `audit/tools/pen2.py` — allowed (audit dir). Fine.
+
+My G08 test: preview_tag null — because the malicious SVG likely failed to parse/optimize? Actually `preview_tag` null means no img, maybe because the SVG after sanitization failed to render or the tool errored. `removed_notice` null too. Let me check status. Possibly the fill put content but the editor has `wrap` and `fill` works. Maybe the execute button click selected "解析并优化" correctly. Let me investigate: check statusbar text and editor content. Possibly the sanitizer removed `xlink:href` namespace error causing img @error → previewUrl cleared. Actually `@error="previewUrl = ''"`. Hmm, or the SVG data URL failed because encodeURIComponent of clean with `#`? Not present.
+
+Let me redo more carefully with the built-in "不安全示例" button and inspect status + optimized output + preview. Also check whether `img` exists. Let me debug.
+dsh: reasoning:
+G08 verified: script/on*/external href stripped, no XSS, no external requests, preview renders via img data URL. Good. The safety notice is present. Design's "仅源码/隔离预览" toggle missing. Also design says "不加载外部资源" — confirmed no external request.
+
+Note the removed notice says "2 个 on* 事件属性" — onload + onclick. Good.
+
+Now let me handle G02 FileDrop accept bypass more concretely and check the reject/limit. Also G05 example/sample data and G06 failure states are covered by subagent 3 (running). Let me check on subagents 2 and 3 status. But I can continue.
+
+Let me now check red lines more:
+- Rule 1: status bar counts derived from real data. t12 shows "64 个十六进制字符 · 32 字节"; design says. Code DkEditor stats computed from real values. Need to check for hardcoded numbers in status text. Let me grep for statusbar meta with hardcoded numbers.
+- Rule 5: 解码/解析/验签文案区分. Check JWT tool: "解码成功" vs "签名有效/无效". Let me read t33-jwt status messages.
+- Rule 9: URL only tool ID + non-sensitive params. Check useRecent/usePrefs storing inputs? Check settings page query params? Let me grep for route query usage and localStorage of inputs.
+
+Let me check t33-jwt claims/verify wording, and search for "验签" / "解析成功" / "解码成功".
+dsh: reasoning:
+JWT wording is excellent: distinguishes 解码成功 ≠ 签名有效, 验签结果. Good, rule 5 satisfied. But note line 12 mentions test key `devkit-secret` — it's a public test key, labeled as such. Rule 9 forbids keys in URL; this is in source/test data labeled "公开测试密钥" per design G05 "测试密钥示例明确只用于测试". Acceptable.
+
+Now rule 9: URL only tool ID + non-sensitive params. Let me check useRecent/usePrefs for URL storing inputs. And check settings page. Let me grep for `useRoute().query` and `router.push({ query`.
+dsh: reasoning:
+Rule 9: no URL query params for inputs — good. useTransfer only pushes path. localStorage only prefs/favorites/recent. Let me verify useRecent stores only tool id+name+time, and usePrefs doesn't store input. Let me read them quickly.
+
+Also check that no tool persists input to localStorage. grep localStorage in components/tools.
+dsh: reasoning:
+Good. Rule 9 satisfied for persistence; only transfer in memory (but leak bug).
+
+Note prefs has `editorWrap` but is it wired to DkEditor? grep `editorWrap`. If not wired, that's a design/functional gap: a wrap toggle exists in settings but tools don't apply it. Let me check.
+
+Also G07 "自动换行" — settings has editorWrap. Let me grep usage.
+dsh: reasoning:
+Confirmed: `prefs.editorWrap` is settable in settings but **never consumed anywhere** (DkEditor doesn't read prefs). Meanwhile codeFontSize is applied via CSS var; reduceMotion applied. So the "自动换行" preference is a no-op — DkEditor always defaults wrap=true, no `:wrap` passed anywhere. This is a concrete functional bug tied to G07 and design R04/settings. High-ish (中).
+
+Let me verify at runtime: set editorWrap off in settings, then check editor textarea wrap attribute stays soft. Quick test maybe. Let me do code-level citation: `DkEditor.vue:16` default wrap true; no `:wrap` in any tool (grep none); `usePrefs` `editorWrap` only used in settings.vue:99. Good enough. But a runtime check strengthens. Let me do it quickly along with other final checks.
+
+Now G03 download prepare/failure: downloadBlob has no try/catch and no confirm dialog. Design amLL3/S4Xf7k not implemented. Also no composable for download. Let me confirm no "下载准备" text. grep.
+dsh: reasoning:
+Subagent 2 done. Note discrepancy: subagent 2 says C09 design has 成功/错误/警告/信息/加载中 and lacks 待更新/未执行; but requirement says C09 must have 成功、失败、待更新、未执行. And my earlier reading of uzR1p... Let me trust subagent with node IDs but note the requirement mismatch. Actually requirement (task book) says C09 必需变体: 成功、失败、待更新、未执行. If design board lacks 待更新/未执行, that's a design defect too. I'll include.
+
+Also subagent mentions pen.py's `dump/text` didn't show content because it looks for `content` key — but actually pen.py does read "content" (I saw the dump output with content=). Wait pen.py dump includes "content" in extra keys. And texts() reads x.get("content"). But earlier `text VZOQn` returned [] — because... hmm the dump did show content. Why did text return []? Because `iter_nodes` yields from root; for VZOQn it should find text. Unless the text nodes are hidden under `ref`? No. Actually wait: I called `python3 audit/tools/pen.py text VZOQn` and got []. But dump worked. Odd. Possibly the `text` function's iter_nodes does find them; maybe I passed wrong? Let me not worry — subagent wrote their own extractor. Maybe pen.py was modified? They created pen2.py and r5_extract.py. The discrepancy might be because `pen.py text` signature expects sys.argv[2], and I passed VZOQn. Strange. Whatever.
+
+Let me check subagent 3 (G05-G07) still running. Meanwhile continue my checks.
+
+Remaining for me:
+- G05 example data verification (subagent 3 covers).
+- G06 failure states (subagent 3).
+- Check statusbar counts derived (rule 1). Let me spot check a couple tools for hardcoded stat numbers.
+- Rule 2: crypto results from real computation, no "demo result". Check for TODO/演示/待实现/占位 in tools.
+- Rule 10: no over-promising copy ("所有大文件流畅"/"永不失败"/"完全安全"). grep.
+- Rule 7: file feedback filename/size/remove/progress/cancel/fail — t37 yes; others partial. Already noted. "上传中" not present (checked).
+- Rule 8: disabled/focus/selected/hover/copy-success/cancel states defined — components have; check DkButton variants.
+
+Let me grep for TODO/FIXME/演示结果/待实现/假数据.
+dsh: reasoning:
+No TODO/待实现, no overpromising. Good. Rule 2 satisfied broadly (real crypto via WebCrypto; SM2/SM3/SM4 use libraries; signature "验签" messages real).
+
+Wait — rule 2 says "不能运行验证时使用无结果状态或明确写'演示结果，待实现验证'". SM2 code: let me check whether SM2 sign/verify is real or a stub. t15-sm2 imports what library? Let me check. Also t17-sm4. And whether SM2 verification is "未核验内容不得显示成功证明" (batch requirement). Let me check t15 imports.
+dsh: reasoning:
+Good. Two subagents done. Subagent 3 (G05-G07) still running. Let me continue and prepare report.
+
+Let me quickly verify a few more things myself:
+1. G02 FileDrop accept bypass runtime? Code evidence enough.
+2. Rule 1 hardcoded stats: check t05 base64 "输入 36 字符 · 解码 27 字节" design; code computes stats. DkEditor stats computed. Let me check a tool with statusbar meta numbers that might be hardcoded. e.g. t05 template stats. grep.
+3. G05 sample defaults: check t39-qrcode DEFAULT_TEXT — it prefills input! `const text = ref(DEFAULT_TEXT)`. Does it auto-execute? Design G05 says no default fill causing "looks already computed". Let me check t39. Also t18/t39 might prefill and auto-run. Let me grep for `ref('` with sample values and onMounted execute.
+4. Check t36-http-status (no useToolRun) — is it a static table? Fine.
+5. G05 "示例结果": does loading sample auto-execute and show result? Design yDpMe/uuExn. Let me check `loadSample` functions.
+
+Let me examine t39 (prefilled) and search all tools for onMounted(execute) or watch immediate auto-run.
+dsh: reasoning:
+t39 prefills DEFAULT_TEXT but does it auto-generate on mount? line 64 `watch([text,size,ecc],()=>...)` — let me see what the watch does (probably debounced generate or just marks stale). line 72 onMounted. Let me read 60-80.
+dsh: reasoning:
+t39 auto-generates on mount with a prefilled default URL. This conflicts with G05 "空输入 / 示例入口" and rule: "不要默认填充输入导致'看起来算了'的假象". Actually G05 requirement: "设计通用空输入、示例入口、载入示例将替换现有内容时的提示。用户无现有输入时直接加载，不弹无意义确认。" It doesn't strictly forbid a default sample. But the task explicitly asks me to check "是否存在默认填充输入导致'看起来算了'的假象". t39 prefills a URL and auto-generates a QR code on mount. Is that a "假象"? The QR shown is real and corresponds to the default text; status bar says generated. It's arguably a live preview default, not a fake. But it is an input prefilled and auto-executed, which differs from "空输入" design. Also the design for QR tool (T39) may intentionally default. I'll note as 低/中 depending: it does legitimately compute. The bigger concern would be if a tool prefilled input and showed a *hardcoded* result. Let me check none.
+
+t38 image-compress: bgColor default '#ffffff', but no file so idle. Fine.
+
+Now t25-stack-trace bizPrefix default `^com\.example\.` — fine.
+
+Let me check whether any tool onMounted auto-executes with prefilled and the result is real. t39 is the only auto-run. I'll report as a G05 divergence (medium): QR tool ships with prefilled example and auto-runs on mount, so first-time users see a populated input + real result without clicking "载入示例", inconsistent with G05 empty-input pattern and the design's 示例入口.
+
+Now rule 1: status counts from real data. Let me check t05 base64 stat: design "输入 36 字符 · 解码 27 字节". Code? grep.
+dsh: reasoning:
+Stats are computed from real bytes. Rule 1 okay.
+
+Now rule 7: "文件处理提供文件名、大小、移除、进度、取消、失败反馈". t05/t12/t16 file inputs show name + size + 移除 + 读取中, but no cancel/progress. t37 has all. Let me check t38/t40/t41. This is partial coverage; I'll note as G02 partial.
+
+Now let me examine G06 in code (subagent 3 may cover, but let me do a quick check of failure states + retry). Let me grep for distinct failure messages: 算法不支持/不支持, 解析失败, 取消.
+dsh: reasoning:
+G06: failure messages are specific and distinguish 不支持/解析失败/超时. "任务取消" (task cancel) state — design AkkM9. Code: only t37 has cancel. Other compute tasks (regex timeout) says 已中止 but not user cancel. Design G06 wants "任务取消" as one of three. Partially implemented in t37, missing elsewhere. Also there's no "取消执行" button for long computations (e.g., file digest aside). Report as partial.
+
+Also note: parse failure messages preserve input ("已保留原输入"), good. Retry: not all provide an explicit 重试 button, but execute button always available. DkStatusBar retry missing in 5 tools.
+
+Now let me check the G01 design's "已进入目标" lightweight prompt (cqTLs) — code has no "已从「...」发送 1 行文本" banner or "撤销". Let me verify grep.
+dsh: reasoning:
+No "已进入目标" lightweight prompt / "已从「Base64 解码结果」发送 1 行文本（126 字节）" banner / 撤销. Missing (medium). Also design says "转换失败时不传递伪结果" — SendToMenu disables when !text.trim(); good.
+
+Also design G01 menu title "发送到兼容工具 · 内容识别为 JSON" and per-item descriptions; code title "兼容的目标工具", no descriptions, no disabled incompatible rows. Missing.
+
+Now check SendToMenu menu item height 30 vs design 40, and button height 24 vs 30 (I have design values). Also the button style (design fill accent-soft, accent text). Already noted for my report.
+
+Now let me verify the G01 SendToMenu entry is in design's Base64 (t05) but missing. Confirmed only 3 tools.
+
+Now let me also verify DkStatusBar design vs code from subagent (C09) — main message slot semantics. Fine.
+
+Now, let me get the design G07 frames details (hTluV / X8miW) to compare. Subagent 3 will cover, but let me extract text quickly for my own report table. Let me use the subagent's extractor? Simpler: use node/dump. Let me dump text with a small python using `content`. Actually pen.py texts uses content; earlier returned []. Let me retry now maybe it was a fluke.
+dsh: reasoning:
+G07 design is very explicit:
+- 视图: 分栏 / 只看输入 / 只看输出 (toggle)
+- 长行: 不换行 / 自动换行 (toggle)
+- 查找 with hit count "3 / 7", wrap indicator ↵
+- 折行不新增行号 (gutter stays logical lines) — this is the exact bug we found: code's gutter uses fixed 20.8px rows while wrapped text occupies more; visually the numbers misalign with wrapped lines (though count of numbers = logical lines). Actually the design says "折行不新增行号" i.e. gutter shows 3 numbers for 3 logical lines even when visually 7 rows. Code shows numbers = logical lines (`lines` computed) which is correct in count, BUT the numbers' vertical positions are fixed at line-height intervals, so after a wrapped line, subsequent numbers drift — they don't align to the start of their logical line. That's a real bug. Our measurement: areaScrollH=103 vs gutterScrollH=62 confirms mismatch.
+
+Also G07 "只看输入/只看输出" toggle exists in design; code ToolPageLayout always shows both; no toggle. Missing.
+- 查找 in editor: missing.
+- 视图/分栏: SplitPanes exists; but design has explicit 3-mode toggle. Partial.
+
+Now let me verify SplitPanes drag works (code). Read SplitPanes.vue.
+dsh: reasoning:
+SplitPanes works, but the right pane has no flexBasis binding: left has flexBasis, right `flex:1`. Since left has flex:1 AND flexBasis, right flex:1 (flex-basis 0). Hmm, left `.split__pane { flex:1 }` plus inline flexBasis; right flex:1 basis 0. That means left grows from basis but both flex-grow 1, so left may not honor the percentage exactly. Let me think: left flex: 1 1 auto with flex-basis X%; right flex: 1 1 auto basis 0(auto? flex:1 → 1 1 0%). Left basis X%, grow 1. Free space distribution: container width W, handle 9. basis left X% of W, right 0. Remaining = W-9 - X%W distributed equally (+half each) → left ≈ X%W + (W-9-X%W)/2. That's not X%. So the drag percentage is not honored correctly — pane split will snap to near 50% + half of left's basis. Actually left gets X% + half remaining, so at initial 50: left = .5W + (W-9-.5W)/2 = .75W - 4.5. That's 75%, not 50%! Let me verify at runtime by measuring. Hmm wait `.split__left` and `.split__right` both have class split__pane (flex:1 1 auto? no, `flex: 1` shorthand = 1 1 0%). The inline style `flexBasis: leftPct+'%'` overrides basis. Right has no inline basis, so basis 0. Then free space = W - 9 - (X%W + 0) = W(1-x) -9; each grows equally by half → left = X%W + (W(1-x)-9)/2 = W(x + (1-x)/2) - 4.5 = W(1+x)/2 -4.5. At x=50 → 75% - 4.5. So indeed the left pane is ~75% wide at initial 50. Let me verify with browser measurement on json-format (does it use SplitPanes? yes t01 likely). This is a real functional bug in G07 分栏.
+
+Wait, but maybe `.split__right` has flex:1 with basis 0 and left has flex:1 too; yes. Let me measure.
+
+Let me test runtime: on /tools/json-format, measure `.split__left` width vs container.
+
+Also verify the resizer drag changes proportion.
+
+Let me run a quick measurement.
+dsh: reasoning:
+Confirmed: SplitPanes initial 50% renders left at 74.6%. Real bug. The design G07 requires draggable split; the drag works but the ratio semantics are wrong (left pane too wide). This affects t01 and other tools using SplitPanes. Let me check which tools use SplitPanes.
+
+Also editor wrap='soft' always.
+
+Let me grep SplitPanes usage count.
+dsh: reasoning:
+25 tools affected by the SplitPanes ratio bug. That's high severity/wide impact.
+
+Now let me wait for subagent 3 (G05-G07) and meanwhile start writing the report. Let me gather remaining evidence:
+
+1. C01-C08 report: read summary from subagent file (already have summary). I'll cite key items.
+2. C09-C14 report: have summary.
+3. G05/G06/G07: subagent 3 pending.
+
+Let me check subagent 3 status via list_agents maybe. Actually I'll just proceed and collect at end.
+
+Let me also verify the design components' numeric specs I can cite quickly for the API alignment table. Subagents did this. I'll use their findings with node IDs.
+
+Let me quickly check DkButton/DkInput CSS to confirm the button height claim (subagent said DkButton height 32, design 30).
+dsh: reasoning:
+Confirmed DkButton md height 32, radius var(--radius-sm)=6, font 13. Design Pet6k height 30, radius 7. Let me verify design Pet6k node. Subagent said so. Good enough; I can cite node.
+
+Now let me also verify the design G02 file frames text to include in table. Let me extract G02 texts (TFRBq...tan8r) and G04 already done. Actually for G02 the design frames are in batch A4; let me extract.
+dsh: reasoning:
+This gives me the design expectations for G02/G05/G06. Now compare with code:
+
+G02 (t37 = 文件摘要与批量校验, matches design tool "文件摘要与批量校验"):
+- design: per-file item states 等待读取/读取中/计算中 62%（chunk progress）/已完成/读取失败/已取消/超限未开始 + 取消/重试/移除.
+- code t37: STATUS_LABEL reading/已完成/失败/已取消/pending. Let me verify statuses and progress. t37 has `read` bytes progress (real), cancel, remove, retry? Let me check STATUS_LABEL and retry. Also "超限" handling: design says "超出当前读取上限，未开始读取" per item; code uses SHA_MEM_WARN warning but does it reject? Let me check t37 for a hard limit. And read failure handling (NotReadableError). Let me read t37 more.
+
+Let me read t37 relevant parts.
+dsh: reasoning:
+t37 is robust: real chunk progress, cancel, size limit (512MB) with toast "超出当前限制...已跳过" — but design says per-item state "超出当前读取上限，未开始读取" in the list, code skips with toast (component behavior mismatch). Also no "重试" for read failure. Let me check error handling.
+dsh: reasoning:
+t37 read failure: sets status error with error message, but no per-item "重试" button. Design tE8A7 shows "重试" and message "读取失败：读取过程中文件被移动或删除（NotReadableError）". Code shows generic `读取文件失败：{msg}` in the results area? Let me check template for item error display. Also no "重试". So G02 read-failure retry missing. Medium.
+
+Also G02 design "计算进度 62%" for SHA chunked; code computes SHA by loading full file into memory after reading — so no "计算中 62%" state; only read progress. Design explicitly says only show % when chunked and deterministic; code's SHA path isn't chunked (memory), so it shows "已读取 X / 共 Y" then computes. Acceptable but the design's "计算中" state absent. Note.
+
+Now I have enough. Let me check subagent 3. Let me list agents.
+dsh: reasoning:
+Subagent 3 still running. Let me start writing the report skeleton and fill in my findings. I'll wait for subagent 3 before finalizing G05-G07 section. Meanwhile let me read the two subagent reports' key details to cite accurately — actually I have their summaries. I could read specific lines from their files for a few claims to ensure accuracy. But context is a concern. I'll trust summaries and cite as provided (they include file:line).
+
+Let me double-check one subagent claim that seems important and potentially wrong: C09 design lacks 待更新/未执行 but task book requires them. Subagent 2 said design board C09 (uzR1p) actually has 成功/错误/警告/信息/加载中. Let me verify quickly by extracting texts from uzR1p and yvE1y.
+dsh: reasoning:
+Confirmed: C09 design board lacks 待更新/未执行, contrary to task book requirement (C09 必需变体: 成功、失败、待更新、未执行). So this is a DESIGN defect to report. Code has stale/idle.
+
+Now let me check the C15 variable board exact content vs code — I already did the full variable comparison (all match). Let me also verify design fonts: font-ui "Noto Sans SC", font-mono "JetBrains Mono" — CSS matches. Good. Design variables count 43; CSS has all 43 plus extras (accent-hover, code-null, editor-*, diff-*, radius, shadow, topnav-h, sidenav-w). Design `radius`/`spacing` not in variables; design uses literal cornerRadius values (7/8/9/10/12). Code defines --radius 8 and --radius-sm 6 and reuses; that's the systematic issue subagent 1 flagged.
+
+Now let me capture the concrete design numeric specs for components to include a concise API alignment table. I'll pull from design nodes quickly: Pet6k (button), x1e6C (field), tPt2l (segmented), WJkbJ (editor), yvE1y (statusbar), kWQyu (file item), R4IbS7 (toast), CerYs (modal), MBSI5 (tree row), M5DyY (collapse), PQJ6y (topnav), vxMha (sidenav), I1Bhp (toolcard), o7OL6 (palette), LYFe2 (variables). Let me dump these compactly (just top-level props) to get numbers for the table.
+dsh: reasoning:
+Now I have solid numeric design specs:
+- PQJ6y topnav h60 pad[0,24] gap28 fill surface stroke border; search 400x34 r8.
+- vxMha sidenav w236 pad[14,12] gap3 items h36 r8; category rows h32 and **子列表 h0** (collapsed by default) — confirms subagent's claim.
+- I1Bhp toolcard w320 r10 pad16 gap10 stroke border.
+- o7OL6 palette w420 r12 stroke border-strong.
+- Pet6k button h30 r7 pad[0,12] gap6, label fs12.5.
+- x1e6C field label fs12, input h30 r7 pad[0,10] stroke border.
+- tPt2l segmented r8 pad3 gap3, selected h28 r6 stroke border.
+- WJkbJ editor r8 stroke border, toolbar h32.
+- yvE1y statusbar h34 r7 pad[0,12] gap8, label fs12 (primary), stat fs11.5; fill surface-subtle.
+- kWQyu file item r8 pad[10,12] gap10, icon 30x30 r7.
+- R4IbS7 toast r9 pad[10,12] gap10, text fs12, action accent fs12.
+- CerYs modal r12 pad18 gap14, title fs15.
+- MBSI5 tree row h28 r6 pad[0,8] gap6, indent 12, key code-key fs12.
+- M5DyY collapse r9 pad[12,14] gap10, icon bg 26x26 r7.
+
+Now code values:
+- DkButton md h32 r6 (--radius-sm=6); design 30/7. sm h26. Mismatch.
+- DkInput: let me read to get heights.
+- DkField label.
+- DkSegmented.
+- DkModal.
+- JsonTree.
+- DkCollapse.
+- DkToastHost.
+- TopNav.
+Let me read these quickly (compact).
+dsh: reasoning:
+Numeric diffs:
+- DkInput height 32 vs design input h30; radius var(--radius-sm)=6 vs design 7; border uses --border-strong vs design $border. font-size 13 vs design? design input text maybe 12.5. Let me note.
+- DkSegmented: container padding 2 (design 3), gap 2 (design 3), border on container (design no stroke), radius-sm 6 (design 8), selected radius 4 (design 6), height 26 (design 28), font 12 (design 12.5?).
+- DkModal: radius 12 (design 12 ✓), padding header 14px 18px 0 & body 14px 18px vs design pad 18 gap 14; close enough. Panel width 480 default vs design 360. Mask rgba hardcoded (line 80) — design uses a token? design mask maybe `rgba(15,17,21,0.45)`; subagent flagged CommandPalette mask hardcoded. DkModal mask also hardcoded.
+- DkCollapse: radius 8 vs design 9; header height 44 vs design (M5DyY pad[12,14], icon 26x26, gap10); body padding 0 16px 14px 38px; no icon bg/action text (subagent).
+- DkToastHost: radius 8 vs design 9; padding 9px 12px vs design [10,12].
+- DkIconButton 30x30 vs design? Design icon button maybe 28/30. Subagent may have.
+- DkField label fs12 ✓ (design 12).
+
+Now let me get TopNav, SideNav, ToolCard, CommandPalette, DkEditor, DkStatusBar numeric values to complete the table. I'll grep.
+dsh: reasoning:
+TopNav: padding 0 20px vs design 0 24px; search 400x34 r6 vs design r8 stroke $border vs code border-strong; brand icon 28x28 r7 (design? maybe). TopNav h uses --topnav-h=60 ✓.
+
+SideNav: padding 12 (design 14 top/12 sides — code padding:12 all around vs design [14,12]); item h36 r6 vs design r8; category h32 r6 vs r8; sub item h24 r4; gap 2 vs 3; sub-list padding-left 14 vs design 8; default collapsed wrong (code default expanded).
+
+ToolCard: padding 14 vs design 16; radius 8 vs 10; icon 32 r6; gap 8 vs 10.
+
+CommandPalette: width 640 vs design 420; radius 12 ✓; mask hardcoded.
+
+JsonTree: no row height/box.
+
+FileDrop: radius 8.
+
+Good enough for the alignment table.
+
+Now, need to verify C15 variable design values match CSS — done, all match.
+
+Now, let me check the `usePalette` and `useFavorites` for any bug, and `DkToastHost` accessibility. Probably not necessary. Focus on scope.
+
+Wait — one important scope item: G01 "转换失败时不传递伪结果" and SendToMenu disabled when output empty. Fine.
+
+Let me also check useTransfer `compatibleTargets` bug: `from?.slug` referenced before declaration. Actually `const route = useRoute()` and `const from = computed(...)` are declared AFTER `compatibleTargets` function but within setup. Since compatibleTargets is called from SendToMenu's computed during render (after setup completes), `from` is initialized. But careful: `useTransfer()` is called in SendToMenu setup; `compatibleTargets` closure references `from` const declared later in the same function scope. If `compatibleTargets` were called synchronously during setup before `const from` line executes, TDZ error. It's called from a computed evaluated during render (after setup) — safe. Not a bug.
+
+However, there IS a subtle issue: `compatibleTargets` filters `t.slug !== from?.slug`, where `from` is the *current route's* slug. SendToMenu also filters by props.from. Redundant. Not a bug.
+
+Now the more severe: transferTargets includes 10 targets, only 3 consumers. Let me map slugs: json-format(t01 consumer), json-diff(t02 consumer), text-diff(t10 NO), json-yaml(t03 consumer), base64(t05 NO), url-encode(t06 NO), text-dedup(t08 NO), regex-test(t11 NO), sm3(t16 NO), md5-sha(t12 NO). 7 non-consumers. Confirmed by grep (only t01/t02/t03 import useTransfer).
+
+Let me confirm t10/t05/etc don't have any transfer code. grep useTransfer already showed only t01-t04. Good.
+
+Now I should also check whether useTransfer's `send` blocks sending from and to same? deliver filters same slug but SendToMenu already filters. Fine.
+
+Now let me write the report. I'll wait for subagent 3. Let me check if it's done; if not, I'll draft.
+
+Actually, let me use the time to check a few more red-line specifics:
+- Rule 6: t02 diff copy with line numbers. Let me confirm reportLine format. line 332. Also check t18 batch copy includes TSV header — that's data, fine. t20 copy includes "（tz） / UTC" unit annotations — rule 6 says copy content must not include "单位说明". Design TRsUU explicitly: "复制内容为纯摘要文本，不含行号与单位说明". t20 copy: `${f.local}（${tz.value}） / ${f.utc} UTC` — includes timezone/unit annotations. That's arguably necessary context for a schedule list. But rule says no unit annotations. Hmm. Might be acceptable because the value itself is ambiguous without tz. I'll note as low/存疑.
+- t02 diff report line numbers: flag medium.
+- t21-date-diff copy: let me check.
+- t29 batchOutput copy: check if includes headers/units.
+
+Let me look at t21 and t29 copy content and t02 reportLine.
+dsh: reasoning:
+Rule 6:
+- t02: copy report with line numbers " 1. [修改] path ..." — violates "不含行号". 中.
+- t21: copy includes unit/label text ("开始.../结束.../实际时长：...天..."). Rule 6 forbids "单位说明" in copy. However, a multi-field summary legitimately needs labels; the design's rule aims at not appending "64 个十六进制字符 · 32 字节" unit annotation to a copied pure value. Here the copy is a structured summary, arguably acceptable. I'll note as 低/存疑.
+- t18 batch copy "TSV" includes a header row `head` — let me check; header may be a display artifact. Let me look at t18 line 390-400.
+
+Let me check t18 batch header.
+dsh: reasoning:
+t18 copy includes a header row. Rule 6 forbids "展示性换行" and "语法提示" — a header row is a display artifact. For TSV export, headers are conventional. Low. I'll note as 低 with caveat.
+
+Now let me finalize. Let me check subagent 3 output.
+
+Actually let me also quickly verify G03 "复制成功" inline state design TRsUU: "已复制" label + note "复制内容为纯摘要文本，不含行号与单位说明". Code only toast; no inline copied state. And the design shows copy button green "已复制" for ~ seconds. Code DkEditor buttons have no copied state; DkIconButton no. So missing inline copied feedback (中).
+
+Also verify "下载准备完成" not implemented — yes.
+
+Now check G05 "载入替换确认" for example loading (not transfer): design yDpMe "载入示例将替换当前内容" confirm. Do tools implement loadSample with confirmation when input non-empty? Let me grep loadSample implementations.
+dsh: reasoning:
+t01's 载入示例 directly `input = SAMPLE; execute()` with NO confirmation even when input has content. Design G05 yDpMe requires a confirm "载入示例将替换当前内容" when editor non-empty, and no confirm when empty. So G05 "载入替换确认" is NOT implemented — it silently overwrites. That's a rule-3/G05 violation (silent data loss). High.
+
+Let me count tools with 载入示例 and check whether ANY implements confirmation. grep for a modal/confirm around sample loading.
+dsh: reasoning:
+Confirmed: NO tool implements the G05 sample-replacement confirmation. Many `载入示例` buttons directly overwrite input (`input = SAMPLE; execute()`), silently destroying unsaved input. That's a clear G05 miss, high.
+
+Also design G05 "空输入/示例入口" — code has 载入示例 buttons in most tools; good. But no "示例结果" preview? Design uuExn lists sample options (订单对象/嵌套配置/语法错误示例/大整数) — a sample picker. Code has a single fixed sample. Partial.
+
+Also design uuExn text "示例数据 · 只用于测试" and "示例不含真实数据" — code tooltips mention test vectors. Partially.
+
+Now, "默认填充输入导致假象": t39 prefill+auto-generate. Also check t18-timestamp / t20-cron defaults: they auto-execute via watch immediate? Let me check whether t18/t20 compute on mount with defaults (they have tz default but input empty). Probably idle. t39 is the main one.
+
+Now I have plenty. Let me check subagent 3 status; if still running, I'll start writing the report with placeholders and merge.
+
+Let me check job/agent.
+dsh: reasoning:
+Excellent — subagent 3 found a very important bug (#4): stale watcher fires immediately after execute because `markOk` sets `lastSig` but the watcher never compares; actually the watch callback runs when signature changes. Sequence at t01:122: `input = SAMPLE; execute()`. input changes → watcher scheduled (Vue watch is async, flush pre/post) → then execute() runs synchronously → markOk sets status ok. After that, the watcher callback runs (on next tick) and sets status stale because status is 'ok'. So the result is immediately stale! That's a real bug affecting any tool that sets input then synchronously calls execute (e.g., loadSample `input = SAMPLE; execute()`). Also `lastSig` is assigned but never read → dead code confirming the bug.
+
+This is significant: G04 stale mechanism false-positive. Let me verify at runtime myself to be sure and get concrete evidence. t01 loadSample: input=SAMPLE; execute(). After click, status should be stale. Let me test.
+
+Also subagent 3 found:
+- #2: cancel marked as failure (t37 markFail when all cancelled). Design AkkM9 says cancel is not error. Real.
+- #3: JSON parse error position wrong due to wrapNumbers changing text length. Very important rule-5/rule-1 correctness bug. Let me verify myself: t01 error position. Actually t01 uses jsonErrorPosition(e, text) where text is original input but e.message position is from wrapped text. `position` offset in V8 message is 0-based index into the parsed string. wrapNumbers expands numbers (adds `"@@raw:` prefix + `@@"` suffix = 10 chars each). So positions shift. Confirmed logic. Let me verify runtime.
+- #6: readonly editor copy permanently disabled: DkEditor `:disabled="!modelValue || stale || readonly"` — for readonly result editors, copy button disabled. But many tools have separate copy buttons. Still a real bug: the editor's own copy button is disabled in readonly mode. Let me verify: t01 result DkEditor readonly → its 复制 button disabled. That's a design/functional defect.
+
+Let me verify #4, #3, #6 at runtime quickly.
+
+Also M7: t39/t29/t30/t28 prefill & auto-execute. t29-css-units has valueStr default '32' — does it auto-execute on mount? watch immediate? Let me trust subagent.
+
+Let me run verification for #4, #3, #6.
+dsh: reasoning:
+All three subagents done. I verified the top bugs myself:
+- G04 false stale after loadSample: CONFIRMED (status 结果待更新 immediately after loadSample).
+- readonly result editor copy disabled: CONFIRMED (disabled:true).
+- parse error position: CONFIRMED (9-char input reports position 18 / 第1行第10列, exceeding input length).
+- SplitPanes ratio 74.6% at initial 50: confirmed.
+- Gutter misalignment: confirmed.
+- Editor wrap always soft / no toggle / no search: confirmed by grep.
+- G01 7 advertised targets non-consuming + payload leak: confirmed.
+- G03 clipboard manual panel/retry missing: confirmed.
+- G08 isolation works: confirmed.
+
+Also /tools/cron pageerror "getTool is not defined" is interesting — subagent says it's S09 range. But wait, it's a pageerror on a tool page, potentially a real bug in scope? My scope is shared components/composables, not S09. But it could be a shared issue. Let me quickly check /tools/cron for pageerror — might indicate a broken route. Actually "getTool is not defined" sounds like a route/page issue. Let me not chase; mention in 存疑/out-of-scope.
+
+Actually let me quickly verify to decide. It might be that /tools/cron doesn't exist (slug differs) and the 404 handling throws. Let me check tools.ts for cron slug. If slug is 'cron' it should work. Let me probe.
+
+Actually subagent said it's S09 (error page) scope, so skip. But if it's a shared shell bug (TopNav/SideNav), it'd be in my scope. Let me check quickly.
+dsh: reasoning:
+/tools/cron errors with "getTool is not defined" and renders 出错了 page. That's a real bug: the cron tool page is broken. Let me check why. `getTool` is imported in pages/tools/[slug].vue from '~/data/tools'. Maybe auto-import conflict? Wait the specific error "getTool is not defined" plus "Cannot read properties of undefined (reading 'm')". Let me check the cron page component for `getTool` usage. Actually t20-cron.vue might reference something. Let me grep.
+dsh: reasoning:
+Found the root cause: `devkit/app/error.vue:11` uses `getTool(s)` but error.vue has no import for getTool. When /tools/cron throws inside setup (H3Error "Cannot read properties of undefined (reading 'm')"), Nuxt renders error.vue, which then throws "getTool is not defined" → the generic error page.
+
+Two bugs:
+1. error.vue missing `import { getTool } from '~/data/tools'` → error page itself crashes. This is a shared/system bug (error page is a shared component-ish). In scope partially.
+2. Why does /tools/cron throw H3Error "Cannot read properties of undefined (reading 'm')"? Possibly t20-cron.vue uses something undefined at setup. Let me find `.m` access. Maybe a regex/luxon? Actually "reading 'm'" might be from a Date/Intl or a library. Let me check t20 for `.m` or something like `someArr.find(...).m`. Hard. Or it might be in `[slug].vue` `getTool` returns undefined? No, cron exists. H3Error from `createError`? The page 200 but renders error. Let me reproduce with SSR logs? The console warning says H3Error: Cannot read properties of undefined (reading 'm'). Could be from `Intl.DateTimeFormat` with a bad timezone? Unlikely.
+
+Wait — maybe cron slug collision: getTool('cron') might match a different entry? tools.ts line 161 shows slug 'cron'. Fine.
+
+Actually the error might be from `devkit/app/data/tools.ts` itself? "getTool is not defined" is in error.vue. And the original H3Error reading 'm' — maybe in error.vue? Let's look at error.vue.
+
+Let me read error.vue.
+dsh: reasoning:
+Confirmed: `error.vue:11` calls `getTool` without import. So any error page (including 404) crashes. Let me verify the 404 page also crashes. Probe a nonexistent tool.
+
+Actually the [slug].vue throws createError 404 for unknown tool → error.vue → getTool undefined → crash. Let me verify /tools/does-not-exist. This is a shared component bug within my scope (error page / tool shell). High severity.
+
+Also the original cron H3Error "reading 'm'" — that's the trigger. Let me find it. Could be in t20-cron.vue: maybe `Intl.DateTimeFormat(...).formatToParts` or a `field.def.kind`? "reading 'm'" — maybe `cron.fields.find(...).m`? Let me search for `.m` patterns or an object with `.m`. Actually H3Error wraps an internal error; the message "Cannot read properties of undefined (reading 'm')" suggests accessing `.m` on undefined. In cron expression parsing, maybe `range.m`? Let me grep for ".m" in t20. Hard with regex. Let me search for `\bm\b` usage. Could be `match[3]` etc. Let me look for a variable named `m` used as property.
+
+Actually maybe it's `unref(...).m`? Let me just grep for `\.m\b`.
+dsh: reasoning:
+404 page works fine (no pageerror). So error.vue's getTool crash only occurs when the error route... hmm, but /tools/nope-xyz rendered 404 with title "页面不存在 · DevKit" and no pageerror, meaning getTool somehow works there? That contradicts missing import. Wait, error.vue may rely on Nuxt auto-imports for `getTool`? No, `getTool` is an explicit export in ~/data/tools; Nuxt auto-imports composables/ and utils/ only, not data/. But the 404 page worked... Maybe Nuxt auto-imports from `app/data`? No. Or maybe on 404, `clearError`/the page didn't actually render error.vue's setup? It did (title set). Hmm.
+
+Wait, the cron page's console pageerror was 'getTool is not defined' — maybe that error came from error.vue while rendering the *500* variant. But 404 variant also calls line 11 at setup. Both should throw. Unless... the 404 probe didn't execute line 11 because `error` prop was null? No, line 11 runs regardless.
+
+Hmm, maybe Nuxt auto-imports `getTool` because `data/tools.ts` is in `app/` and there's a `imports` config? Let me check nuxt.config. Or maybe `getTool` IS auto-imported via `#imports` because it's exported from a directory configured in `imports.dirs`. Let me check nuxt.config.ts. If auto-import works, then "getTool is not defined" would be a different scope — but then why cron fails?
+
+Actually maybe the cron error is from SSR: the H3Error "Cannot read properties of undefined (reading 'm')" occurs in setup, then error.vue renders on client where auto-import of getTool isn't available? Confusing.
+
+Let me check nuxt.config for imports.
+dsh: reasoning:
+No auto-import for getTool. So error.vue:11 should throw. But the 404 probe showed no pageerror and correct title. Hmm. Maybe `getTool` is on `globalThis` from an earlier import? No.
+
+Wait — maybe probe's pageerror listener only catches `pageerror` (uncaught exceptions). If error.vue's setup throws, Nuxt catches it and shows a fallback, possibly logging a Vue warn (console warning), not a pageerror. For /tools/nope-xyz, maybe Nuxt renders the error page but line 11 `getTool(s)` — if `getTool` is undefined, calling it throws ReferenceError. That would be caught by Nuxt's error handling and might show another error page. But the title was "页面不存在 · DevKit", which is set by useSeoMeta at line 8 BEFORE line 11. So setup partially ran, set title, then crashed at line 11 — but the title persisted and no pageerror recorded. That's plausible: the crash happened during SSR (server-side) and Nuxt recovered, sending HTML with title. And console warnings may not have been captured because probe filters console types error/warning — but it returned console [] for 404? The probe output only printed status/title/pageerrors; I didn't print console. Let me re-probe 404 and cron and print console. Actually earlier cron probe printed console warnings including "Unhandled error during execution of setup function". For 404 I didn't print console. Let me recheck 404 console.
+
+This is somewhat out of my scope (error page), but it's a real shared-shell bug worth reporting. Let me verify carefully and also determine the cron root cause minimally.
+
+Actually the key question for my report: is `getTool is not defined` a real bug? For cron yes (pageerror recorded). For 404 maybe also. Let me probe 404 console.
+dsh: reasoning:
+So 404 page also has an app-initialization error (NUXT_E1005) likely from error.vue getTool. And cron page is fully broken (200 but error page).
+
+Let me find the cron root cause: `Cannot read properties of undefined (reading 'm')`. Likely `get('second')` returns undefined when non-quartz; line 315 uses cron.quartz guard, lines 316-318 use get('minute').m etc. If `get('minute')` returns undefined → `.m` throws. `get` is a lookup over cron.fields; maybe 'minute' field missing due to parse failure. Let me look at the setup/mounted that calls this function with an invalid/empty expression. On mount, t20 likely auto-executes with default expr '*/15 * * * *' and tz. Let me check onMounted/watch in t20.
+dsh: reasoning:
+`get('year')` — for Unix 5-field cron there may be no 'year' field, so `get('year')` returns undefined and `undefined.m` throws at line 319! And likely the default dialect is quartz? Let me check: dialect default. If default is 'quartz', fields include year. Or if default is unix, year field absent → crash. The error occurs on mount (watch + onMounted execute). Let me check dialect default and the field definitions.
+
+Line 319: `const yearM = get('year').m as ... | undefined` — if `get('year')` is undefined, throws. This is a real bug: no optional chaining. It crashes for the default dialect if 'year' is absent.
+
+Let me check fields definitions for 'year'. grep.
+dsh: reasoning:
+Confirmed: default dialect is 'unix' (line 24), so `defs` has no 'year' field (only added when 7 fields → quartz). `nextRuns` line 319 `get('year').m` → `get('year')` undefined → TypeError. Since execute() runs onMounted, the cron tool crashes on load for the default Unix dialect. Blocking bug (T20 fully broken). This is within "接口/组件" area? It's a tool page, but it's triggered by onMounted and the failure surfaces the error.vue getTool bug. I'll report it as a shared-shell + tool bug. It's a strong finding.
+
+Wait, but the batch says T20 belongs to another subagent's scope (time & Java). Still, my scope includes shared interactions and error page. I'll report the error.vue bug (shared) and note the cron trigger with file:line, flagging that T20's own audit belongs elsewhere but it's blocking.
+
+Let me confirm the crash is caused by year: line 319. Yes. And also line 316-318 `get('minute')` etc. exist. Only year missing.
+
+Now let me also verify the error.vue getTool bug independently by checking a route that errors: cron. Yes.
+
+Also note: error.vue has another bug at line 31: `usePalette()` called in template click handler inside `nextTick` — calling a composable outside setup may fail (no component instance). But minor.
+
+Now, also I noticed probe console for 404: "An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing." This comes from Nuxt devtools? devtools disabled. Maybe from the Pen embedded browser? Actually it's the page. Hmm, "iframe sandbox allow-scripts allow-same-origin" — that's likely Nuxt's dev server error overlay or a Google Fonts? Not sure. Out of scope; could note as low.
+
+Now I have a comprehensive set of findings. Let me also quickly verify the `useToolRun` false-stale root cause: `lastSig` never compared. Confirmed by reading: watch callback ignores `sig` param and doesn't compare to lastSig. So any synchronous input-set + execute leads to stale. Also more generally: after markOk, if the watcher fires from the same change, false stale. But for normal user flow (type then click execute), the watcher fires on typing and marks stale (correct), then execute sets ok. Since typing and execute are separate ticks, fine. The bug specifically hits tools that set input then immediately execute (loadSample) — and indeed t01 loadSample is broken. How many tools use `input = SAMPLE; execute()` synchronously? t01, t25, t27, t08/t09 (no execute, watch may auto-run). Let me count. grep `= SAMPLE; execute()`.
+
+Let me quantify to size the impact.
+dsh: reasoning:
+At least 4 explicit + 20 loadSample functions call execute. So the false-stale bug affects many tools when loading samples (result marked stale immediately, copy/download disabled). That's high impact. Let me verify one more, e.g., t12 loadSample (does it set text=SAMPLE then execute?). Subagent said t12 loadSample sets abc and computes; if it calls execute synchronously, status would be stale. Let me check t12 loadSample.
+dsh: reasoning:
+t12 loadSample sets text then execute synchronously → will be marked stale due to watcher. Let me verify at runtime for t12: click 载入示例, check status. Earlier when I tested t12 I filled manually then clicked 计算摘要 and got 成功. So loadSample path is the issue. Let me verify quickly.
+
+Actually I already verified t01 loadSample → stale. Same pattern. Good enough; I can generalize with code evidence.
+
+Now, let me also verify the G04 watcher false-positive more precisely: is it because watch callback runs after execute? Yes. The fix would be comparing sig to lastSig. The code sets lastSig but never reads. Good.
+
+Now let me write the report. I'll structure per BRIEF:
+## 结论摘要 (覆盖率 + 最严重 3-5)
+## 覆盖对照表 (G01-G08, C01-C15, red lines)
+## 设计还原问题 (per item)
+## 功能与代码缺陷
+## 无法验证/存疑项
+## 修复优先级建议
+
+I'll synthesize from subagent reports (citing their node IDs and file:line) plus my own verifications. I must keep it Chinese, evidence-based, with DONE line.
+
+Let me organize the key findings with severity:
+
+### 阻断/高
+1. [阻断] SplitPanes 分栏比例错误 (initial 50 → 74.6%) — SplitPanes.vue:38/53 (left flexBasis + both flex:1). Affects 25 tools. Evidence: runtime measurement.
+2. [阻断] T20 Cron 页面加载即崩溃 (get('year').m, default unix no year field) → error page; and error.vue:11 getTool undefined makes error page itself crash. t20-cron.vue:319, error.vue:11.
+3. [高] useToolRun 假 stale: watch 不比较 lastSig；载入示例后结果立即「待更新」，复制/下载禁用。useToolRun.ts:15-24,30; t01:122. Runtime confirmed.
+4. [高] G01 7/10 目标不接收：transferTargets 列出 text-diff/base64/url-encode/text-dedup/regex-test/sm3/md5-sha，但仅 t01/t02/t03 实现接收；consume() 从未被调用 → 内存载荷残留，之后进入 consumer 工具时被意外注入。useTransfer.ts:19-30,45-49; SendToMenu.vue:16-18,34-38. Runtime confirmed (send to text-diff → empty; then json-diff injected).
+5. [高] G05 示例载入无替换确认，静默覆盖输入。t01:122 等 20+ 处.
+6. [高] 解析错误行列定位错误（wrapNumbers 改变文本长度）。json.ts:77, t01:67. Runtime: 9-char input reports position 18.
+7. [高] G07 缺：自动换行开关（prefs.editorWrap 未接线）、只看输入/输出、编辑器内查找。DkEditor.vue:24 默认 wrap true；grep 0 命中；usePrefs.ts:5 vs settings.vue:99 未消费.
+8. [高] 只读结果编辑器复制永久禁用 DkEditor.vue:81 (`|| readonly`) — runtime confirmed.
+9. [高] G06 任务取消被判为失败 (t37:176-177 → DkStatusBar:21-22). 
+10. [高] G02 FileDrop 拖入不校验 accept (FileDrop.vue:21-37,67).
+11. [高] C08 无语法高亮/错误行定位 (DkEditor textarea) — design tokens.
+12. [高] C13 JsonTree 大面积缺实现（行盒/类型 chip/全部展开折叠/复制 JSON）.
+13. [高] C09 状态栏语义：设计主槽位是具体结果文案，代码是状态名；且设计变体板缺「待更新/未执行」与任务书 C09 要求不符.
+14. [高/a11y] DkModal 无焦点陷阱. DkModal.vue:48-49.
+15. [高] C02 侧栏默认展开 vs 设计默认折叠；C02 隐私卡片样式缺失.
+16. [高] G03 下载准备/失败反馈缺失；剪贴板不可用无手动选择面板/重试授权.
+17. [中] G07 行号与折行错位 (DkEditor gutter fixed height).
+18. [中] t02 差异报告复制含行号 (rule 6).
+
+Also from subagent 1: button/input/segmented geometry, toolcard palette width, etc. (设计还原).
+
+Now the coverage table for G01-G08 and C01-C15 and 10 red lines.
+
+Let me also get the design G03 download frame IDs for citation: amLL3 (下载准备完成), S4Xf7k (下载失败). Good.
+
+Let me note the design G01 "已进入目标" frame cqTLs: code lacks the "已从「…」发送 …（… 字节）/撤销" prompt.
+
+Now let me also decide on the "代码有设计无" items:
+- DkEditor 工具条含「下载」；design C08 editor? Maybe. 
+- Components: DkSwitch (code) not in C-list (design has 设置开关?). 
+- UseToolRun 'error' state exists; design C09 lacks 失败? Actually design C09 has 错误. fine.
+- code has `running` status not in C09 design (design has 加载中). equivalent.
+
+Let me write the report now. It should be thorough but I must be efficient. I'll write ~250-350 lines.
+
+I need to include the "设计项 → 实现 → 结论" table. Let me build tables:
+
+Table 1: G01-G08 coverage
+| 设计项 | 设计节点 | 实现 | 结论 |
+G01 target menu / replace confirm / entered target
+G02 6 states
+G03 4 states
+G04 before/after
+G05 3 states
+G06 3 states
+G07 2 states
+G08 2 states
+
+Table 2: C01-C15
+Table 3: 红线 10 条
+
+Then detailed problems.
+
+Let me verify a couple of subagent claims I'll cite that I haven't personally confirmed, to avoid propagating errors:
+- C09 design main slot semantics: design yvE1y text "校验通过" as 状态文字 with fill $text-primary, and stat "28 / 28 字节" $text-tertiary. Code DkStatusBar main label = 成功/失败. Actually design "校验通过" IS a status/result message, code's message slot is separate (`:message`). Hmm code has both label (成功) and message (具体文案). Design has 状态文字 "校验通过" + 统计. So the design's single main text corresponds to code's message, while code adds a separate bold label. The subagent framed it as "语义反转"; I'll phrase carefully: design main slot = 具体结果文案（校验通过）; code puts 状态名（成功）in bold primary + message in secondary. Partial divergence, medium rather than high. I'll adjust to 中.
+
+- C10 FileDrop accept: confirmed by code.
+- DkModal focus trap: let me quickly read DkModal to confirm no focus trap.
+dsh: reasoning:
+DkModal: no focus trap (Tab can leave panel; Esc handler is on panel keydown, so if focus leaves, Esc won't close). `danger` prop adds an icon but `.dk-modal__panel--danger` has no CSS rule (dead class). Confirm: grep in file — no `.dk-modal__panel--danger` style. Yes, dead class. Focus return implemented. Point 4 from subagent confirmed.
+
+Now let me write the report. I'll be comprehensive but concise per item.
+
+Let me also include a short note about the false-stale affecting G04 (both false-positive on loadSample and the initial stale behavior).
+
+Let me collect file line refs I'll use:
+- SplitPanes.vue:38,53,66 (left flexBasis; right flex:1; .split__pane flex:1)
+- t20-cron.vue:24 (dialect unix), 319 (get('year').m), 539-540 (onMounted execute)
+- error.vue:11 (getTool), [slug].vue:2 (import)
+- useToolRun.ts:15-24,30
+- t01-json-format.vue:122
+- useTransfer.ts:19-30,45-49,56; SendToMenu.vue:16-18,34-38,43,50-56
+- json.ts:46-48,77; t01:67 (jsonErrorPosition usage) — let me confirm t01 line 67. Earlier sed showed execute at 47-60; line 67? Let me check t01 errDetail lines. Actually subagent said t01:67. Let me verify.
+dsh: reasoning:
+All confirmed. Note settings.vue:99 says "关闭后长行横向滚动，可在工具内临时切换" — but the tool内切换 doesn't exist. So the settings copy itself is misleading (claims "可在工具内临时切换"). Great evidence.
+
+Now write the report.
+
+Let me note t01 line 67 = `const pos = jsonErrorPosition(e, input.value)`? sed showed execute catch around lines 63-69. Let me compute: the sed printed lines 60-80; line 60 is `? \`检测到...` so line 63 `} catch (e) {`, 64 parsed, 65 output, 66 dupKeys, 67 const pos = jsonErrorPosition... Yes line 67.
+
+Now writing. I'll create the file.
+
+I should also mention the pen.py tool defect (subagent 2 found: `text`/`dump` reads `content` vs `text`). Actually my own `text` command returned [] for G frames but worked for G08? No, G08 returned content. Weird. Let me not include tool defects (not part of deliverable) except maybe a note. Skip.
+
+Let me write the report now. Given length, I'll write with the write tool.
+
+Structure:
+# R5 审核报告 · 共享交互 G01–G08 与可复用组件 C01–C15
+
+## 结论摘要
+- coverage percentages: G01–G08 设计状态共 24 个画板，完全落地约 ... Let me estimate:
+G01: target menu partial (compatible list yes, but 7 targets non-consuming, no descriptions, no disabled rows, no entered-target prompt, replace confirm dead code) → 部分
+G02: 6 states — t37 covers 拖入/读取/进度(binary read)/取消/失败/超限(跳过) → 基本实现 but 失败重试缺、其它文件工具无取消/进度、FileDrop accept 不校验 → 部分
+G03: 复制成功 toast (partial, no inline), 剪贴板不可用 (toast only, no manual panel/retry), 下载准备/失败 未实现 → 部分/未实现
+G04: stale status+disable+retry yes; 但从设计旧结果标注、diff note、失败路径、假 stale → 部分
+G05: 空输入/示例入口 yes; 替换确认 0 → 部分
+G06: 解析失败 yes; 算法不支持 缺; 任务取消 误判失败; 定位错误 → 部分
+G07: 分栏(drag yes但比例错)/横向滚动原语有但无开关/自动换行只有默认/查找缺失/只看输入输出缺失/行号错位 → 部分
+G08: 基本实现（隔离有效、安全提示、剥离清单、无法完整还原提示），缺 仅源码/视图切换 → 基本实现
+
+So G-frames fully implemented: G08 (mostly). Partially: G01-G07.
+
+Components C01-C15: all 15 exist in code, but many variant/geometry gaps; C01-C15 present. C15 variables 100% match.
+
+Most severe 3-5: 
+1. T20 cron 崩溃 + error.vue 崩溃 (阻断)
+2. SplitPanes 比例错误 影响25工具 (阻断)
+3. useToolRun 假 stale + G04 (高)
+4. G01 传递到7个目标静默失败+载荷残留 (高)
+5. 解析定位错误 due to wrapNumbers (高)
+
+Let me write it.
+
+I'll produce the coverage tables. For brevity in the C table, I'll list per component with key diff + evidence.
+
+Let me write.
+dsh: reasoning:
+Report written. Let me verify a couple of line references I cited that I haven't explicitly confirmed: t13:190, t14:359, t19:333 (from earlier grep — yes). t18:456 and t41:291 for :wrap — subagent claimed; let me confirm quickly. Also t08:92, t09:121, t25:333, t27:297 confirmed earlier. t22:652 confirmed. t21:411-421 confirmed.
+
+Let me confirm t18:456 and t41:291 wrap.
+dsh: reasoning:
+All references verified. Report complete with DONE line.
+
+Let me update the todo list to completed and give a brief final summary.
+
+Also note: I should double check the report's claim "C01-C15: 完整落地 1" etc. Fine.
+
+One more: the BRIEF says write report and last line DONE. Done.
+
+Let me mark todos complete.
+审核完成。报告已写入 `/Users/hao/WebstormProjects/web_tools/audit/reports/r5-shared-and-components.md`（259 行）。
+
+## 工作方式
+- 3 个后台子代理分别负责 C01–C08、C09–C14、G05–G07 的设计↔代码数值对照，原始明细落在 `audit/raw/r5-c01-c08.md`、`r5-c09-c14.md`、`r5-g05-g07.md`。
+- 我本人对 G01/G02/G03/G04/G08、composables、红线与运行站点做了实测（Playwright + probe.py + pen.py + 变量脚本比对）。
+
+## 关键结论（均带设计节点 ID / `文件:行号` / 命令输出）
+- **阻断 1**：`t20-cron.vue:319` 默认 Unix 方言下 `get('year').m` 崩溃；`error.vue:11` 调用未导入的 `getTool` 使错误页二次崩溃。实测 `/tools/cron` HTTP 200 但显示「出错了」，`pageerror=getTool is not defined`。
+- **阻断 2**：`SplitPanes` 分栏比例错误——`initial=50` 实测左栏 74.6%，影响 25 个工具。
+- **高**：`useToolRun` 假 stale（`lastSig` 从未读取），载入示例后结果立即「待更新」、复制/下载被禁。
+- **高**：G01 目标表 10 个里 7 个无接收实现，且 `consume()` 全仓从未调用 → 载荷残留、后续进入接收工具被意外注入（已实测复现）。
+- **高**：`wrapNumbers` 使 JSON 解析错误定位偏移（9 字符输入报 position 18）。
+- **G07**：换行开关/只看输入输出/编辑器查找整体缺失，`prefs.editorWrap` 未接线；行号与折行错位。
+- **G08**：隔离真实有效（img data URL，无 XSS、无外部请求）——唯一基本达标的 G 项。
+- **C15**：43 个设计变量与 `main.css` 100% 一致（含明暗），系统性偏差来自设计未定义的 `--radius-sm=6` 一刀切。
+- 红线 10 条：6 条达标，2 条部分，1 条违反（红线 6 复制含行号），1 条部分涉大整数定位链路。
+
+最后一行已按要求输出 `DONE: <绝对路径>`。全程只读，未修改 `devkit/**`、`design.pen`、`docs/**`。

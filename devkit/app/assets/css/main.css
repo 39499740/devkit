@@ -1,0 +1,343 @@
+/* ============================================================
+   DevKit 设计令牌 —— 从 design.pen 提取（明/暗双主题）
+   字体：Noto Sans SC（UI）/ JetBrains Mono（代码）
+   ============================================================ */
+
+:root {
+  /* 表面与背景 */
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-subtle: #f4f6f9;
+  --surface-hover: #f8fafc;
+  --border: #e4e7ec;
+  --border-strong: #d3d8e0;
+
+  /* 文字 */
+  --text-primary: #12161f;
+  --text-secondary: #5a6472;
+  --text-tertiary: #8b94a3;
+
+  /* 主操作 */
+  --accent: #2563eb;
+  --accent-hover: #1d4fd7;
+  --accent-soft: #eff4ff;
+  --accent-ring: #bfd4fe;
+
+  /* 收藏星标 */
+  --star: #f59e0b;
+
+  /* 分类色 */
+  --cat-format: #2563eb;
+  --cat-text: #7c3aed;
+  --cat-crypto: #0e9f6e;
+  --cat-time: #0891b2;
+  --cat-java: #dc2626;
+  --cat-web: #d97706;
+  --cat-api: #c026d3;
+  --cat-file: #0d9488;
+  --cat-format-soft: rgba(38, 99, 235, 0.1);
+  --cat-text-soft: rgba(124, 58, 237, 0.1);
+  --cat-crypto-soft: rgba(14, 159, 110, 0.1);
+  --cat-time-soft: rgba(8, 145, 178, 0.1);
+  --cat-java-soft: rgba(220, 38, 38, 0.1);
+  --cat-web-soft: rgba(217, 119, 6, 0.1);
+  --cat-api-soft: rgba(192, 38, 211, 0.1);
+  --cat-file-soft: rgba(13, 148, 136, 0.1);
+
+  /* 语义状态 */
+  --error: #dc2626;
+  --error-soft: #fef1f1;
+  --ok: #0e9f6e;
+  --ok-soft: #eaf7f1;
+  --warn: #d97706;
+  --warn-soft: #fef4e6;
+
+  /* 代码高亮 */
+  --code-punct: #9aa4b2;
+  --code-key: #2563eb;
+  --code-string: #0e9f6e;
+  --code-number: #d97706;
+  --code-bool: #7c3aed;
+  --code-null: #7c3aed;
+  --gutter-text: #a8b0bd;
+
+  /* 编辑器 */
+  --editor-bg: #ffffff;
+  --editor-line-highlight: #f4f6f9;
+  --diff-add: #eaf7f1;
+  --diff-add-strong: #c9ecdc;
+  --diff-del: #fef1f1;
+  --diff-del-strong: #f9d6d6;
+  --diff-add-text: #0b7a55;
+  --diff-del-text: #b91c1c;
+
+  /* 字体 */
+  --font-ui: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono',
+    Menlo, monospace;
+
+  /* 结构尺寸 */
+  --topnav-h: 60px;
+  --sidenav-w: 236px;
+  --radius: 8px;
+  --radius-sm: 6px;
+  --shadow-1: 0 1px 2px rgba(18, 22, 31, 0.05);
+  --shadow-2: 0 4px 16px rgba(18, 22, 31, 0.08);
+  --shadow-3: 0 12px 40px rgba(18, 22, 31, 0.16);
+
+  --code-font-size: 13px;
+  --reduce-motion: 0;
+}
+
+.dark {
+  --bg: #0f1115;
+  --surface: #161a21;
+  --surface-subtle: #1b2029;
+  --surface-hover: #1f2530;
+  --border: #272f3b;
+  --border-strong: #38424f;
+
+  --text-primary: #e9edf3;
+  --text-secondary: #9fa9b8;
+  --text-tertiary: #6c7686;
+
+  --accent: #4d8dff;
+  --accent-hover: #6b9eff;
+  --accent-soft: #1a2740;
+  --accent-ring: #2c4368;
+
+  --star: #f5b321;
+
+  --cat-format: #4d8dff;
+  --cat-text: #a98bfa;
+  --cat-crypto: #35d39c;
+  --cat-time: #38bdf8;
+  --cat-java: #f87171;
+  --cat-web: #fbbf24;
+  --cat-api: #e879f9;
+  --cat-file: #2dd4bf;
+  --cat-format-soft: rgba(77, 141, 255, 0.15);
+  --cat-text-soft: rgba(169, 139, 250, 0.15);
+  --cat-crypto-soft: rgba(53, 211, 156, 0.15);
+  --cat-time-soft: rgba(56, 189, 248, 0.15);
+  --cat-java-soft: rgba(248, 113, 113, 0.15);
+  --cat-web-soft: rgba(251, 191, 36, 0.15);
+  --cat-api-soft: rgba(232, 121, 249, 0.15);
+  --cat-file-soft: rgba(45, 212, 191, 0.15);
+
+  --error: #ff6b6b;
+  --error-soft: #2b1a1c;
+  --ok: #45d69b;
+  --ok-soft: #11241d;
+  --warn: #f0a94a;
+  --warn-soft: #2b2114;
+
+  --code-punct: #7b8698;
+  --code-key: #7faeff;
+  --code-string: #4fd3a0;
+  --code-number: #f0a94a;
+  --code-bool: #bc93ff;
+  --code-null: #bc93ff;
+  --gutter-text: #596374;
+
+  --editor-bg: #131720;
+  --editor-line-highlight: #1b2029;
+  --diff-add: #11241d;
+  --diff-add-strong: #174534;
+  --diff-del: #2b1a1c;
+  --diff-del-strong: #4a2226;
+  --diff-add-text: #45d69b;
+  --diff-del-text: #ff8f8f;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --shadow-3: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+
+/* ---------------- 重置与基础 ---------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin: 0;
+}
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+code,
+kbd,
+pre,
+.mono {
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 5px;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  color: var(--text-secondary);
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: var(--accent-ring);
+  color: var(--text-primary);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+
+/* 滚动条 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---------------- 少量通用工具类 ---------------- */
+
+.row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+}
+
+.grow {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.muted {
+  color: var(--text-secondary);
+}
+
+.tertiary {
+  color: var(--text-tertiary);
+}
+
+.ellipsis {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+body.reduce-motion *,
+body.reduce-motion *::before,
+body.reduce-motion *::after,
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}

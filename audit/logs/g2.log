@@ -1,0 +1,1027 @@
+dsh: reasoning:
+Let me start by exploring the workspace and reading the design files.
+
+Let me create a todo list and start investigating.
+
+First, let me look at the current state of the files I'm allowed to modify, and read the design nodes.
+dsh: reasoning:
+Now let me read the composables and the design nodes.
+dsh: reasoning:
+Let me get the full text dump and the structural dump. Also for recent G5GfwW, hVwyK, vO8fN.
+dsh: reasoning:
+Now I have the text content. Let me get the structural dumps to understand layout. Let me also read the empty recent text and dump structures.
+
+Let me read G5GfwW (empty recent), and dump FdLxl at depth 5, hVwyK at depth 5.
+dsh: reasoning:
+Let me get deeper dumps for the workspace FdLxl's dSZXs and the header QxdWJ and footer ScW7d. Let me dump specific nodes.
+dsh: reasoning:
+Now let me get deeper into the table structure of favorites. Let me dump the list item structure, specifically c2vwmz depth. And also the empty state vO8fN structure.
+
+Let me dump the table row structure. c2vwmz at depth 4.
+dsh: reasoning:
+Now let me look at the empty state structure inside the workspace (the empty panel / 列表?). Let me dump z0MWtm. Also let me look at the recent structure.
+dsh: reasoning:
+Let me dump the recent workspace structure in detail for hVwyK. And the header PHHdp.
+dsh: reasoning:
+Now let me see the details of the recent row and group header, and empty recent workspace. Let me dump a group header and a row.
+
+Let me dump TlidQ (group header), oZi3s (row), and the group "更早" / second group. Also dump the empty recent workspace vHCMG.
+dsh: reasoning:
+Now let me find the "更早" group header in hVwyK. Let me search for "更早" text.
+dsh: reasoning:
+The "更早" text might be inside the group header but the pen find did not find it (find may only search names?). Let me search for "更早" alone. Actually text hVwyK gave only "今天" as group header. The second group header may be "更早" but text dump only had one group header text "今天". Let me check text again - the hVwyK text didn't include "更早". Looking at the list, after 4 rows in 今天 they had a row with "10月10日 15:12" which is in 今天? Wait no—the group header text dump only had "今天". But the design shows 8 records total, with 3 today, and the rest earlier. Actually the text output shows group "今天" with count 3. Hmm, but there are 4 rows then a 5th? Let me re-examine.
+
+From text output for hVwyK:
+- 今天 (group)
+- 3 (count)
+- JSON 格式化 / 数据格式 / 09:41
+- Base64 编解码 / 编码与文本 / 09:12
+- 时间戳转换 / 时间与标识 / 08:55
+- 文本差异比较 / 编码与文本 / 10月10日 15:12
+...
+
+So the first group is 今天 with 3 count, but 4 rows listed before we hit "最近使用 · 本地存储". Hmm wait, the text dump might not include the second group header because the group header text node for "更早" might be missing? Actually, maybe "更早" group header exists but the count. Let me look at the full text again. In the text output, after "时间戳转换" (3rd) there's "文本差异比较" then "最近使用 · 本地存储". So indeed the list structure we dumped (IYHBB) only showed 4 rows total (oZi3s, IQCTW, q5wKB5, knf9d) and one group header TlidQ. So maybe the design has only one group shown in this frame? But total 8 records. Hmm, that's odd — maybe the workspace is clipped and only shows 4 rows due to height. Actually the frame height 1020 and rows 58 → maybe only 4-5 fit. The 4th row is 10月10日 which is "更早". But it's under the 今天 group? Perhaps the design list is truncated and the second group header is below the fold.
+
+Let me search for "更早" in the whole pen. Use find.
+dsh: reasoning:
+The "更早" group header isn't in the design (probably truncated/below fold). But the task says group by 今天/更早 which the composable already does. Good.
+
+Now let me look at the existing CSS tokens and components. Let me read main.css and the existing Dk components (read-only, to understand available API). Also look at other pages that already implement similar table/workspace layout, e.g., maybe an existing tool page or the crawl/audit reports to see the shared style patterns. Let me look at the app structure.
+dsh: reasoning:
+Let me look at existing pages with similar workspace/table layout. Maybe the settings page or privacy page. Also check DkSegmented, DkStatusBar, DkIconButton, DkButton APIs. Let me read those components (read-only).
+dsh: reasoning:
+Now let me look at existing pages with workspace/table style to reuse patterns. Let's check settings.vue, help.vue, and privacy.vue, and check if there's an existing "workspace" CSS class pattern. Also check the ToolPageLayout and DkIcon usage. Let me grep for "workspace" / "工具条" / "状态栏" patterns in pages.
+dsh: reasoning:
+Let me look at help.vue to see the footer pattern (FAQ/usage) which likely matches design. Also check the ToolPageLayout and index page for reuse of "本地处理" badge and header patterns. Let me also look at how `useToolRun` records recent (to make sure no other place needs change). And check what `ToolPageLayout` header looks like (icon badge, local badge). Let me grep.
+dsh: reasoning:
+Now I have a good understanding. Let me plan the implementation.
+
+Key design requirements:
+
+**S04 favorites** — Workspace table form:
+- Header: icon badge (star), title "我的收藏", subtitle "收藏的工具入口与快捷打开方式；收藏只保存工具标识，不保存任何输入内容。", right: "本地处理" badge + "已收藏" (favorites count button?)
+- Workspace: toolbar with 排序 segmented (最近收藏 / 工具名称 / 分类), 分隔, option "仅显示当前可用工具", spacer, "共 N 个收藏", "全部取消收藏" button
+- Table: header row 工具 / 分类 / 收藏时间 / 操作. Row: icon + name + desc | category tag | time | star icon button (取消收藏) + 打开 button
+- Status bar: "收藏记录 · 本地存储" + "共 N 个收藏 · 排序：最近收藏"
+- Footer 说明区: 使用说明 (2 steps) + 常见问题 (2 Q&A)
+
+**S05 recent** — 
+- Header: icon badge (history), title "最近使用", subtitle "只记录工具名称与访问时间；不保存输入正文、密钥、Token 或文件名。", right: 本地处理 badge + 收藏 button
+- Toolbar: accent option "只记录工具名与访问时间" + x, 分隔, 分组 segmented (按时间 / 按分类), spacer, "共 N 条记录", "清空全部记录" button
+- Table: header 工具 / 分类 / 访问时间 / 操作; group header 今天 (with count) — and 更早; rows same as favorites but 移除 icon button.
+- Status bar: "最近使用 · 本地存储" + "共 N 条记录 · 最早 ..."
+- Footer: 使用说明 + FAQ
+
+**真实性 concern**: Favorites currently only stores tool ids (no timestamp). Design has 收藏时间 column. Requirement says either extend storage backward-compatibly or don't show column and explain. Best: extend to store `{id, at}` while remaining backward compatible with old `string[]`. Design explicitly has 收藏时间 so extend storage.
+
+So I'll extend useFavorites:
+- Storage format v2: `{ v: 2, items: [{id, at}] }`? But must be backward compatible with existing `devkit.favorites.v1` which is `string[]`. Approach: keep same key, store either string[] (legacy) or new object. Load: parse; if array → legacy, map to `{id, at: null}`. If object with items → map. Persist: write `{v:2, items:[...]}`.
+
+Actually simplest: keep `ids` computed from entries. But settings.vue uses `fav.ids.value`, `fav.clear()`, `fav.toggle()`. ToolPageLayout uses `fav.ids.value` and `fav.toggle`. So I must keep API: `ids` (Ref<string[]> or computed), `isFav`, `toggle`, `clear`. I can add `entries`, `addedAt(id)`, `remove(id)`.
+
+But wait — settings.vue is not in my allowed files. It calls `fav.ids.value` (read) and `fav.clear()`. If `ids` becomes a computed, `.value` still works. Good.
+
+For backward compatibility and no fabricated times: entries have `at: string | null`. Rows with null show "—" or "未知时间" placeholder. The requirement says "老数据无时间时显示占位说明或归入「未知时间」".
+
+Sorting by 收藏时间: entries with at desc; nulls last. "最近收藏" sort.
+
+Let me design the composable:
+
+```ts
+const FAV_KEY = 'devkit.favorites.v1'
+
+export interface FavoriteEntry {
+  id: string
+  /** ISO 收藏时间；旧数据可能为 null（未记录时间） */
+  at: string | null
+}
+
+interface FavStore {
+  v: 2
+  items: FavoriteEntry[]
+}
+
+function load(): FavoriteEntry[] {
+  if (import.meta.server) return []
+  try {
+    const raw = localStorage.getItem(FAV_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      return parsed.filter((x) => typeof x === 'string').map((id) => ({ id, at: null }))
+    }
+    if (parsed && Array.isArray(parsed.items)) {
+      return parsed.items
+        .filter((x: any) => x && typeof x.id === 'string')
+        .map((x: any) => ({ id: x.id, at: typeof x.at === 'string' ? x.at : null }))
+    }
+    return []
+  } catch {
+    return []
+  }
+}
+
+export function useFavorites() {
+  const entries = useState<FavoriteEntry[]>('devkit-favorites-entries', load)
+  const loaded = useState<boolean>('devkit-favorites-loaded', () => false)
+
+  onMounted(...)
+
+  const ids = computed(() => entries.value.map((e) => e.id))
+
+  function persist() {
+    localStorage.setItem(FAV_KEY, JSON.stringify({ v: 2, items: entries.value }))
+  }
+
+  function isFav(id) { return computed(() => ids.value.includes(id)) }
+
+  function addedAt(id) { return entries.value.find((e) => e.id === id)?.at ?? null }
+
+  function toggle(id) {
+    if (entries.value.some((e) => e.id === id)) {
+      entries.value = entries.value.filter((e) => e.id !== id)
+    } else {
+      entries.value = [...entries.value, { id, at: new Date().toISOString() }]
+    }
+    persist()
+  }
+
+  function remove(id) { ... }
+  function clear() { ... }
+
+  return { entries, ids, isFav, addedAt, toggle, remove, clear }
+}
+```
+
+Wait: `ids` previously was a `useState` ref, and `settings.vue` and `ToolPageLayout.vue` read `fav.ids.value`. Computed ref works fine there. But is `ids` used with `.value =` assignment anywhere? Let me grep.
+
+Also need to check `useState` SSR hydration: `useState('devkit-favorites', load)`. If I rename key, existing state? It's fine in dev. But careful: on SSR, load returns [] and then onMounted loads. The page compute. Fine.
+
+Also note `entries` initial may be [] on server; after mount it loads.
+
+Let me check usages of fav.ids assignment and recent API usage across the app.
+
+Let me grep for `useFavorites` and `useRecent`.
+dsh: reasoning:
+Good. `ids` only read, never assigned externally. Safe to make it computed. But note `useState` returns a Ref; computed ref works.
+
+However, there's a subtlety: `useState('devkit-favorites', load)` is shared across SSR and client. Making `ids` computed is fine.
+
+Let me look at the index.vue to see how it uses recent grouped/favorites. Also check DkIcon available icons for "history", "clock", "star", "star-filled", "x", "trash", "external-link", "arrow-right", "info", "sparkles"? Let me grep icons.
+
+Let me read index.vue and check available icons list.
+dsh: reasoning:
+Wait, `'clock'`, `'history'`, `'star'`, `'x'`, `'trash'`, `'info'`, `'home'` matched via grep? The grep output only showed star-filled, arrow-right, external-link, shield-check. Hmm, my grep pattern used `'clock'` with quotes; the file uses `clock:` without quotes for those. Let me not worry: `clock`, `history`, `star`, `x`, `trash`, `info`, `home` exist (star: at line, history: at line). Good.
+
+Also let me check other icons I might use: `sparkles`? not present. `lock`? present. `layers`? not sure. Let me just use available ones.
+
+Now, let me check the exact palette of grid columns. Design table columns: 工具 (fill), 分类 150, 收藏时间 150, 操作 132. I'll replicate responsive.
+
+Now regarding "仅显示当前可用工具" option: Design shows it as a pill option (probably a toggle). Since all tools are available in this app, but some might be placeholders. Let me check tools data for availability. There may be tools not yet implemented (pages exist for all?). Let me check `toolsOfCategory` / any `status` field. Let me grep `status` or `available` in data/tools.ts and tool page. Actually the app has 41 tools (t01-t41). Let me check.
+
+Actually "仅显示当前可用工具" implies some tools in favorites may not be available (e.g., removed). Since favorites stores ids, an id may no longer resolve → currently filtered out. I can implement a real toggle: "仅显示当前可用工具" checked = hide favorites whose id doesn't resolve to a tool; when unchecked, show unknown entries with a placeholder row (真实：not fabricated — show the stored id). Hmm, but design shows it as an option pill with no checkbox in the text. In the design, `aPL3v` frame '选项 · 仅显示当前可用工具' with fill=$surface. Probably a toggle/segmented. Since it's a static design, I'll implement it as a DkCheckbox-like or a DkSwitch? Actually simplest: a DkSegmented with 全部/可用? But design says single option pill.
+
+Let me check DkCheckbox API.
+
+Actually let me think about honesty: favorites are by tool id. Unknown ids won't happen in practice unless the catalog changes. To make "仅显示当前可用工具" meaningful and real, I'll implement it as a checkbox (default checked) that filters out entries whose id no longer resolves in the current catalog, and when unchecked shows the unknown entries with "该工具已不可用" placeholder (real, based on stored id). That's honest and functional.
+
+Let me check DkCheckbox.
+dsh: reasoning:
+Now let me check the full DkIcon list to be sure about icons I'll use. Let me print all icon keys.
+dsh: reasoning:
+Now let me check the existing favorites.vue and recent.vue full contents to know what I'm replacing (read complete). Also check ToolCard (not modifying).
+
+Let me read full favorites.vue and recent.vue.
+dsh: reasoning:
+Now I have everything. Let me set up a todo list and start writing.
+
+Plan:
+1. Extend `useFavorites.ts` to store `{id, at}` backward-compatibly (v2), exposing `entries`, `ids`, `isFav`, `addedAt`, `toggle`, `remove`, `clear`.
+2. Rewrite `favorites.vue` as workspace table with toolbar, sorting (最近收藏/工具名称/分类), 仅显示当前可用工具 toggle, 全部取消收藏, status bar, footer help/FAQ, empty state.
+3. Rewrite `recent.vue` as workspace table with grouping 按时间 (今天/更早) / 按分类, category column, remove, clear all, status bar, footer, empty state.
+4. Possibly small backward-compatible touch to `useRecent.ts`: keep grouped but maybe add `groupedByCategory`? The recent page can compute grouping inline. Requirement says "composable 已有 grouped". I can add a `groupedByCategory` computed to useRecent, or compute in page. Better keep changes minimal; I'll add `groupedByCategory` maybe. Actually simpler: compute in page. But the task lists useRecent.ts as a file I may extend ("可小幅扩展"). I might add nothing or a small helper. I'll leave useRecent mostly as is (it's already correct) — but maybe add `earliest` for status bar? Status bar says "共 8 条记录 · 最早 10月10日 15:12". I can compute earliest in page. Fine, no need to touch useRecent. But the task explicitly includes it. It's optional ("可小幅扩展"). I'll leave it alone unless needed. Actually, I need "按分类" grouping in recent; I'll compute in page.
+
+Let me think about the timestamp formatting for favorites:
+- Design favors: "09:41", "09:12" (today), "昨天 18:30", "昨天 16:04", "10月12日", "10月11日".
+- For favorites 收藏时间: if at is null (legacy) → "未知时间" with title explaining legacy data.
+- For recent: "09:41" today, "10月10日 15:12" earlier.
+
+Let me write a shared-ish formatting function in each page (can't add new util files? I can only modify the four files. utils/json.ts is off-limits but other util files I could create? The instruction says only allowed to modify listed files; creating a new util file isn't listed. So keep formatting inline in each page.)
+
+Now favorites time format function:
+```
+function fmtFavTime(at: string | null) {
+  if (!at) return '未知时间'
+  const d = new Date(at)
+  if (isNaN(d.getTime())) return '未知时间'
+  const now = new Date()
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const diffDay = Math.floor((startToday - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / 86400000)
+  const hm = ...
+  if (diffDay <= 0) return hm  // today -> HH:MM
+  if (diffDay === 1) return `昨天 ${hm}`
+  if (d.getFullYear() === now.getFullYear()) return `${d.getMonth()+1}月${d.getDate()}日`
+  return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`
+}
+```
+
+Note design used "09:41" for today in favorites too. Good.
+
+Now sorting by 收藏时间 (最近收藏) — descending by at; nulls last. Default order: `entries` order. Since toggle appends new at end, and I want most recent first. I'll sort by at desc, null last, stable.
+
+Sort by name: localeCompare zh. Sort by category: by category order then name.
+
+"仅显示当前可用工具" default true. Entries whose id resolves. If off, show unknown entries (row with placeholder "该工具已不可用" and just a remove button; no link).
+
+Also, there's a subtle honesty issue: "共 N 个收藏" should reflect total favorites (all entries), not filtered. The table shows filtered. I'll show total count in toolbar and status bar; if filter hides unknown, maybe note. To keep simple and honest: toolbar "共 N 个收藏" (N = all entries). When filter on and there are unavailable entries hidden, show a note in status bar like "N 个收藏 · M 个已不可用已隐藏". Hmm, that could be over-engineering. Actually, since catalog currently has all ids valid, unavailable entries only appear if stored id is invalid (e.g., from older version). It's a real possibility. I'll implement the filter genuinely and status bar mentions hidden count only when > 0.
+
+Let me decide: `allEntries` = fav.entries. `availableEntries` = entries with tool. `displayEntries` = showAvailable ? availableEntries : allEntries.
+
+Now, the empty state: when there are 0 favorites → empty state. When there are favorites but all filtered? If showAvailable is true and all entries are unavailable, displayEntries empty but total>0. Show a different real message. Edge case; I'll handle: if total === 0 → empty state (design). else if displayEntries.length === 0 → a small message "已收藏的 N 个工具在当前目录中不可用" with button to show all. Actually simpler: since this is rare, render the empty state only when total === 0, and if total>0 but display empty, render a row-less panel with note. Hmm. Let me keep it straightforward:
+
+- `v-if="fav.entries.length === 0"` → empty state (design vO8fN)
+- `v-else` → table; inside tbody if `displayEntries.length === 0` show a "无匹配" row with a real explanation.
+
+Now the recent page:
+- toolbar: option badge "只记录工具名与访问时间" with info icon; 分隔; 分组 segmented (按时间/按分类); spacer; "共 N 条记录"; 清空全部记录 (disabled when 0).
+- table header: 工具 / 分类 / 访问时间 / 操作.
+- group by time: 今天 (with count) and 更早 (with count). Use recent.grouped (already). 
+- group by 分类: group by category key, ordered by categories array order; only groups that have entries. Count badge.
+- Each row: icon+name+desc | category tag | time | remove icon button.
+- Row title link to tool. If tool unavailable (getToolById undefined), show placeholder id and no link? For recent, entries only created from actual tool pages, so should resolve. But to be safe, handle.
+- Status bar: "最近使用 · 本地存储" + "共 N 条记录 · 最早 <time>" or "0 条记录".
+- Footer 使用说明 2 steps + FAQ 2 items.
+- Empty state with 浏览全部工具 + hint about 偏好设置.
+
+Also the design has header right side: "收藏" button (for recent page) and "已收藏" button (for favorites page). These are the design's page header actions. In the app, "收藏" on recent page—what would it do? On tool pages it toggles favorite. On the recent page, there's no "current tool". Design shows it as a labeled button. Hmm. The design header "右侧操作" for S04 shows a button with star icon + "已收藏" (count?), and S05 shows star + "收藏". These likely represent the global favorites entry. Since we can't have a meaningful toggle on these pages, I should not fabricate a non-functional button. Better: make the header right side a link to the other page:
+- favorites page: "本地处理" badge + link to recent? Hmm design says "已收藏". 
+- recent page: "本地处理" badge + link "我的收藏" with star icon.
+
+The requirement says match design. But adding a dead "收藏" button would be fake. I'll interpret the header right button as navigation: On favorites page, show "已收藏" as a static status chip (since we're already on favorites) — but design shows it as a surface button. Actually design "已收藏" with star icon is a chip showing the current tool is favorited; on a list page it's not applicable.
+
+Alternative honest approach: make the header right button functional as a link to the complementary page:
+- On 我的收藏 page: primary action "全部取消收藏"? No, that's in toolbar.
+- Keep the design's local badge, and use the button to link to /recent ("最近使用" with history icon) or keep "已收藏" disabled chip.
+
+I think the cleanest honest mapping:
+- favorites page header right: 本地处理 badge + a link chip to "最近使用" (history icon). But that deviates from design text "已收藏".
+
+Hmm, the task says "列、行操作（打开、取消收藏）、排序… 全部取消收藏、状态栏、页尾说明区". It doesn't demand the header button. I'll include the "本地处理" badge (real, links to /privacy like ToolPageLayout) and a chip that shows the count "已收藏 N" — a static status indicator (real data, not a fake button). For recent page, header right: 本地处理 badge + link to 我的收藏 "收藏 N" which is a real navigation. Actually design recent header button is "收藏" (plain). I can render it as a link to /favorites labeled 收藏 with star icon. That's functional and matches design visually. For favorites page, render "已收藏" as a non-interactive chip with star-filled icon and count. That's honest.
+
+Let me do:
+- favorites header: `<span class="chip chip--star"><DkIcon name="star-filled"/> 已收藏 {{ count }}</span>` + local badge.
+- recent header: link to /favorites `收藏` + local badge.
+
+Hmm but the design order: 本地处理 badge first, then 收藏/已收藏 button. I'll match order.
+
+Now, the table needs responsive handling — on small screens maybe hide 分类/时间 columns. I'll add media queries.
+
+Now let me consider using `DkSegmented` for sorting. Design uses a segmented control with 3 options. Good. `DkSegmented` modelValue string.
+
+For "仅显示当前可用工具", design shows a pill. I'll use DkCheckbox with label. Actually design `aPL3v` frame fill=$surface height=26 with text only. Since it's inside the toolbar and could be a toggle. I'll use DkCheckbox with label="仅显示当前可用工具". This is a real control.
+
+Now, let me handle SSR / hydration: The pages read localStorage in onMounted. On first server render, entries=[] → shows empty state. After hydration, loads. Since Nuxt SSR, on the client the initial render might briefly show empty state before onMounted. That's existing behavior. For probe (networkidle + wait 900ms), it'll be loaded. Fine.
+
+However, there is a hydration mismatch risk: server renders empty state, client immediately (before onMounted) renders empty state too because useState initial value from server payload is []. Actually useState is SSR-serialized; on client hydration it uses the same value ([]), then onMounted loads. So no mismatch. Good.
+
+But careful: `load()` is called as initializer for useState on both server and client. On server returns []. Nuxt serializes state as []. On client, useState picks up the payload value, not calling load again? Actually Nuxt's useState: during hydration, it uses the payload value. The initializer may run in some cases. Either way client `load()` returns the actual localStorage data, which could differ from server payload [] and cause hydration mismatch if it runs before hydration. In Nuxt 4, useState initializer runs on client too and can cause hydration mismatch warnings if the server value differs. The existing code already has this pattern, and probe presumably showed warnings? The probe only records error/warning console. The task says no console error/pageerror; warnings might be included in "console" list. Let me check how probe reports. It collects warnings too. Hmm, the requirement is "无 console error/pageerror". So warnings are acceptable but I should avoid them.
+
+The existing pattern: `useState<string[]>('devkit-favorites', load)`. In Nuxt, when payload exists, `useState` returns payload value and does NOT call init. So on client hydration, ids = server value [] and then onMounted updates. No mismatch. Good.
+
+If I change to `useState<FavoriteEntry[]>('devkit-favorites-entries', load)`, same behavior.
+
+Now the `ids` computed. `settings.vue` uses `fav.ids.value.length` fine. `SideNav` fine. `index.vue` uses `fav.ids.value.slice(0,8)`. Fine.
+
+One concern: `useState` key change means the server payload key changes; no issue.
+
+Now let's write the composable. Also `useFavorites` currently not imported anywhere (auto-import). TypeScript: `entries` type.
+
+Let me also consider that `getToolById` returns undefined for unknown. In favorites table, for unknown entries, show a placeholder with the raw id? Showing the stored id string is real data. I'll show name "无法识别的工具" and desc `标识：${id}` — hmm, id is real. Good.
+
+Now write files.
+
+Let me write useFavorites.ts:
+
+```ts
+const FAV_KEY = 'devkit.favorites.v1'
+
+export interface FavoriteEntry {
+  id: string
+  /** ISO 收藏时间；旧版数据未记录时间为 null */
+  at: string | null
+}
+
+function normalize(list: unknown): FavoriteEntry[] {
+  if (!Array.isArray(list)) return []
+  const out: FavoriteEntry[] = []
+  for (const item of list) {
+    if (typeof item === 'string') {
+      out.push({ id: item, at: null })
+    } else if (item && typeof item === 'object' && typeof (item as any).id === 'string') {
+      const at = (item as any).at
+      out.push({ id: (item as any).id, at: typeof at === 'string' ? at : null })
+    }
+  }
+  return out
+}
+
+function load(): FavoriteEntry[] {
+  if (import.meta.server) return []
+  try {
+    const raw = localStorage.getItem(FAV_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    // v1: string[]；v2: { v, items }
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return normalize((parsed as any).items)
+    }
+    return normalize(parsed)
+  } catch {
+    return []
+  }
+}
+
+/** 收藏：只保存工具标识与收藏时间，不保存任何输入数据 */
+export function useFavorites() {
+  const entries = useState<FavoriteEntry[]>('devkit-favorites', load)
+  const loaded = useState<boolean>('devkit-favorites-loaded', () => false)
+
+  onMounted(() => {
+    if (!loaded.value) {
+      entries.value = load()
+      loaded.value = true
+    }
+  })
+
+  const ids = computed(() => entries.value.map((e) => e.id))
+
+  function persist() {
+    if (import.meta.server) return
+    localStorage.setItem(FAV_KEY, JSON.stringify({ v: 2, items: entries.value }))
+  }
+
+  function isFav(id: string) {
+    return computed(() => ids.value.includes(id))
+  }
+
+  function addedAt(id: string) {
+    return entries.value.find((e) => e.id === id)?.at ?? null
+  }
+
+  function toggle(id: string) {
+    entries.value = entries.value.some((e) => e.id === id)
+      ? entries.value.filter((e) => e.id !== id)
+      : [...entries.value, { id, at: new Date().toISOString() }]
+    persist()
+  }
+
+  function remove(id: string) {
+    entries.value = entries.value.filter((e) => e.id !== id)
+    persist()
+  }
+
+  function clear() {
+    entries.value = []
+    persist()
+  }
+
+  return { entries, ids, isFav, addedAt, toggle, remove, clear }
+}
+```
+
+Wait: using the same useState key 'devkit-favorites' for entries (object array) is fine. But to avoid any stale server payload of old type during dev HMR, doesn't matter.
+
+Now favorites.vue. Let me design the template carefully.
+
+```
+<script setup lang="ts">
+import { getToolById, categories } from '~/data/tools'
+
+useSeoMeta({ title: '我的收藏 · DevKit' })
+
+const fav = useFavorites()
+const sortMode = ref<'recent' | 'name' | 'category'>('recent')
+const showAvailable = ref(true)
+
+interface Row {
+  id: string
+  tool?: ToolMeta
+  at: string | null
+}
+```
+
+Need ToolMeta type import? `import type { ToolMeta } from '~/data/tools'`.
+
+Build rows:
+```
+const allRows = computed<Row[]>(() =>
+  fav.entries.value.map((e) => ({ id: e.id, tool: getToolById(e.id), at: e.at }))
+)
+
+const unavailableCount = computed(() => allRows.value.filter((r) => !r.tool).length)
+
+const displayRows = computed(() => {
+  const base = showAvailable.value ? allRows.value.filter((r) => r.tool) : allRows.value
+  const list = [...base]
+  if (sortMode.value === 'name') {
+    list.sort((a, b) => (a.tool?.name ?? a.id).localeCompare(b.tool?.name ?? b.id, 'zh'))
+  } else if (sortMode.value === 'category') {
+    const order = categories.map((c) => c.key)
+    list.sort((a, b) => {
+      const ai = a.tool ? order.indexOf(a.tool.cat) : order.length
+      const bi = b.tool ? order.indexOf(b.tool.cat) : order.length
+      if (ai !== bi) return ai - bi
+      return (a.tool?.name ?? a.id).localeCompare(b.tool?.name ?? b.id, 'zh')
+    })
+  } else {
+    // 最近收藏：有时间的在前，时间倒序；未记录时间的置后
+    list.sort((a, b) => {
+      const at = a.at ? Date.parse(a.at) : NaN
+      const bt = b.at ? Date.parse(b.at) : NaN
+      const av = Number.isNaN(at) ? -Infinity : at
+      const bv = Number.isNaN(bt) ? -Infinity : bt
+      return bv - av
+    })
+  }
+  return list
+})
+```
+
+sortLabel:
+```
+const sortLabel = computed(() => ({ recent: '最近收藏', name: '工具名称', category: '分类' }[sortMode.value]))
+```
+
+fmtFavTime as above.
+
+categoryName(key) => getCategory(key).name. I can import getCategory.
+
+Header: 
+```
+<header class="fav__head">
+  <div class="fav__title">
+    <span class="fav__icon"><DkIcon name="star" :size="17" /></span>
+    <div>
+      <h1>我的收藏</h1>
+      <p>收藏的工具入口与快捷打开方式；收藏只保存工具标识与收藏时间，不保存任何输入内容。</p>
+    </div>
+  </div>
+  <div class="fav__actions">
+    <NuxtLink to="/privacy" class="fav__local"><DkIcon name="shield-check" :size="13" />本地处理</NuxtLink>
+    <span class="fav__chip"><DkIcon name="star-filled" :size="14" />已收藏 {{ fav.entries.value.length }}</span>
+  </div>
+</header>
+```
+
+Note: design subtitle says "收藏只保存工具标识，不保存任何输入内容。" but FAQ says "收藏只保存工具标识与收藏时间". Since we now store time, use the FAQ wording to be truthful. The requirement says "文案与设计一致或等价". Good.
+
+Workspace:
+```
+<section class="fav__workspace">
+  <div class="fav__toolbar">
+    <div class="fav__seg-group">
+      <span class="fav__label">排序</span>
+      <DkSegmented v-model="sortMode" size="sm" :options="[
+        { value: 'recent', label: '最近收藏' },
+        { value: 'name', label: '工具名称' },
+        { value: 'category', label: '分类' }
+      ]" />
+    </div>
+    <span class="fav__divider"></span>
+    <DkCheckbox v-model="showAvailable" label="仅显示当前可用工具" />
+    <span class="grow"></span>
+    <span class="fav__count">共 {{ fav.entries.value.length }} 个收藏</span>
+    <DkButton v-if="fav.entries.value.length" size="sm" :disabled="!fav.entries.value.length" @click="clearAll">
+      <DkIcon name="trash" :size="13" />全部取消收藏
+    </DkButton>
+  </div>
+  <div class="fav__panel">
+    <template v-if="fav.entries.value.length === 0">
+      <div class="fav__empty"> ... </div>
+    </template>
+    <template v-else>
+      <div class="fav__table">
+        <div class="fav__thead"> ... 工具/分类/收藏时间/操作 </div>
+        <div class="fav__tbody">
+          <p v-if="displayRows.length === 0" class="fav__noresult">当前筛选下没有可显示的工具。</p>
+          <div v-for="row in displayRows" :key="row.id" class="fav__row">
+            <div class="fav__cell-tool">
+              <span v-if="row.tool" class="fav__row-icon" :style="...">icon</span>
+              <span v-else class="fav__row-icon fav__row-icon--unknown"><DkIcon name="info" :size="15"/></span>
+              <div class="fav__row-text">
+                <NuxtLink v-if="row.tool" :to="`/tools/${row.tool.slug}`" class="fav__row-name">{{ row.tool.name }}</NuxtLink>
+                <span v-else class="fav__row-name fav__row-name--unknown">无法识别的工具</span>
+                <span class="fav__row-desc">{{ row.tool ? row.tool.desc : `收藏标识：${row.id}` }}</span>
+              </div>
+            </div>
+            <div class="fav__cell-cat">
+              <span v-if="row.tool" class="fav__cat" :style="...">{{ getCategory(row.tool.cat).name }}</span>
+              <span v-else class="fav__cat fav__cat--unknown">已不可用</span>
+            </div>
+            <div class="fav__cell-time">
+              <span class="fav__time" :title="row.at ?? '该收藏来自旧版数据，未记录时间'">{{ fmtFavTime(row.at) }}</span>
+            </div>
+            <div class="fav__cell-ops">
+              <DkIconButton title="取消收藏" @click="fav.remove(row.id)"><DkIcon name="star-filled" :size="14" :style="{ color: 'var(--star)' }" /></DkIconButton>
+              <NuxtLink v-if="row.tool" :to="`/tools/${row.tool.slug}`"><DkButton size="sm"><DkIcon name="arrow-right" :size="13" />打开</DkButton></NuxtLink>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="fav__status">
+        <span class="fav__status-mono">收藏记录 · 本地存储</span>
+        <span class="grow"></span>
+        <span class="fav__status-mono fav__status-mono--strong">共 {{ fav.entries.value.length }} 个收藏 · 排序：{{ sortLabel }}</span>
+      </div>
+    </template>
+  </div>
+</section>
+```
+
+Wait: design has empty state inside the panel with a status bar below. So both empty and non-empty states have status bar. Let me keep the status bar always visible (it shows "0 个收藏" in empty). Good, matches design.
+
+clearAll with confirmation? Design has "全部取消收藏". Direct click is fine; maybe no modal to keep simple. But destructive; other pages use DkModal. The settings page has modal. For favorites "全部取消收藏" I could add a confirm. To keep scope reasonable and match design (single button), I'll do direct action but that's risky. Hmm. I'll add a DkModal confirm for both clear-all actions — it's honest UX and uses existing component. But design doesn't show modal. It's fine (equivalent). Actually to reduce complexity and risk of hydration/probe issues, I'll keep it simple with a confirm modal. Let me check DkModal API (open, title, danger, width, close, footer slot). Already used in settings. Good.
+
+Actually, maybe simpler: no modal. But accidentally clearing favorites is bad. I'll add modal for 全部取消收藏 and 清空全部记录.
+
+Hmm, but "全部取消收藏" and "清空全部记录" — the design shows undo? No. I'll use modal.
+
+Footer (说明区):
+```
+<footer class="fav__docs">
+  <div class="fav__docs-cols">
+    <section class="fav__docs-block">
+      <h2 class="fav__docs-title"><DkIcon name="help" :size="14" />使用说明</h2>
+      <div class="fav__steps">
+        <div class="fav__step" v-for="...">序号 + 标题 + 说明</div>
+      </div>
+    </section>
+    <section class="fav__docs-block">
+      <h2 class="fav__docs-title"><DkIcon name="info" :size="14" />常见问题</h2>
+      ...
+    </section>
+  </div>
+</footer>
+```
+
+Data arrays:
+```
+const steps = [
+  { n: 1, title: '在工具页收藏', body: '点击任意工具页右上角的星标按钮即可加入收藏，再次点击取消。' },
+  { n: 2, title: '在这里快速打开', body: '列表默认按最近收藏排序，也可切换为按名称或分类排序。' }
+]
+const faqs = [
+  { q: '收藏会保存我处理过的内容吗？', a: '不会。收藏只保存工具标识与收藏时间，输入、密钥、Token 都不会写入。' },
+  { q: '取消收藏会删除历史记录吗？', a: '不会。收藏与“最近使用”是两套独立记录，互不影响。' }
+]
+```
+
+Empty state:
+```
+<div class="fav__empty">
+  <span class="fav__empty-icon"><DkIcon name="star" :size="19" /></span>
+  <p class="fav__empty-title">还没有收藏任何工具</p>
+  <p class="fav__empty-hint">在工具页点击右上角星标按钮即可收藏，收藏只保存工具标识与收藏时间。</p>
+  <NuxtLink to="/"><DkButton variant="primary" size="sm"><DkIcon name="grid" :size="13" />浏览全部工具</DkButton></NuxtLink>
+  <p class="fav__empty-note">也可以用顶部搜索直接进入工具，例如“国密”“时间戳”。</p>
+</div>
+```
+
+Also design empty state footer still shows 使用说明 with different steps: "先浏览工具" / "收藏后回到这里". I can switch the footer steps based on empty state to match design. Good idea: `steps` computed based on `isEmpty`.
+
+Now recent.vue:
+
+```
+<script setup lang="ts">
+import { getToolById, categories, getCategory } from '~/data/tools'
+import type { ToolMeta } from '~/data/tools'
+
+useSeoMeta({ title: '最近使用 · DevKit' })
+
+const recent = useRecent()
+const groupMode = ref<'time' | 'category'>('time')
+
+interface Row { entry: RecentEntry; tool?: ToolMeta }
+```
+
+Need RecentEntry type import from composable: `import type { RecentEntry } from '~/composables/useRecent'`? Auto-imported types may not be importable directly. In Nuxt, composables auto-import functions, but types need explicit import. The file is at app/composables/useRecent.ts, so `~/composables/useRecent` alias should work? In Nuxt 4, `~` maps to app dir? Actually in Nuxt 4, `~` and `@` map to `app/` (srcDir). Hmm, Nuxt 4 default srcDir is `app/`, so `~/composables/useRecent` works. But to be safe, I can just define a local interface `{ id: string; at: string }` and avoid importing. Since recent.entries is typed, I can use `recent.entries.value` and let TS infer. Define Row = { id: string; at: string; tool?: ToolMeta }.
+
+Let me avoid importing RecentEntry.
+
+Rows:
+```
+function rowsFor(entries: { id: string; at: string }[]): Row[] {
+  return entries.map((e) => ({ ...e, tool: getToolById(e.id) }))
+}
+```
+
+grouped display structure:
+```
+interface Group { key: string; label: string; icon: string; rows: Row[] }
+
+const groups = computed<Group[]>(() => {
+  const out: Group[] = []
+  if (groupMode.value === 'time') {
+    const g = recent.grouped.value
+    if (g.today.length) out.push({ key: 'today', label: '今天', icon: 'clock', rows: rowsFor(g.today) })
+    if (g.earlier.length) out.push({ key: 'earlier', label: '更早', icon: 'history', rows: rowsFor(g.earlier) })
+  } else {
+    const order = categories.map((c) => c.key)
+    for (const c of categories) {
+      const list = recent.entries.value.filter((e) => getToolById(e.id)?.cat === c.key)
+      if (list.length) out.push({ key: c.key, label: c.name, icon: 'grid', rows: rowsFor(list) })
+    }
+    // 未识别分类
+    const unknown = recent.entries.value.filter((e) => !getToolById(e.id))
+    if (unknown.length) out.push({ key: 'unknown', label: '已不可用', icon: 'info', rows: rowsFor(unknown) })
+  }
+  return out
+})
+```
+
+Wait, `recent.entries.value` are ordered most-recent-first already (record prepends). Good. But the `grouped.today/earlier` preserves order. Good.
+
+For 'earlier' label design likely "更早". Good.
+
+Count: `recent.entries.value.length`.
+
+earliest: 
+```
+const earliest = computed(() => {
+  const times = recent.entries.value.map(e => Date.parse(e.at)).filter(t => !Number.isNaN(t))
+  if (!times.length) return null
+  return new Date(Math.min(...times)).toISOString()
+})
+```
+
+fmtRecentTime(iso): today → "HH:MM"; else if same year → "M月D日 HH:MM"; else "YYYY年M月D日 HH:MM". Design earlier format "10月10日 15:12". Good.
+
+Toolbar:
+```
+<div class="recent__toolbar">
+  <span class="recent__option"><DkIcon name="lock" :size="12" />只记录工具名与访问时间<DkIcon name="info" :size="11" /></span>
+  <span class="recent__divider"></span>
+  <div class="recent__seg-group">
+    <span class="recent__label">分组</span>
+    <DkSegmented v-model="groupMode" size="sm" :options="[{value:'time',label:'按时间'},{value:'category',label:'按分类'}]" />
+  </div>
+  <span class="grow"></span>
+  <span class="recent__count">共 {{ recent.entries.value.length }} 条记录</span>
+  <DkButton size="sm" :disabled="!recent.entries.value.length" :class="{...}" @click="confirmClear = true">
+    <DkIcon name="trash" :size="13" />清空全部记录
+  </DkButton>
+</div>
+```
+
+Design empty shows disabled 清空全部记录 with opacity 0.45. DkButton disabled handles opacity 0.5. Good.
+
+Table: for each group render group header row then rows.
+
+Row:
+```
+<div class="recent__row">
+  <div class="recent__cell-tool">
+    icon / name link / desc
+  </div>
+  <div class="recent__cell-cat"> category tag or 已不可用 </div>
+  <div class="recent__cell-time"> fmtTime(e.at) </div>
+  <div class="recent__cell-ops">
+    <DkIconButton title="移除记录" @click="recent.remove(row.id)"><DkIcon name="x" :size="14" /></DkIconButton>
+  </div>
+</div>
+```
+
+Note design row for recent only has remove icon in ops (no 打开 button). Good.
+
+Empty state:
+```
+<div class="recent__empty">
+  <span class="recent__empty-icon"><DkIcon name="history" :size="19" /></span>
+  <p>暂无访问记录</p>
+  <p>打开任意工具后，这里会记录工具名称与访问时间。</p>
+  <NuxtLink to="/"><DkButton variant="primary" size="sm"><DkIcon name="grid" :size="13" />浏览全部工具</DkButton></NuxtLink>
+  <p>也可以在“偏好设置”里关闭“记录最近使用”。</p>
+</div>
+```
+
+Footer steps depends on empty:
+- non-empty: "打开过的工具会自动记录" / "单条移除或全部清空"
+- empty: "打开一个工具" / "想关掉记录？"
+
+FAQ same in both:
+- "会记录我处理的正文或文件名吗？" / "不会。记录里只有工具名称与访问时间，正文、密钥、Token、文件名都不写入。"
+- "清空记录会影响收藏吗？" / "不会。收藏是独立列表，需要在“我的收藏”里单独取消。"
+
+Header right: local badge + link to /favorites "收藏".
+
+Now the modal for clear confirmation. Let me include DkModal:
+```
+<DkModal :open="clearOpen" title="清空全部记录" :danger="true" width="420px" @close="clearOpen = false">
+  <p>将删除最近使用列表（仅含工具名称与访问时间）。不影响收藏和偏好设置。</p>
+  <template #footer>
+    <DkButton size="sm" @click="clearOpen = false">取消</DkButton>
+    <DkButton size="sm" variant="danger" @click="doClear">确认清空</DkButton>
+  </template>
+</DkModal>
+```
+
+Wait, DkModal `:open` prop and `@close`; check props. Let me read DkModal quickly.
+
+Also for favorites "全部取消收藏" modal similar.
+
+Now the time format functions must be SSR-safe: they use `new Date()` at render. Since local storage is empty on SSR, no times rendered on server. After mount, client renders. Could hydration mismatch? On client initial hydration, entries still [] (from payload), so table not rendered. After onMounted, updates. So no mismatch. Good.
+
+Now let's write CSS. I'll make it clean and match design tokens.
+
+Column widths: 工具 flex:1, 分类 150, 时间 150, 操作 132. For recent: 工具 flex:1, 分类 150, 时间 150, 操作 132. Responsive: at <900px hide 分类 and 时间? Actually maybe stack. Let me add media query at 860px: hide 分类 column; at 640px hide time too and reduce.
+
+Now let me also double-check: the design toolbar `仅显示当前可用工具` uses a pill; I'll style DkCheckbox inside a subtle pill container.
+
+Now I need to be careful: `DkSegmented` with `v-model` uses `modelValue: string`, but sortMode is a typed union ref. v-model on a union-typed ref with component expecting string — TypeScript may complain? In Vue templates, type checking is loose; but `v-model="sortMode"` where sortMode is `Ref<'recent'|'name'|'category'>` and component emits string → assigning string to union ref could error in vue-tsc. The original code used `v-model="sortMode"` with DkSelect and `size=""` weirdly. To be safe, I'll bind `:model-value="sortMode"` and `@update:model-value="sortMode = $event as any"` like settings.vue does. That avoids TS issues.
+
+Actually settings.vue uses `:model-value` + `@update:model-value="update({ theme: $event as any })"`. I'll do same.
+
+Now, does the project run typecheck in dev? Nuxt dev uses vite, no typecheck by default. But let's keep types clean.
+
+Let me check DkModal props.
+dsh: reasoning:
+Server is running. Now let me write the files. Let me set up todos first.
+dsh: reasoning:
+Now write useFavorites.ts. I need to read it first (already did via cat, but the edit tool requires read via read tool for existing files). Let me use write to fully replace — but policy says "Existing files are overwritten, so read an existing file first". I read via bash cat, but the fs-observation-policy may require the read tool. Let me use the read tool on the files first to be safe. Actually I already read them with bash; the policy likely tracks read tool usage. Let me use read tool on useFavorites.ts, favorites.vue, recent.vue before writing.
+dsh: reasoning:
+Now write favorites.vue. Let me carefully compose the full file.
+
+One thing: the "已收藏 N" chip with star-filled. And local badge.
+
+Let me write it.
+
+For formatting the time, I'll write a helper `fmtFavTime`.
+
+Also, `sortMode` default 'recent'.
+
+Let me write the CSS to look like a workspace table.
+
+I'll use `<div class="fav__table" role="table">`? Could add roles for a11y. Since it's a real table semantically, maybe use `<table>` element. But grid layout with flex is easier and matches design. For a11y, I can add role="table"/"row"/"columnheader"/"cell". The probe checks buttonsNoName and such. Buttons have titles. Let me add roles.
+
+Actually simpler and more semantic: use a real `<table>`. But the row has an icon + name + desc in one cell; flex works. Styling tables is fine. However design is div-based. I'll use divs with ARIA roles to keep layout control.
+
+Let me write.
+
+For the "无匹配" case: if showAvailable is true and unavailableCount > 0 and displayRows empty → show message. Also if entries exist but none available.
+
+Let me include a small note in status bar about hidden unavailable count when > 0 and showAvailable.
+
+Now writing.
+
+CSS variables used: --bg, --surface, --surface-subtle, --border, --border-strong, --text-*, --accent, --accent-soft, --star, --cat-*.
+
+Let me produce a polished page.
+
+I need to be careful about `v-model` on DkCheckbox (modelValue boolean) — sortMode ref. Fine.
+
+Let me write the file.
+dsh: reasoning:
+Now recent.vue. Let me write it.
+
+Considerations:
+- Group by time uses recent.grouped (today/earlier).
+- Group by category.
+- Status bar earliest.
+- Remove per row.
+- Clear all modal.
+- Footer.
+
+Let me write.
+
+For category grouping of unknown tools: place under "已不可用".
+
+For row keys: `e.id + e.at`.
+
+Note: design ops column for recent is 132 wide with remove icon. Good.
+
+Let me define format function.
+
+Also need `getCategory`.
+
+Type for entry: I'll define local `type Entry = { id: string; at: string }`.
+
+Rows function.
+
+Let me write.
+dsh: reasoning:
+Now let me check the dev server compiled without errors. Let me curl the pages and check the HMR output. First let me see if there's a dev server log. Let me just fetch the pages and run probe.
+
+Let me update todos and run probe on /favorites and /recent. But localStorage is likely populated from earlier browsing? Let me first check for compile errors by curling.
+
+Actually the dev server is already running; Vite will compile on request. Let me run probe. But first, let me quickly check for HMR issues via the dev server output — I don't have the log path. Let me just probe.
+
+Let me run probe on both pages. The probe writes? Let me see the full probe.py CLI usage. Let me read the rest.
+dsh: reasoning:
+Let me run probe on both pages. First check dev server log for compile errors by fetching via curl, then probe. Let me run probe with output to files.
+
+Actually let me first do a quick page load with curl to see if there's an SSR error (500). Let me do that.
+dsh: reasoning:
+Now let's check whether the dev server had compile errors. Let me look for a dev log. Probably running in a terminal I can't access. Let me check the HTML for any error markers or check surface. Let me grep the returned HTML for our new classnames to confirm rendering.
+dsh: reasoning:
+SSR renders the empty states (localStorage empty on server). Good. Now run the probe for console/pageerror. Let me run both.
+
+Also need to test populated states by writing localStorage via playwright. I'll write a small script. But first probe.
+dsh: reasoning:
+counts is under metrics. Fine. No console errors/pageerrors. Let me look at the screenshots to visually verify.
+
+Let me read the images. But first, populated state test. I'll write a playwright script that sets localStorage then reloads and probes. Let me write a temp script /tmp/g2_seed_probe.py. Since I can only modify the four listed files, writing to /tmp is fine (not workspace).
+
+The script:
+- launch chromium
+- goto http://localhost:3000/ (to get origin)
+- evaluate localStorage.setItem for favorites v2 with mixed: legacy string[] test too
+- Actually test two scenarios:
+  1. Legacy favorites (string[]) + recent entries → verify backward compat (no crash, 未知时间 placeholder).
+  2. New favorites v2 with timestamps.
+
+I'll do one combined scenario: set `devkit.favorites.v1` to a legacy string array including one unknown id, and `devkit.recent.v1` to entries with today and earlier times. Then reload /favorites and /recent, capture console + pageerrors + screenshot + key DOM text.
+
+Let me write the script.
+
+Need times: today's date. Generate ISO in JS. earlier = 2 days ago.
+
+Scenario A (legacy): favorites = ['t01','t05','nonexistent-xyz']; recent = [{id:'t10', at: now-1h},{id:'t18', at: now-2h},{id:'t22',at: twoDaysAgo}]
+
+Then test:
+- favorites shows 3 收藏, 未知时间 entries (all legacy → 未知时间), one unknown id.
+- toggling showAvailable off shows unknown row.
+
+Then Scenario B (v2 with times): set favorites v2 items with at values.
+
+Let me script and print results.
+
+Also verify localStorage after toggle that v2 format is written and reading it back works.
+
+Let me write the script.
+dsh: reasoning:
+Excellent! Everything works:
+- Legacy string[] migrated to v2 with at:null, showing 未知时间. Backward compat confirmed (persist rewrote to `{"v":2,"items":[...]}`).
+- Unknown id handling works.
+- Sorting works.
+- Clear works.
+- Recent grouping today/earlier + category; remove; clear works.
+- No console errors/warnings.
+
+One thing: `recent_store_after_clear` is `[]` — that's because clear sets entries to [] and persists `[]` (JSON.stringify of empty array). Fine, backward compatible with the load function (array). Good.
+
+Now let me look at the screenshots to check visual quality. Let me read the images.
+dsh: reasoning:
+The pages look very close to the design. Let me compare with the design. Let me get a design screenshot? There may be tools to render pen nodes. But the visual looks good.
+
+A few observations:
+1. Favorites page: workspace panel is quite tall (min-height 420px + flex). It looks fine, similar to design where workspace fills. Actually in the design, workspace has height=fill_container within a 1020px body. Our panel min-height 420 makes it a bit large but fine.
+
+2. Recent page: The recent row icons look right. Category tags right.
+
+3. In recent, the group header for 更早 shows icon history. Good.
+
+4. The status bar in recent "共 3 条记录 · 最早 9月18日 13:08". Good.
+
+5. Favorites status shows "排序: 分类" after switching to category sort. Good.
+
+One issue: In favorites, the sidebar shows "我的收藏 3" but recent shows 3. In the second screenshot sidebar favorites shows 0 because we cleared. Fine.
+
+Now let me check the empty states screenshots. Let me view the probe empty screenshots. Actually /tmp/g2-favorites-empty.png and /tmp/g2-recent-empty.png were captured before seeding (empty). Let me view them quickly to ensure empty design matches.
+
+Also, I should compare with the actual design frames. Let me check if there's a way to export the pen frame to PNG. Maybe pen.py has a render command. Let me check `python3 audit/tools/pen.py` usage. Actually the task says I can use pen.py dump/text/find. Rendering may not be available. There may be existing design screenshots in audit/raw. Let me check.
+dsh: reasoning:
+The empty state looks great. Note "共 0 个收藏" shows in toolbar and status. "全部取消收藏" button is disabled (opacity 0.5). Good.
+
+Now let me view the recent empty state.
+
+Also I should check the design screenshot to compare. The audit/raw has crawl and screens.json, top_frames.json. Let me check screens.json — might contain screenshot paths. Let me grep. Actually the task doesn't require pixel comparison. The design text and structure are matched.
+
+Let me look at recent empty screenshot quickly and also view legacy fav screenshot to check unknown time display.
+
+Then check that the `g2.log` file exists (maybe the grading harness logs). Not needed.
+
+Let me also run the probe on the populated state (with seeded localStorage) to capture console errors in that state. The seed script captured errs = [] already for both pages. Good.
+
+One more check: dark mode. Let me probe /favorites --dark with seed? Probe doesn't seed. The seed script could run dark, but not necessary. Let me at least check dark empty.
+
+Also, I should verify the pages still work at narrow widths (responsive). Maybe not required.
+
+Let me view recent empty and legacy fav.
+dsh: reasoning:
+Everything looks good. The legacy unknown row shows "无法识别的工具 / 收藏标识: legacy-unknown-id" with "已不可用" tag and "未知时间". Honest.
+
+Now, a subtle issue: in favorites, when `showAvailable` is true and there's an unknown id, the "打开" button is absent for the unknown row, and the star icon button is present. Good. Also the checkbox toggled off shows it (legacy-all screenshot). But in that screenshot the checkbox still shows unchecked? The screenshot shows "仅显示当前可用工具" unchecked... Actually the screenshot after clicking once: checkbox appears unchecked (empty box) and 3 rows. Wait, the click order: initial checked (showAvailable=true, 2 rows). Click → false → 3 rows. Screenshot shows unchecked box and 3 rows. Good.
+
+Now there's a possible issue with the `fav__status-hint` for unknown count when showAvailable true: shows "1 个收藏已不可用 · 已隐藏". Good, honest.
+
+Now let me double check the "全部取消收藏" and "清空全部记录" buttons styling. Design: height 26, surface bg. DkButton size sm is height 26. But DkButton default variant=secondary has border. Design button has fill=$surface (no border visible). Minor. The screenshot shows a bordered button, acceptable.
+
+Now let me verify dark mode and a narrow viewport. Let me run probe dark for both and a mobile width.
+
+Also, I want to verify the design screenshot. Let me check `/tmp/penmcp.py` or pen.py render. Not necessary.
+
+Let me now check the dev server compile warnings. The seed test captured console errors/warnings = []. But Vue hydration warnings would appear as console warnings; none. 
+
+Let me run probe --dark on both to ensure no errors, and check responsive at 640 width for overflow.
+
+Also potential concern: `DkCheckbox v-model="showAvailable"` works. Good.
+
+Potential concern: `fav.entries.value.length` in template — `fav` is an object with `entries` ref; in template, refs in objects are NOT auto-unwrapped (only top-level refs from setup). Since `fav.entries` is accessed as property of a plain object, we need `.value` in template. I used `.value` consistently. Good — and it works (screenshots).
+
+Now, `recent.entries.value.length` same.
+
+`recent.grouped.value` same.
+
+Now let me run dark + mobile probes.
+dsh: reasoning:
+No horizontal overflow (doc.w == 640). Good.
+
+Now let me also verify typecheck passes. Run `npm run typecheck`? That could be slow but let's check the four files compile. Actually vue-tsc on the whole project might show pre-existing errors. Let me just run it and grep for our files. But it may take a while. Let me run in background.
+
+Actually, the dev server compiled without errors and screenshots render, so runtime is fine. Type errors would not break runtime. But let me run typecheck targeted, since the project has `nuxt typecheck`. Let me start it in background and meanwhile write the report.
+
+Let me start the typecheck job.
+dsh: reasoning:
+While typecheck runs, let me write the report. But first let me collect the exact probe outputs to cite. Let me prepare report content.
+
+Also I should double check that I haven't touched forbidden files. Let me run git status/diff to confirm only my 4 files changed.
+dsh: reasoning:
+No git repo? `git status` produced nothing, maybe not a git repo. Let me check. It could be that .git doesn't exist. The output empty. Let me check `ls -a`. Not important, but I want to confirm I only modified my files. I used write on exactly 4 files. Fine.
+
+Let me check background typecheck progress. Meanwhile, let me capture clean probe JSON summaries for the report. Let me re-run probes without the full output and save concise evidence.
+
+Actually I already have probe outputs. Let me extract key fields from the earlier saved JSONs: /tmp/g2-fav-probe.json and /tmp/g2-recent-probe.json.
+
+Let me also verify design node text vs implementation. 
+
+Let me now write the report. But wait for typecheck result to include it. Let me check job output.
+dsh: reasoning:
+Typecheck completed with exit code 0 (the tail says exit code 0) but there's one pre-existing error in `app/components/tools/t27-json2ts.vue` which is not my file. Importantly, no errors in my four files. The vue-router volar warning is pre-existing environment noise.
+
+Wait, exit code 0 despite TS error? The tail pipeline exit code is from `tail`, not nuxi. Right — `| tail -60` masks the exit code. But the only TS error is in t27-json2ts.vue, unrelated. My files produced no errors. Good.
+
+Now let me write the report. I'll include:
+- Summary
+- Design basis (node ids, extracted text)
+- Changes per file
+- Authenticity handling
+- Verification commands + outputs
+- Notes/limitations
+
+Let me also mention that `useRecent.ts` was not modified because its `grouped` was sufficient. The task allows small extension but doesn't require. Actually the prompt lists useRecent.ts as a file I can modify. I didn't. That's fine.
+
+Hmm, but the "必做" item 2 says "S05 按设计补：今天/更早分组（composable 已有 grouped）、分类列、单条移除、清空全部、说明区。" All done in the page.
+
+Let me also double-check the design's recent status bar: "共 8 条记录 · 最早 10月10日 15:12". Implemented.
+
+Let me capture a concise evidence block from the saved probe JSONs.
+
+Let me read the metrics textSample for a11y button names to ensure buttonsNoName = 0. Let me check the probe JSON.
+dsh: reasoning:
+Good. Now write the report.
+
+Let me construct the report at /Users/hao/WebstormProjects/web_tools/audit/reports/g2-favorites-recent.md.
+
+I'll include command outputs verbatim (trimmed).
+
+Let me write it.
+dsh: reasoning:
+Now let me update the todo list. Also verify the report's final line is correct and re-run a final probe to confirm nothing broke after all writes (the files are written; HMR). Let me do a final quick probe on both pages (empty) to confirm no errors, and confirm the report file exists.
+
+Also, I should double-check that `useRecent.ts` clear persists `[]` and load handles it. Yes.
+
+One more consideration: the seed script cleared localStorage for favorites/recent, leaving browser state in the playwright context only (not affecting the user's actual browser). Good.
+
+Let me do a final verification: fetch both pages and confirm 200, plus confirm report. Also, let me reconsider whether the `recent__fav` link label "收藏" in header could be confusing; it's fine.
+
+Let me also verify there are no lingering issues with the favorites `ids` computed and `settings.vue` type: `fav.ids.value.slice(0,8)` — ids is ComputedRef<string[]>, `.value` is string[]. Good. `fav.ids.value.length` fine.
+
+But wait: `index.vue` line 27: `fav.ids.value.slice(0, 8).map((id) => getToolById(id))`. Fine.
+
+`SideNav.vue`: `fav.ids.value.length`. Fine.
+
+Everything good.
+
+Let me run final probes and mark todos complete.
+Done. Here's a summary of what I delivered.
+
+## Changes (only the 3 allowed files)
+
+**`app/composables/useFavorites.ts`** — extended to store `{ id, at }` under the same key `devkit.favorites.v1`, backward-compatibly:
+- old `string[]` reads in as `{ id, at: null }`; new writes use `{ v: 2, items: [...] }`
+- `ids` is now a `computed` (all existing consumers only read `.value`), `isFav`/`toggle`/`clear` kept; added `entries`, `addedAt`, `remove`
+- legacy entries render an honest `未知时间` placeholder — no fabricated times
+
+**`app/pages/favorites.vue`** — workspace table per `FdLxl`/`vO8fN`: columns 工具/分类/收藏时间/操作, segmented sort (最近收藏/工具名称/分类), a real "仅显示当前可用工具" filter (unknown ids surface with their raw stored identifier), 全部取消收藏 with confirm modal, mono status bar, 使用说明 + 常见问题, and a true empty state with 浏览全部工具.
+
+**`app/pages/recent.vue`** — workspace table per `hVwyK`/`G5GfwW`: 按时间 (今天/更早) and 按分类 grouping, 分类 column, single-row remove, 清空全部记录 with confirm, status bar with 最早 time, 使用说明 + FAQ, empty state. Never touches input text/keys/filenames.
+
+## Verification
+- `probe.py /favorites` and `/recent`: `status=200`, empty `console`, `pageerrors`, `failed_requests`; `buttonsNoName=0`, `inputsNoLabel=0`
+- Seeded Playwright test (legacy `string[]`, v2 timestamps, sort modes, remove, clear-all, both grouping modes): all behaviors correct, `console_and_errors: []`; legacy data rewrites to v2
+- Dark mode and 640px width: no errors, no horizontal overflow
+- `nuxi typecheck`: no errors in my files (one pre-existing unrelated error in `t27-json2ts.vue`)
+
+Report: `/Users/hao/WebstormProjects/web_tools/audit/reports/g2-favorites-recent.md`
+
+DONE: /Users/hao/WebstormProjects/web_tools/audit/reports/g2-favorites-recent.md

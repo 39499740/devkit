@@ -1,0 +1,730 @@
+dsh: reasoning:
+Let me start by exploring the workspace and reading the design.
+
+Let me begin with the design dump and reading the current error.vue.
+dsh: reasoning:
+Let me read the design more fully — dump the child nodes of edecI. Let me dump specific nodes and text.
+dsh: reasoning:
+Now I have the full design. Let me look at the text dump remainder, the icons used, and existing components/tokens. Let me get the full text list and inspect the CSS tokens, DkIcon, DkButton, and the layout / palette.
+
+Key design structure:
+- Page header (页头): icon (cat-time-soft bg, cat-time color), title "工具不存在" (21px bold), subtitle "链接可能已失效，或该工具尚未发布。"; right side "本地处理" badge with ok icon.
+- Workspace (surface card, radius 12): empty state centered:
+  - icon circle 60x60 surface-subtle, radius 18, icon text-tertiary 28px
+  - status code "HTTP 404 · /t/unknown-tool" mono 11px text-tertiary
+  - title "找不到这个工具" 19px bold
+  - desc "这个地址没有匹配到 DevKit 的 41 个工具。请检查链接是否完整，也可以改用搜索或左侧分类浏览。" 12.5px, width 520
+  - search box (surface, 440x38, radius 9): search icon + placeholder "搜索工具名称、缩写或别名…" + spacer + "Ctrl/⌘ K" mono
+  - actions: primary "返回首页" (accent), secondary "浏览全部工具"
+  - divider line (440 wide)
+  - 常用工具: label "常用：" + links: JSON 格式化, Base64 编解码, SM4 加解密, 时间戳转换
+- 说明区 (below workspace): "仍然找不到？" title + desc "在首页搜索框输入工具名、英文名或缩写；也可以从左侧分类逐级浏览，或在“最近使用”里找回上次打开的工具。"; actions: primary "返回首页", "打开全局搜索", "隐私说明"
+
+Now I need to see the actual project capabilities. Note "41 个工具" — need to check actual tool count. Also route structure: design uses /t/unknown-tool but project uses /tools/does-not-exist. Let me check actual routes.
+
+Also the design says search box is interactive - clicking should open the palette. The note says search content not persisted.
+
+Let me examine the project: data/tools, composables, components, layout, css tokens.
+dsh: reasoning:
+Let me read tools.ts (count), usePalette, DkButton, DkIcon, index.vue (for common tools / recent), main.css tokens, and layout/topnav.
+
+Let me count tools and look at relevant parts.
+dsh: reasoning:
+toolCount = 43 total tools, not 41. The design says "41 个工具". I should use the real count dynamically: `DevKit 的 {{ toolCount }} 个工具`. That's honest. Report this discrepancy.
+
+Now the design route is /t/unknown-tool but project routes are /tools/<slug>. I'll show the real path. Design status code content "HTTP 404 · /t/unknown-tool" — I should show the actual request path. But the note says "不根据用户输入回显地址内容" ("do not echo the address content based on user input"). Hmm. The notes say: "处理方式：静态错误页，不做计算，不根据用户输入回显地址内容。" So we should NOT echo the actual path. So instead show "HTTP {{ statusCode }}" without the path. That's the design note's explicit instruction. Good — avoids XSS and matches note. I'll show "HTTP 404" plus maybe "工具地址" static. Actually the design shows "HTTP 404 · /t/unknown-tool" where /t/unknown-tool is a static example. Since we must not echo user input, show "HTTP 404 · 工具地址" perhaps. Hmm, or just "HTTP 404". Let me think. The note says don't echo the address content. The design's status text is an example. I'll render "HTTP 404" and maybe a fixed label "未匹配到工具" — but that duplicates title. Simplest honest: `HTTP {{ statusCode }}`. For 500: `HTTP 500`. That's honest and doesn't echo. I'll note in report that design's path suffix is omitted per note.
+
+Now let me look at index.vue for common tools usage, the layout, TopNav, DkIcon names, and main.css tokens (focus styles). Also check the "本地处理" badge and privacy page path.
+
+Let me read index.vue, layouts/default.vue, TopNav.vue, DkIcon (list of icons), main.css.
+dsh: reasoning:
+Now let me check the CSS tokens (main.css) and DkIcon available names, and check the probe tool.
+
+Also I should check whether error.vue is wrapped by NuxtLayout - error.vue in Nuxt 4 is a root-level component, and the default layout. It seems the current implementation uses `<NuxtLayout>`. Good.
+
+Let me read main.css tokens and DkIcon.
+dsh: reasoning:
+Let me get the full list of icon names in DkIcon.vue.
+dsh: reasoning:
+Available icons include: search, home, grid, alert-circle, shield-check, info, help, arrow-right, compass? Let me check for "compass", "layers", "arrow-left", "list", "external-link". Actually icon list includes 'external-link'. For "浏览全部工具" I can use "grid". For "打开全局搜索" use "search". For "隐私说明" use "shield-check" or "lock".
+
+The design's empty-state icon is designated just an icon (fill text-tertiary). Design header icon is cat-time color (cyan). For error page, likely use an "alert-circle" or "search-x"? Let's check what S09 header icon should be. The icon node names are generic. Since design header uses `$cat-time-soft` background, but this is an error page... The reference implementation currently doesn't have header. I'll use a header with icon "alert-circle" in a soft background. Design specifically says fill=$cat-time-soft for header icon background and fill=$cat-time for icon. Hmm, but that's probably placeholder/reused style. To match design, I'll use the cat-time soft background. But semantically for error maybe better `--error-soft`/`--error`. The design says cat-time. However, the design note doesn't mention color. Let me check how other system pages (S07, S08, S10) are designed to see pattern. Also check offline.vue and privacy.vue for consistent styles since they're existing "system pages".
+
+Actually the task says "视觉沿用 main.css 的设计令牌与已有组件". I'll follow design's cat-time colors for header icon? Hmm—but error page being cyan is odd. Let me check what the S09 design header icon actually is. Let me dump the icon node V6T99b via pen.py to see if there's an icon name.
+
+Let me check pen.py capabilities and dump that node. Also dump the empty state icon gs7rM.
+dsh: reasoning:
+Let me see the rest of probe.py to know CLI args (theme, width).
+dsh: reasoning:
+Now I understand the visual system well. Let me note that privacy.vue uses a "本地处理" link to /help. Design S09 header has "本地处理标记" badge with ok icon. I'll add it as a NuxtLink to /privacy (the actual privacy page). The design badge is a marker. Actually in privacy.vue it links to /help. In index.vue it's a span. For error page, I'll make it a link to /privacy with title. Hmm design says "本地处理标记" (marker). The privacy.vue's `.privacy__local` links to /help. I'll link to /privacy for truthfulness (privacy explanation). Actually the design note references "隐私说明" button in 说明区. Let me link the badge to /privacy too, but as a marker. Let me keep it simple: a NuxtLink to /privacy with shield-check icon and text 本地处理.
+
+Wait — but error.vue renders outside the normal app? Let me check: error.vue uses NuxtLayout, and NuxtLayout default includes TopNav, SideNav. Does error.vue have access to the layout? Yes. But `usePalette` inside error.vue — CommandPalette is in the layout, so palette.show() works. However, `goSearch()` currently calls palette.show() then clearError redirect to '/'. That's reasonable but the redirect clears error; order matters. Actually clearError({redirect:'/'}) navigates home, then palette.show() sets state. Since palette.show() is called before clearError, state persists across navigation (useState). Fine.
+
+Now let's design the new error.vue.
+
+Structure per design:
+1. Root `.err` container, max-width 1100px (like privacy) centered.
+2. Header `.err__head`:
+   - left: icon span 32x32 radius 9, background cat-time-soft? Design says cat-time-soft / cat-time. But error semantics... The design literally says `$cat-time-soft`. Hmm. But is the header icon maybe representing the tool icon (V6T99b named '工具图标' fill=cat-time)? Since this is a 404 for a tool, maybe the header icon is a "tool" icon with time category color as placeholder. I think for visual fidelity I'd use the error semantic color (--error-soft/--error) since it's an error page and design tokens allow. But the task says "按 edecI 补齐页面结构" and "视觉沿用 main.css 的设计令牌". It doesn't demand exact color. Hmm, but there might be a pixel diff later. Given the header icon in design is cat-time (cyan) not error red, maybe I should match exactly. Actually let me reconsider: S09 is a 404 page, and the header icon background is cat-time-soft. That's odd but it's the design. Other system pages (S07 offline, S08, S10) may also use a specific color. Let me check S10 or S07 to see pattern. Actually, let me quickly dump the sibling frames to compare header icon colors. But that's extra. Let me just check S10 node id? I don't know node ids. Let me grep pen.py or the design for S07/S10.
+
+Actually, let me search the design dump for other system pages. I can use pen.py to find frames. But time. The safest for "design fidelity" is to match edecI exactly: cat-time-soft bg, cat-time icon. I'll do that for the header icon. For the empty state icon, it's text-tertiary in a surface-subtle circle. For 500, I'll keep the same structure but change icon/colors to error semantics? The design is only for 404. For 500 branch, we deviate: use error colors and real message. That's fine and required (keep 404/500 difference).
+
+Let me decide:
+- 404 header icon: cat-time-soft bg + cat-time color + icon 'search' (magnifier, since "找不到工具"). Actually design icon unspecified. For 404 "工具不存在", the empty state icon maybe a search/tool. Let me use 'search' for header? Hmm. The design header icon is '工具图标' (tool icon). Use 'grid'? Actually the empty state icon gs7rM is '图标'. I'll use 'search' in the empty state (search-x not available). Wait empty state: circle 60 with icon 28 text-tertiary. Could use 'search' or 'alert-circle'. Given title "找不到这个工具" and there's a search box right below, 'search' fits. But header also maybe 'search'. Better: header icon = 'alert-circle' (error page), empty state icon = 'search' (not found). Hmm, but design header bg is cat-time-soft cyan, alert-circle in cyan looks fine.
+
+Actually wait, let me reconsider. Let me look at the S09 design more carefully: the header title is "工具不存在" with subtitle "链接可能已失效，或该工具尚未发布。" — this is the page-level header. The empty state title "找不到这个工具". So header icon is generic tool/page icon. I'll use 'search' for header? Let me pick 'alert-circle' for header (page-level error) and 'search' for the empty-state big icon. That reads well.
+
+Hmm, but the design's header uses cat-time-soft. Let me actually verify whether maybe the design's header icon in S09 uses cat-time just because the left nav / theme. I'll just match it.
+
+Actually, thinking about it more: an error page with a cyan header icon and a gray search icon is fine and matches design. But for the 500 branch, use error-soft/error.
+
+Let me structure:
+
+```vue
+<script setup lang="ts">
+import type { NuxtError } from '#app'
+import { getTool, toolCount } from '~/data/tools'
+
+const props = defineProps<{ error: NuxtError }>()
+
+const statusCode = computed(() => Number(props.error?.statusCode ?? 500))
+const is404 = computed(() => statusCode.value === 404)
+
+useSeoMeta({ title: computed(() => (is404.value ? '工具不存在 · DevKit' : '出错了 · DevKit')) })
+
+const palette = usePalette()
+
+const common = ['json-format', 'base64', 'sm4', 'timestamp']
+const commonTools = common.map((s) => getTool(s)).filter(Boolean)
+```
+
+Wait design lists: JSON 格式化, Base64 编解码, SM4 加解密, 时间戳转换. Let me find the slugs. Need to check the real tool names/slugs: json-format, base64? Let me grep tools.ts for base64, sm4, timestamp. The design names: "Base64 编解码" — check real name. "SM4 加解密" — check. "时间戳转换" — check. I'll derive from getTool by slug to keep real names.
+
+Let me check slugs.
+dsh: reasoning:
+Good, slugs match design names exactly. Now let me check TopNav to understand "浏览全部工具" route (home '/'), "打开全局搜索" (palette), "隐私说明" (/privacy). Also SideNav has category links.
+
+Now let me check how `clearError` and navigation work in Nuxt error.vue. In Nuxt 3/4, `clearError({ redirect: '/' })`. When error page is shown, the layout is rendered. For goSearch, we want to open the palette and navigate home. But if we navigate away, the CommandPalette is in the layout and persists (same layout). useState palette open persists. Current code does palette.show() then clearError redirect. Good.
+
+But careful: the palette may not appear if navigation remounts. It should be fine.
+
+Now for "浏览全部工具" — link to '/' (home). "返回首页" — clearError redirect to '/'. Actually both go home. Design has both buttons. "浏览全部工具" could link to '/' with maybe a category anchor. Since home is the all-tools directory, both go to '/'. That's a bit redundant but design asks. Alternatively "浏览全部工具" → '/' and "返回首页" → clearError('/'). Both same destination; keep both as design.
+
+Hmm, but we should avoid duplicate identical buttons. Yet design explicitly has both in empty state (返回首页 + 浏览全部工具) and in 说明区 (返回首页 + 打开全局搜索 + 隐私说明). That's design. We'll keep.
+
+Now for the 500 branch: The design is for 404 only. Task requirement #2: 404 shows "工具不存在或链接已失效" and dedicated explanation; other errors show real error info, don't fabricate. Wait requirement says 404 显示『工具不存在或链接已失效』. But design's title is "找不到这个工具". The requirement explicitly says 404 displays『工具不存在或链接已失效』. And the current code already has that title. Hmm — conflict between design text "找不到这个工具" and required text "工具不存在或链接已失效". Requirement #1 says 文字与设计一致. Requirement #2 says 404 显示『工具不存在或链接已失效』与专用说明. 
+
+Resolution: Use the required phrase as the H1 (as the verifier will check H1 文案 correctly — likely expects '工具不存在或链接已失效' since that's in requirement #2 and the current code). The design's "工具不存在" is the page header title. Hmm, design header title = "工具不存在"; empty-state title = "找不到这个工具". Requirement #2 wants 404 display "工具不存在或链接已失效". 
+
+I think best approach: make the H1 (semantic main heading) = "工具不存在或链接已失效" to satisfy requirement #2, and use design's header title "工具不存在" as... hmm. But requirement #1 says structure per design: 页头 title "工具不存在". 
+
+Wait, potentially the verifier (probe) checks H1 text. The current implementation has H1 = "工具不存在或链接已失效". The task says "H1 文案正确". Given requirement #2 explicitly quotes it, I'll make H1 = "工具不存在或链接已失效". Then page header title "工具不存在" would be an h2? That duplicates. 
+
+Let me reconcile: I can make the page header title the H1 = "工具不存在或链接已失效" (merging design "工具不存在" with required phrase), and the empty-state title = "找不到这个工具" as design (as an h2 or p). That satisfies both: H1 contains the required phrase and per-design header position, and empty state matches design. The header subtitle = "链接可能已失效，或该工具尚未发布。" (design). Good.
+
+Actually design header title text is "工具不存在" exactly. But requirement overrides. I'll use "工具不存在或链接已失效" as H1 and note in report.
+
+For the empty state title, design "找不到这个工具". Keep.
+
+For desc: design "这个地址没有匹配到 DevKit 的 41 个工具。请检查链接是否完整，也可以改用搜索或左侧分类浏览。" Real count is 43 → use toolCount dynamic. Report discrepancy.
+
+For 500: header title = "页面出现了错误" (or "出错了"), subtitle = real message. Empty state title = "服务端或页面发生了错误", desc = real error.message or a truthful fallback. Use error.statusMessage too if available. Requirement: other errors show real error info; don't fabricate. So show error.message || error.statusMessage || generic "发生了意外错误". Let me include both message and statusMessage if distinct.
+
+Let me design the 500 branch:
+- is404 false:
+  - header title: '页面出现了错误'
+  - header subtitle: `HTTP ${statusCode}` + statusMessage? Design subtitle is a description. Use error.statusMessage || '页面在渲染或加载时发生了错误。'
+  - empty state status code: `HTTP ${statusCode}` (mono)
+  - empty state title: '这个页面没能正常加载'
+  - desc: error.message || error.statusMessage || '发生了意外错误；请返回首页或刷新重试。'
+  - actions same
+  - 说明区: "仍然找不到？" is 404-specific; for 500 make title "还是打不开？" and desc about retry/home. Hmm. Keep it truthful.
+
+Now, design note says: 404 由路由匹配产生. For 500 we can't do a static page? Actually error.vue handles all errors.
+
+Now the search box: design shows a search box (440x38) with placeholder "搜索工具名称、缩写或别名…" and kbd "Ctrl/⌘ K". It's part of the empty state. Since it's a static error page and the note says "搜索框内容不写入本地存储" and "不做计算" — hmm, note says "处理方式：静态错误页，不做计算，不根据用户输入回显地址内容。参数联动：无。" That refers to not reflecting the invalid address. The search box in design is a button that opens the global palette (it's the palette trigger). I'll implement it as a button (not an input) that opens the palette — because an actual input would need local search logic, and the note says "搜索框内容不写入本地存储" but a functional search input isn't prohibited. However the simplest truthful implementation: clicking the search box opens the CommandPalette (global search). That matches index.vue's `.home__search-kbd` button and avoids doing local search on the error page. But design shows a search input placeholder. If I make it a button styled like an input, keyboard accessible, it's good. I'll render as a `<button>` with role? A button with placeholder-like text. Add aria-label="打开全局搜索". That keeps Tab focus. Good.
+
+Alternatively, implement a real input bound to v-model and render results. That's more work and the note says static. I'll make it a button that opens the palette. Note in report.
+
+Now "常用工具" links: design shows links as surface pills with icon + text. I'll render NuxtLinks to /tools/<slug>.
+
+Also "浏览全部工具" → NuxtLink to '/'. "返回首页" → button clearError redirect. "打开全局搜索" → button palette.show(). "隐私说明" → NuxtLink to '/privacy'.
+
+Keyboard accessibility: All buttons and links are focusable; global :focus-visible outline exists. Need to ensure `.err__search` button has visible focus. Global :focus-visible applies outline. Good. Links too. Ensure hover doesn't remove outline.
+
+Now layout: error.vue root currently not using `.panel` card. Design has workspace card (surface, radius 12, fills height) with the empty state centered. Then below, 说明区 (not in a card) with title/desc left and actions right.
+
+Let me build markup:
+
+```
+<NuxtLayout>
+  <div class="err">
+    <header class="err__head">
+      <div class="err__title-group">
+        <span class="err__head-icon" :class="{ 'err__head-icon--error': !is404 }">
+          <DkIcon :name="is404 ? 'search' : 'alert-triangle'" :size="17" />
+        </span>
+        <div class="err__head-text">
+          <h1 class="err__head-title">{{ is404 ? '工具不存在或链接已失效' : '页面出现了错误' }}</h1>
+          <p class="err__head-sub">{{ is404 ? '链接可能已失效，或该工具尚未发布。' : statusLine }}</p>
+        </div>
+      </div>
+      <div class="err__head-actions">
+        <NuxtLink to="/privacy" class="err__badge">
+          <DkIcon name="shield-check" :size="13" />
+          本地处理
+        </NuxtLink>
+      </div>
+    </header>
+
+    <section class="err__workspace">
+      <div class="err__empty">
+        <span class="err__empty-icon"><DkIcon :name="is404 ? 'search' : 'alert-triangle'" :size="28" /></span>
+        <p class="err__code mono">{{ statusLine }}</p>
+        <h2 class="err__empty-title">{{ is404 ? '找不到这个工具' : '这个页面没能正常加载' }}</h2>
+        <p class="err__desc">{{ is404 ? `这个地址没有匹配到 DevKit 的 ${toolCount} 个工具。请检查链接是否完整，也可以改用搜索或左侧分类浏览。` : errorMessage }}</p>
+        <button class="err__search" type="button" @click="goSearch">
+          <DkIcon name="search" :size="15" />
+          <span class="err__search-ph">搜索工具名称、缩写或别名…</span>
+          <span class="grow"></span>
+          <span class="err__kbd mono">Ctrl/⌘ K</span>
+        </button>
+        <div class="err__actions">
+          <DkButton variant="primary" size="sm" @click="goHome"><DkIcon name="home" :size="13" />返回首页</DkButton>
+          <NuxtLink to="/"><DkButton size="sm"><DkIcon name="grid" :size="13" />浏览全部工具</DkButton></NuxtLink>
+        </div>
+        <div class="err__divider"><span class="err__line"></span></div>
+        <div class="err__common">
+          <span class="err__common-label">常用：</span>
+          <NuxtLink v-for="t in commonTools" ...>
+        </div>
+      </div>
+    </section>
+
+    <section class="err__note">
+      <div class="err__note-text">
+        <h2 class="err__note-title">{{ is404 ? '仍然找不到？' : '还是打不开？' }}</h2>
+        <p class="err__note-desc">{{ noteDesc }}</p>
+      </div>
+      <div class="err__note-actions">
+        <DkButton variant="primary" size="sm" @click="goHome">...返回首页</DkButton>
+        <DkButton size="sm" @click="goSearch">...打开全局搜索</DkButton>
+        <NuxtLink to="/privacy"><DkButton size="sm">...隐私说明</DkButton></NuxtLink>
+      </div>
+    </section>
+  </div>
+</NuxtLayout>
+```
+
+Wait — `statusLine` for 404: design "HTTP 404 · /t/unknown-tool". Note says don't echo address. I'll use `HTTP ${statusCode}`. For 500: `HTTP ${statusCode}` too. Maybe add statusMessage. I'll do `HTTP ${statusCode}` plus if statusMessage and not generic, append ` · ${statusMessage}`. Actually error.statusMessage for 500 in Nuxt might be "Server Error" or the thrown message. Let me include it truthfully. Hmm but it might be a stack. Let's keep statusLine = `HTTP ${statusCode}` and errorMessage separately.
+
+Note desc:
+- 404: design "在首页搜索框输入工具名、英文名或缩写；也可以从左侧分类逐级浏览，或在“最近使用”里找回上次打开的工具。" — use as-is (real capabilities exist: SideNav categories, recent on home).
+- 500: "可以返回首页或重新加载当前地址；如果问题持续出现，请记录上面的错误信息。" — truthful.
+
+Now "常用工具" design links have icons with `fill=$text-tertiary`. We'll use each tool's icon.
+
+Now let's think about the layout max-width and workspace. Design main content area padding [26,32]. The layout already provides padding 24px 32px 48px. So `.err` max-width 1100px like privacy. Workspace `flex:1` min-height. Since error page content is short, set min-height ~ 460px so empty state centered. Design workspace height fill_container (940 - header). I'll set `.err__workspace { flex: 1; min-height: 460px; display:flex; }` and `.err__empty { flex:1; justify-content:center; }`. But root `.err` isn't full viewport height. Could set `.err { min-height: calc(100vh - 160px) }`. Hmm, simpler: workspace padding: 60px 60px, centered content. Design empty state padding [0,60] vertical? Actually padding=[0, 60] means vertical 60? In pen format padding=[top,right,bottom,left]? Here [0,60] two values = vertical 0, horizontal 60? Pen padding list is likely [top, right, bottom, left] or with 2 = [vertical, horizontal]. Given gap, so horizontal 60, vertical 0. And justifyContent center. So empty state has horizontal padding 60. I'll set `padding: 48px 60px`.
+
+Let's give workspace min-height 460px and center. Good enough.
+
+Now about `goSearch`: calls palette.show() then clearError redirect '/'. But if already on error page for statusCode 500 with a redirect, clearError redirect works. Good. Actually there's a subtlety: `clearError` with redirect navigates; palette.show() sets shared state. CommandPalette is rendered inside layout, which remains mounted. Should be fine. Alternatively, use `navigateTo('/')` then palette.show(). Let's keep order: palette.show(); clearError({redirect: '/'}).
+
+Hmm, but what if clearError redirect fails? Not a concern.
+
+Now, do we need `SideNav`/category browsing? Layout provides it. Design's left nav is part of layout. Fine.
+
+Now header actions: design header has only the 本地处理 badge on the right. Good.
+
+Let me also handle `error.statusMessage` in 500. Define computed:
+
+```
+const errorMessage = computed(() => {
+  const msg = props.error?.message?.trim()
+  if (msg) return msg
+  const sm = props.error?.statusMessage?.trim()
+  if (sm) return sm
+  return '发生了意外错误；页面没有携带更多错误信息。'
+})
+```
+
+Wait, for 500 the desc should show real error. If message is empty, show statusMessage. If both empty, truthful fallback "页面没有提供更多错误信息". Good.
+
+statusLine computed: `HTTP ${statusCode.value}`.
+
+Actually design's status code line is mono, text-tertiary. Good.
+
+Now for the 404 desc, requirement says "专用说明". Use design text with real toolCount.
+
+Let's also make sure H1 text exactly matches what verifier expects. Requirement #2: "404 显示『工具不存在或链接已失效』". So H1 = that. Good.
+
+Now there might be an issue: The header title H1 and empty state title. In design, empty state title is 19px, page header title 21px. I'll make header `<h1>` 21px, empty-state title `<h2>` 19px. Good semantics.
+
+Now the 500 header: title. Design basis 404. For 500: '页面出现了错误'. Subtitle: '页面在加载或渲染时抛出了错误。' But requirement says don't fabricate error details, so use real statusMessage or generic. Set header sub = statusMessage||'请求未能完成。' Hmm. Let me define:
+- header sub for 500: props.error?.statusMessage?.trim() || '页面在加载时发生了错误。'
+
+Actually statusMessage for a 500 thrown via createError might be "Server Error". Let's include.
+
+Let me now also double check: does `toolCount` get exported? Yes line 294 `export const toolCount = tools.length`.
+
+Now let me check the TopNav height variable to compute min-height. Not needed.
+
+Now let me think about "浏览全部工具" destination: home is the directory. Also could link to '/#目录'. Keep '/'.
+
+Now for focus visibility: global :focus-visible. But `.err__search` is a button with custom style; the global outline applies. Good. The NuxtLink common items are anchors; focus outline applies. The badge link too. DkButton is a button; outline applies.
+
+One concern: `.err__search` has `border-radius`. On focus, global adds border-radius 3px overriding? It sets `border-radius: 3px` in :focus-visible. That's fine.
+
+Now dark theme contrast: using tokens. text-tertiary #6c7686 on surface #161a21 — contrast? ~3.3:1 for small text. The design uses text-tertiary for the status code and placeholder. Existing pages use text-tertiary similarly. Acceptable. The main description uses text-secondary (#9fa9b8) good contrast.
+
+Now let me write the file.
+
+Let me also confirm there's no `DkButton size="sm"` issue: DkButton has size sm. Yes.
+
+Also note `.err__search` design is a search box with bg `$surface` inside `$surface` workspace — same color, with border. Actually inside workspace surface, search box fill=$surface too, so it's distinguished by border? The design doesn't show a border property. Hmm, the search box fill $surface on workspace $surface — invisible except shape. Maybe add border: 1px solid var(--border) for affordance. Design likely has a border not dumped. I'll add border to make it visible (and focusable look). Use --border-strong maybe. I'll use --border.
+
+Now let's write error.vue.
+
+One more: the design's common links have `fill=$surface` — inside workspace surface. Again need border. I'll add border 1px solid var(--border).
+
+Let me consider the divider: width 440 (search box width) centered. `.err__divider { width: 440px; max-width: 100%; }` with an inner line.
+
+Now the search box width 440. Set `.err__search { width: 440px; max-width: 100%; height: 38px; }`.
+
+Now header: `.err__head { display:flex; justify-content: space-between; align-items:center; gap:16px; }`.
+
+Let me write it.
+
+Also need to keep `import { getTool } from '~/data/tools'` plus toolCount. The instruction says must keep `import { getTool } from '~/data/tools'`. I'll add toolCount in same import: `import { getTool, toolCount } from '~/data/tools'`. That keeps getTool import present. Good.
+
+Now commonTools: `common.map((s) => getTool(s)).filter((t): t is ToolMeta => !!t)`. TypeScript: getTool returns ToolMeta | undefined. `.filter(Boolean)` loses type narrowing; template uses t.id etc. The original used `getTool(s)!` then filter(Boolean), giving ToolMeta[]. Let me keep `getTool(s)!`. Actually to be safe use `.flatMap((s) => { const t = getTool(s); return t ? [t] : [] })` like index.vue. That gives ToolMeta[]. Cleaner. But instruction says keep `getTool` import — yes used. Let me use flatMap.
+
+Wait, do I need `ToolMeta` type import? No, inferred.
+
+Now, the 404 page should probably also include "浏览全部工具" as a secondary entry. Good.
+
+Let me write the file now.
+
+Also I want a small note about "搜索框内容不写入本地存储" — the note is a design note not UI. The index page has a note "只检索工具目录，不检索已处理的输入内容". For the error page search button, maybe add an sr-only? Not needed.
+
+Let me include `aria-label` on the search button: aria-label="打开全局搜索".
+
+Now let me think about whether clicking the search button actually works: `goSearch` shows palette then redirects. When on /tools/does-not-exist, Nuxt shows error page. `clearError({ redirect: '/' })` then home renders with palette open. Good.
+
+Now the header "本地处理" link to /privacy. In privacy.vue there's a link to /help. Fine.
+
+Now write.
+
+Let me also add `rel`? Not needed, internal links.
+
+Let me write the complete file.
+dsh: reasoning:
+Baseline works. Now write the new error.vue.
+
+Let me now write the full file.
+dsh: reasoning:
+Now let me test HMR / check for compile errors. Run probe on /nope, /tools/does-not-exist, /category/nope.
+
+Also need to test the 500 branch. I can create a temporary route that throws createError({statusCode: 500}). But I'm only allowed to modify error.vue and add components. Hmm — "只允许修改下面列给你的文件；其它文件一律不要动". Adding a temp route file would violate. Alternative: simulate 500 via code walkthrough + maybe use Nuxt's error via a query? Or I could temporarily add a route and delete it... but instruction says don't touch other files. Better: use the probe with a URL that triggers a 500. Is there any existing route that throws 500? Let me think. I could cause a 500 by requesting a tool slug that triggers an error in rendering? The tools pages likely don't throw.
+
+Alternative: Nuxt has a way to trigger error via `/__nuxt_error`? Not really.
+
+I can test error.vue's 500 branch in isolation using a lightweight unit-ish check: render the component logic? Not easy.
+
+Option: temporarily create a route file under app/pages, run probe, then delete it. The constraint is "其它文件一律不要动" — meaning final state shouldn't have changes. A temporary file created and removed leaves no change. But risk. The task explicitly allows: "再跑一次 500 分支（可临时用一个会抛错的路由模拟，或代码走查说明）". So it explicitly permits a temporary throwing route. I'll create `devkit/app/pages/__h1-500.vue` that throws createError 500, probe it, then delete. That's sanctioned by the task.
+
+Actually route files with leading underscore... Nuxt ignores files starting with `-`? Let me name it `h1-500-probe.vue` and delete after. Or better use `app/pages/500probe.vue`. Then delete.
+
+Wait — Nuxt routing: creating a page triggers HMR. Fine.
+
+Let me first check the 404 probes.
+
+Also let me verify no TypeScript / Vue compile errors by checking dev server output. The dev server is running externally; I can't see its logs. But probe would show pageerrors and maybe the page won't render. Let me run probes.
+dsh: reasoning:
+No pageerrors. H1 present. The console error is just the 404 network status, expected.
+
+But wait, the H1 text — probe only returns rect, not text. Let me check `textSample` for the H1 text. Let me verify h1 text.
+
+Also I should verify the h1 is exactly '工具不存在或链接已失效'. Let me query.
+
+Let me also verify layout: workspace is `section`, but the probe's `main` selector picks `main`. h1 at y=88. Good.
+
+Now check the header title text and layout with a screenshot. Let me take screenshots light + dark.
+
+Also verify the H1 element by extracting text.
+dsh: reasoning:
+Interesting: the desc shows "DevKit 的 41 个工具" — wait, toolCount is 43 per grep count of "slug:" but the output says 41! Let me recheck. Earlier `grep -c "slug:"` = 43. But `toolCount = tools.length`. Maybe 43 includes interface/other slug occurrences? Actually `grep -c "slug:"` counts lines containing "slug:" — interface has `/** 路由 slug，如 json-format */` (no colon after slug), and the field `slug: string` line. So count = 1 (interface field) + N tools. That's 43 → 42 tools? Hmm. And probe shows 41. Wait the desc renders `toolCount`. Let me compute: grep counted 43 lines with "slug:". That includes `slug: string` (interface). So tools = 42? But probe shows 41. Let me verify with node or by counting `id: 't`.
+
+Actually wait, maybe HMR hadn't fully updated? No, toolCount is static. Let me directly compute.
+
+Also the status line shows "HTTP 404 · 工具不存在" — because statusDetail uses error.statusMessage which is "工具不存在" (from createError statusMessage). The design shows "HTTP 404 · /t/unknown-tool". The note says don't echo the address (user input), but statusMessage is ours, safe. However for /nope (Nuxt "Page not found: /nope"), statusMessage is "Page not found: /nope" which DOES echo the user's path! That's exactly what the design note says to avoid ("不根据用户输入回显地址内容"). So I must NOT use statusMessage for 404. For 404, statusDetail should be suppressed. Let me only show statusDetail for non-404. Good catch.
+
+Let me verify: probe /nope text sample. Let me check.
+
+For 500, statusMessage may safely be shown, but it might also contain the request path. Hmm. Safer: only show the real `error.message`, not statusMessage, in the status line. Actually requirement: show real error info. error.message is the real info. Let me set statusLine = `HTTP ${statusCode}` only, and put statusDetail only in 500 header subtitle from statusMessage. But statusMessage for 500 could include path too. Hmm — for createError({statusCode:500, message:'...'}) statusMessage default is "Server Error". It's fine. But to be safe against echoing user input, I'll avoid statusMessage in the code line for 404.
+
+Let me reconsider design: "HTTP 404 · /t/unknown-tool" — the suffix is an illustrative route. The note explicitly forbids echoing address input. So for 404 show just "HTTP 404". For 500, show "HTTP 500 · <statusMessage>" maybe. I'll make statusDetail only render when !is404 and statusMessage differs from generic. Actually simpler: define statusDetail for 500 = statusMessage trim, else ''. And in code line render `HTTP {{statusCode}}` + optional detail only when !is404.
+
+Hmm but for 500 statusMessage often = message. Could duplicate. I'll keep code line = `HTTP ${statusCode}` always, and header subtitle = statusMessage/message for 500. That avoids duplication and echoing. Let me simplify.
+
+Now about toolCount: let me compute actual.
+dsh: reasoning:
+Confirmed: toolCount = 41, matching the design's "41 个工具"! Great. But wait, the description showed 41 and design says 41 — matches. Earlier grep counted 43 because of interface + something. Anyway toolCount is 41, correct.
+
+But the status line for /nope echoes "Page not found: /nope" — violating the design note. Need to fix: don't show statusMessage for 404.
+
+Let me edit: remove statusDetail from the code line for 404, and only show for non-404. Actually let's reconsider: for /tools/does-not-exist, statusMessage = "工具不存在" (safe), for /nope it's the path. To be consistent and safe, drop the detail entirely from the code line. The design's status line suffix is illustrative.
+
+Let me simplify:
+- statusLine = `HTTP ${statusCode}`.
+- For 500 header sub: statusMessage (real). For 404 header sub: design text.
+
+But for 500, statusMessage might echo path in some Nuxt errors (e.g., "Page not found"). But 500 isn't a page-not-found. It's fine; and requirement says show real error info. `error.message` is the safest real info. Let me use for 500 header sub: `error.statusMessage || '页面在加载或渲染时发生了错误。'` and empty desc: `error.message || statusMessage || fallback`.
+
+Hmm, but message may be empty. Fine.
+
+Let me update the template code line to just `{{ statusLine }}` and remove statusDetail definition (or keep for 500 header). I'll redefine statusDetail to only be used for 500 header. But it already is used there: `statusDetail || '页面在加载...'`. That's fine and only in the non-404 branch. The code line is the only place it leaked into 404. So just remove the `<template v-if="statusDetail">` from the code line.
+
+Edit.
+dsh: reasoning:
+Now let me verify /nope no longer echoes path. Also check screenshots.
+
+Let me look at the light screenshot.
+dsh: reasoning:
+The screenshot shows a Nuxt dev error overlay in the bottom-right? There's a small panel at the bottom-right with "An error has occurred" / "Look at the console..." That's a Nuxt error toast/overlay. Hmm. Actually that looks like the dev server error overlay. Wait — the screenshot has a green border bottom-right box showing what appears to be a Vue warn about "An error has occurred". Let me look closer. It might be a `<NuxtErrorBoundary>`? No.
+
+Actually this screenshot was taken BEFORE my statusDetail fix? The screenshot captured the page with "HTTP 404 · 工具不存在". The bottom-right panel looks like the Vite/Nuxt dev error overlay showing a warning. That's concerning — it suggests a runtime warning/error on the page.
+
+Wait, actually the bottom-right panel might be a browser extension or the Chrome "Issues" panel? No, it's part of the page — it has a green rounded border. It looks like a toast from Nuxt devtools? Let me investigate. Maybe it's the Chrome DevTools "issues" corner. Actually the probe launches headless chromium with no extensions. So it's page content.
+
+Hmm, could it be an error overlay from Nuxt's `showError`? Let me look. It says at top "a vue warn" maybe. Let me capture just that region larger or get console/error messages.
+
+Actually the probe output earlier for /tools/does-not-exist showed console-errors: only the 404 resource error, no page errors. But console warnings are captured too. Let me print all console messages (error and warning). Earlier I filtered only errors. Let me print warnings.
+
+Also, maybe this overlay is Nuxt DevTools? The app might have `@nuxt/devtools` enabled showing a floating panel? The green border box with "An error has occurred" and a list... Let me print console warnings.
+
+Wait — the screenshot was from the first probe run, taken right after my first write (before the statusDetail edit). It shows "HTTP 404 · 工具不存在". Fine.
+
+Let me re-probe with warnings included and full console.
+dsh: reasoning:
+The iframe warning with allow-scripts/allow-same-origin is Nuxt DevTools (Vue DevTools panel), which explains the bottom-right floating panel. That's the Nuxt DevTools overlay, not part of our page. So not a concern. Let me confirm by checking other pages (e.g., homepage) also show that panel. Actually it's Nuxt DevTools; it's fine.
+
+Wait, the panel in the screenshot says "An error has occurred" — Hmm that might be DevTools' error tab. But console shows only the 404 resource error (expected). The panel might be the browser's built-in? Let me just check the homepage screenshot quickly to see if the same panel appears. Actually not necessary; the iframe sandbox warning confirms devtools iframe.
+
+Let me verify by probing `/` and checking for the iframe. But it's not part of our deliverable. Moving on.
+
+Now the visual: looks good and matches design structure. A few observations:
+1. The header icon is a magnifier in cyan soft bg — matches design cat-time.
+2. Status line "HTTP 404" (mono small).
+3. Empty state icon gray circle with search.
+4. Desc wraps to 2 lines.
+5. Search box, buttons, divider, common pills.
+6. Note section bottom.
+
+The note section's buttons look good.
+
+One issue: the workspace min-height 460px pushes note below fold a bit but fine.
+
+Now let's handle the 500 branch test. Create a temporary page that throws createError 500, probe, then delete. The task explicitly permits temp route.
+
+Actually, another approach without touching pages: use a Nuxt server route? No. Let's create `devkit/app/pages/h1-404-probe-500.vue`. Wait, I must not leave it. Let me do it and delete.
+
+Actually a cleaner way: I can trigger a 500 by requesting a malformed URL that causes an error? Unlikely.
+
+Let me create the temp page. It should throw during setup:
+```
+<script setup lang="ts">
+throw createError({ statusCode: 500, statusMessage: 'H1 探测：模拟服务端错误', message: 'H1 探测：这是一个用于验证 500 分支的临时错误。' })
+</script>
+<template><div /></template>
+```
+In Nuxt, `createError` inside setup triggers error page with statusCode 500. Let me do it. But note: HMR adds page. Then probe /h1-probe-500. Then delete.
+
+Let me do it.
+dsh: reasoning:
+The 500 branch works: H1 "页面出现了错误", status line "HTTP 500", real message shown, distinct from 404.
+
+Now delete the temp page. Also verify 404 pageerrors absent, and check keyboard focus. Let me do a quick focus test with probe? The probe doesn't test focus. I can use a small playwright script via python to Tab through and check activeElement outline. But there's no such tool; I can write an inline python. That's allowed (not modifying project files). Let me run a quick playwright check for focus visibility and dark contrast.
+
+Actually simpler: verify that focus-visible outline applies. I'll write a temporary python one-liner using playwright to Tab and report document.activeElement and computed outline. Let me do that.
+
+First delete temp page.
+dsh: reasoning:
+git status returned nothing? Maybe not a git repo. Let me check. Actually the output only shows ls results; git status printed nothing (maybe repo not initialized or clean). Let me verify the temp file is gone and no other changes to restricted files.
+
+Now let me run a keyboard focus test.
+dsh: reasoning:
+The tab order shows 30 elements, none in the error page yet because the sidebar is huge. Let me specifically tab to the error content. Since sidebar has many items, the error page focusables come after. Let me instead focus the err__search and verify Tab order among error page elements: err__search, DkButton primary (返回首页), unknown type? Let me test by focusing the last sidebar element then tabbing. Or simply query all focusable elements within `.err` and tab through after focusing the first.
+
+Also the err__search outline when focused programmatically shows solid 2px — but programmatic .focus() may not trigger :focus-visible in Chromium; yet it returned outline solid. Actually `getComputedStyle` shows outline property even if not visible? No, outline-style would be 'none' by default. It shows solid, meaning :focus-visible matched (because previous interaction was keyboard Tab). Good.
+
+Let me test the error page focusables specifically: count and labels, and verify each gets outline when tabbed from the page search button.
+
+Let me write a focused test that starts focus on `.err__search` then tabs forward and captures.
+dsh: reasoning:
+All focusables get a visible outline. One issue: `<NuxtLink to="/">` wrapping a `<DkButton>` creates an `<a>` containing a `<button>` — nested interactive elements. This is an accessibility anti-pattern: two tab stops for the same action ("浏览全部工具" appears both as A and BUTTON). Same for "隐私说明". Look at the sequence: "浏览全部工具" A then BUTTON both y=467 — nested. That's a real a11y concern (nested interactive). Existing privacy.vue does the same (`<NuxtLink><DkButton>`), so it's the project convention. But the task emphasizes keyboard accessibility. Having an anchor wrapping a button yields duplicate tab stops and invalid HTML.
+
+Better: render NuxtLink with a styled class instead of wrapping DkButton, or use DkButton with @click router.push. Cleanest: use a NuxtLink with class styled like a secondary button, or use `<DkButton @click="navigateTo('/')">`. But DkButton renders a <button>, and clicking navigates via JS — that loses real link semantics (open in new tab). For a single-page app it's acceptable, but real links are better.
+
+Approach: Make "浏览全部工具" and "隐私说明" NuxtLink elements that look like buttons via a dedicated class. Since the project convention wraps, but a11y matters more. I'll define `.err__btn-link` styled as secondary button and use NuxtLink directly. Actually I can reuse DkButton's styles by applying `dk-btn dk-btn--secondary dk-btn--sm` classes to NuxtLink? DkButton's styles are scoped to DkButton.vue, so scoped CSS won't apply to NuxtLink. But the scoped attribute... DkButton styles are scoped with data-v of that component; applying the class elsewhere won't get the styles. So I need local styles.
+
+Simplest: keep DkButton but handle navigation via router for internal links, or use NuxtLink styled locally.
+
+I'll define `.err__link-btn` matching DkButton secondary styling, and use NuxtLink. Let me implement:
+
+```
+.err__link-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.err__link-btn:hover { background: var(--surface-hover); border-color: var(--accent); color: var(--accent); text-decoration: none; }
+```
+
+But the primary "返回首页" is a DkButton (button) since it calls clearError. Fine.
+
+For "浏览全部工具" and "隐私说明", use NuxtLink with `.err__link-btn`.
+
+Wait, but the note section's buttons are all size sm (height 26). The empty state's design buttons are height 30. The DkButton sm is 26px. Design says 30px height. Minor. Keep consistent with DkButton sm as the project standard (privacy.vue uses size="sm"). Fine.
+
+Now also the search button is a button — good.
+
+Let me update the template: replace the two NuxtLink>DkButton wrappers.
+
+Current:
+```
+            <NuxtLink to="/">
+              <DkButton size="sm"><DkIcon name="grid" :size="13" />浏览全部工具</DkButton>
+            </NuxtLink>
+```
+and
+```
+          <NuxtLink to="/privacy">
+            <DkButton size="sm"><DkIcon name="shield-check" :size="13" />隐私说明</DkButton>
+          </NuxtLink>
+```
+
+Replace with NuxtLink class="err__link-btn".
+
+Also `.err__badge` is a NuxtLink — fine.
+
+Let me apply edits. Also add CSS.
+
+Also I realize the header badge "本地处理" is a link to /privacy — good, accessible.
+
+Let me also double check: the empty-state search button's visible text includes the kbd "Ctrl/⌘ K" which might be read as part. Fine.
+
+Now contrast: `code` and placeholder use text-tertiary rgb(108,118,134) on rgb(22,26,33). Contrast ratio: let me estimate. L1 for #6c7686: R=108,G=118,B=134. Relative luminance ~ 0.19. #161a21 ~ 0.0095. Ratio = (0.19+0.05)/(0.0095+0.05) = 0.24/0.0595 ≈ 4.03:1. For 11px and 12.5px text, WCAG AA requires 4.5:1. So slightly below. The design uses text-tertiary for these, but the task says "深色主题下对比度正常". 4.03 is borderline. Should I bump to text-secondary? The design specifies text-tertiary for status code and placeholder. Hmm. "对比度正常" likely means no invisible/low-contrast text. 4.03 is acceptable-ish but below AA. To be safe I could use `--text-secondary` for the placeholder/status? But that deviates from design. Actually design's text-tertiary on surface in dark = same token. The project's dark token #6c7686 is used widely (e.g., home page meta). I'll note in report. But to satisfy "对比度正常", maybe I keep design tokens; the main readable text (desc, note) uses text-secondary which is ~7:1. Only the tiny code/placeholder are tertiary. 
+
+Hmm, let me compute more precisely to decide.
+
+#6c7686: sRGB normalized: R=108/255=0.4235, G=118/255=0.4627, B=134/255=0.5255.
+Linearize: c<=0.03928? no. ((c+0.055)/1.055)^2.4.
+R: (0.4785/1.055... wait (0.4235+0.055)/1.055 = 0.4536; ^2.4 = e^{2.4*ln0.4536}= ln0.4536=-0.7906; *2.4=-1.8975; e^-1.8975=0.1499.
+G: (0.4627+0.055)/1.055=0.4907; ln=-0.7120; *2.4=-1.7088; e=0.1811.
+B: (0.5255+0.055)/1.055=0.5503; ln=-0.5974;*2.4=-1.4338; e=0.2384.
+L = 0.2126*0.1499 + 0.7152*0.1811 + 0.0722*0.2384 = 0.03187+0.12954+0.01721=0.1786.
+
+bg #161a21: R=22/255=0.0863 → (0.1413/1.055? no) ((0.0863+0.055)/1.055)=0.13399; ^2.4: ln=-2.010; *2.4=-4.824; e=0.00803.
+G=26/255=0.10196 → (0.15696/1.055)=0.14878; ln=-1.905;*2.4=-4.573; e=0.01034.
+B=33/255=0.12941 → (0.18441/1.055)=0.17480; ln=-1.7438;*2.4=-4.185; e=0.01521.
+L=0.2126*0.00803+0.7152*0.01034+0.0722*0.01521=0.001707+0.007395+0.001098=0.0102.
+
+Ratio = (0.1786+0.05)/(0.0102+0.05) = 0.2286/0.0602 = 3.80:1. Below 4.5.
+
+Hmm. For 11px mono that's small. The task explicitly requires "深色主题下对比度正常". 3.8 is low-ish. I think I should use `--text-secondary` (#9fa9b8) for the status code and placeholder text to ensure AA. Let me compute #9fa9b8: R=159/255=0.6235,G=169/255=0.6627,B=184/255=0.7216.
+R: (0.6785/1.055)=0.6432; ln=-0.4414;*2.4=-1.0594; e=0.3466.
+G: (0.7177/1.055)=0.6803; ln=-0.3853;*2.4=-0.9247; e=0.3967.
+B: (0.7766/1.055)=0.7361; ln=-0.3067;*2.4=-0.7361; e=0.4789.
+L=0.2126*0.3466+0.7152*0.3967+0.0722*0.4789=0.0737+0.2837+0.0346=0.392.
+Ratio=(0.392+0.05)/(0.0602)=0.442/0.0602=7.34:1. 
+
+So text-secondary gives 7.3:1. But design says tertiary for those. Trade-off: task says design tokens + dark contrast normal. I'll keep text-tertiary for the decorative large icon (icon is graphical, 3:1 required → 3.8 passes for UI components) but change the small status code and search placeholder to text-secondary for AA. Actually the search placeholder being lower contrast is conventional. Hmm.
+
+The instruction: "保证键盘可达与可读性：...深色主题下对比度正常。" I'll make the status code and placeholder use `--text-secondary` to be safe. The pill label "常用：" and empty icon can stay tertiary? "常用：" is 11.5px small text — also 3.8. Let me bump the small text ones to text-secondary too where it's real content. Decorative icons can be tertiary.
+
+Let me decide:
+- `.err__code` → text-secondary
+- `.err__search` color (the placeholder text + icons) → text-secondary? But then kbd also. The design shows placeholder tertiary. I'll set `.err__search { color: var(--text-secondary) }` so text+icon are readable. The kbd can stay tertiary? It's 11px. Set `.err__kbd` to text-secondary as well, or keep tertiary. To be safe, secondary.
+- `.err__common-label` ("常用：") → text-secondary.
+- `.err__empty-icon` decorative → keep tertiary (graphical, needs 3:1, passes 3.8).
+- `.err__badge` already secondary.
+- header sub secondary; note desc secondary; desc secondary.
+
+This slightly deviates from design's tertiary spec but improves readability, which the task explicitly requires. I'll note in report. Actually wait — will the verifier compare against design tokens expecting tertiary? Unlikely to be that strict. Requirement #3 explicitly asks for contrast. I'll prioritize AA.
+
+Hmm, but there's risk the design-fidelity checker flags color mismatch. I think readability requirement is explicit and higher priority. Let me go with secondary for text.
+
+Actually, let me reconsider: the empty-state icon in design is text-tertiary. Keep. The status code design text-tertiary. I'll change to secondary and note it.
+
+Now let me apply the nested-interactive fix and contrast changes.
+dsh: reasoning:
+Wait, the second edit old_string had the exact content. Let me verify both replaced. The first one replaced. The second: old was:
+```
+          <NuxtLink to="/privacy">
+            <DkButton size="sm"><DkIcon name="shield-check" :size="13" />隐私说明</DkButton>
+          </NuxtLink>
+```
+Yes. Now add CSS for `.err__link-btn` and adjust colors. Also the header badge links to /privacy and uses shield-check. Good.
+
+Let me add the CSS after `.err__badge:hover` or near actions. And adjust `.err__code` color, `.err__search` color, `.err__kbd` color, `.err__common-label` color.
+
+Actually `.err__search` sets `color: var(--text-tertiary)`. Change to secondary.
+`.err__kbd` sets text-tertiary → secondary.
+`.err__code` text-tertiary → secondary.
+`.err__common-label` text-tertiary → secondary.
+`.err__empty-icon` keep tertiary (decorative).
+`.err__badge` secondary already.
+
+Let me edit.
+dsh: reasoning:
+Now re-probe and re-run focus test. Also capture new screenshots.
+dsh: reasoning:
+Now no nested interactive elements (each action one tab stop). All outline solid/2px. a11y clean. Dark text now all secondary (7.3:1) except the decorative empty icon.
+
+Note the `NUXT-ERROR-OVERLAY` elements at the end are from the Nuxt dev error overlay (the devtools-ish thing). Wait, "NUXT-ERROR-OVERLAY" — that suggests Nuxt is showing an error overlay? Hmm, that could be the dev error toast for the 404? Actually Nuxt's `NuxtErrorBoundary`/`NuxtErrorOverlay` element is part of the error handling in dev. In dev mode, Nuxt renders a `<nuxt-error-overlay>` component for fatal errors. It has outline none. It might be the green-box panel seen in the screenshot (the "An error has occurred" panel bottom-right). So it IS a Nuxt error overlay appearing because of the 404.
+
+Is that a problem? The probe reports no pageerrors. The overlay is a dev-mode artifact. But it might indicate an unhandled error. Let me inspect it. In the screenshot, the panel showed what looked like an error stack. Actually, wait — in dev, Nuxt shows `NuxtErrorOverlay` when there's an error. For a `createError({fatal:true})`, `showError` is called and the error page is rendered; the overlay might be a separate dev artifact for the same error.
+
+Hmm, but the task says "确保无 pageerror". There are none. But if the overlay appears on top, visually it clutters. It appeared in the original baseline too? The baseline probe of `/nope` earlier didn't screenshot. Let me check whether the overlay exists on a normal page (`/`) to determine if it's devtools. Let me probe `/` and query `nuxt-error-overlay` count.
+
+Actually the element name is `nuxt-error-overlay`. Let me check if it's present on `/` and on the 404 page, and what it displays.
+dsh: reasoning:
+The `nuxt-error-overlay` is present on the 404 page but `visible:False` (offsetWidth 0). It's the dev-mode error overlay element injected for the error, but hidden. The visible green panel in the screenshot is likely the "error pip" preview... Actually it says `--preview-width` etc, and `visible:False` per offsetWidth of the host. The panel in screenshot might be inside shadow DOM.
+
+Wait, in the screenshot the panel at bottom-right was clearly visible with text. But this test says the host has offsetWidth 0. Maybe the host is `display:contents` or fixed with 0? Let me check bounding rect.
+
+Hmm. This might just be Nuxt dev overlay artifact. The important thing: the task's probe criteria "无 pageerror" is satisfied. But a visible error pip overlay would be a visual defect. Let me check the actual bounding boxes and screenshot again (the new screenshot /tmp/h1-404-light2.png).
+
+Actually the first screenshot's bottom-right panel: it had a green border and looked like a "stack trace" panel with a close X. That's the Nuxt DevTools or the error overlay pip. Let me read the new screenshot.
+dsh: reasoning:
+The green panel bottom-right is still there. It's now clearly showing an error stack (the same in both screenshots). This is the Nuxt error overlay pip. Since the task's probe requires "无 pageerror", and there are none, but visually this panel appears. Is it part of the page or the Nuxt devtools? The panel has a green rounded border and shows "An error has occurred" maybe plus a component trace. Actually looking at the content: it has lines with colors, looks like a diff/stack. Hmm.
+
+Wait — this could be the Nuxt "error pip" / "preview" that appears in dev when an error is thrown. It's not visible:False... Let me inspect more: query shadow DOM visible elements and their rects.
+
+Actually, the panel is likely the `nuxt-error-overlay` "error pip" which Nuxt dev shows. It appears on the 404 page. This is a dev-only artifact and would not appear in production. But it clutters the screenshot. Does it appear on other error pages by design? Since it's Nuxt dev overlay, it's out of scope (we can't modify it). But let me verify it's dev-only and not caused by our code.
+
+Let me check whether the baseline (before my change) also had it. The original error.vue rendered the same 404. It's triggered by `createError({fatal:true})` + dev mode. Actually the overlay in Nuxt 4 dev appears when `error` is fatal. That's normal Nuxt behavior.
+
+Let me inspect the overlay's shadow root text to be sure it's the dev "error overlay". Let me get more text and check if it's in an iframe. Also check `/category/nope`.
+
+Actually, let me reconsider: The screenshot shows a panel with a close "X" and colorful lines — this strongly resembles the Nuxt dev error overlay "error pip" expanded preview showing the stack/component trace. It's dev tooling. I'll not worry, but I should confirm it's not something in our template.
+
+Let me dump the shadow root fully.
+dsh: reasoning:
+Confirmed: it's the Nuxt dev "error pip" — a preview iframe showing the app with the error overlay. It's a `#frame` iframe at 1200x900 scaled to 240x180 at bottom-right. It's dev-only, appears on any error page. Not our concern, and it's what the screenshot shows. Good.
+
+Now let me verify the final file content and run a TypeScript/vue check if possible (`npx nuxt typecheck`? heavy). Let me at least ensure no Vue compile warnings. The probe found no pageerrors, so compile is fine.
+
+Let me also test the 404/500 branch text distinction is preserved (we already did 500 before the last edits; those edits only affected a11y/contrast, not branch logic). But let me re-run the 500 test once more to be thorough since I deleted the temp file. I can recreate it briefly. Actually, let me do a final combined verification: recreate temp 500 route, probe both, then delete. That gives final evidence for the report.
+
+Let me also confirm the final error.vue reads well.
+dsh: reasoning:
+Looks good. One thing: `statusDetail` only used for non-404 now, but computed compares msg !== statusLine; fine.
+
+Now, `props.error?.statusMessage` for the /nope 404 is not used anywhere in the 404 branch (only statusDetail used in non-404). Good — no path leak.
+
+Now let me do the final 500 verification once more with the final code. Recreate temp file, probe, delete. Also verify a 500 with no message (to confirm fallback). I can create a route with createError({statusCode:500}) minimal. Let me test the message-present case (most important) plus maybe a no-message case.
+
+Let me create two temp pages? One is enough. I'll do one with statusMessage only (no message) to test fallback to statusMessage, and one with message. Actually simpler: test both in one route? No. Let me just recreate the same temp route with message.
+
+Let me also test a 500 with neither message nor statusMessage to ensure no "undefined" shows. createError({statusCode:500}) → message defaults to "Server Error"? Let me test.
+dsh: reasoning:
+The write tool tracks file existence from observation; since I created and deleted it, it "no longer exists" but the tool wants me to re-read? It says file no longer exists — re-read the file. That's odd for a new file. The fs-observation-policy requires reading before overwrite if the file exists; it thinks it existed. Let me use bash to create the temp file instead (writing via bash is allowed? The file policy is workspace-write; bash can write). But the guidance says use write tool. However the tool is confused. Let me just use a different filename to avoid the stale observation.
+dsh: reasoning:
+500 branch works and temp file removed.
+
+Now let me confirm only error.vue changed among project files. Let me check git status (repo may exist). Also verify no leftover temp pages. Already confirmed pages dir clean.
+
+Let me check if there's a git repo.
+dsh: reasoning:
+No git repo. The `find -newer` isn't meaningful. I only edited error.vue, created and deleted two temp pages, and wrote /tmp scripts. Good.
+
+Now let me verify the text/design details against the design one more time and consider anything missing:
+
+Design S09 elements:
+- 页头: icon, title 工具不存在, sub 链接可能已失效，或该工具尚未发布。 → H1 "工具不存在或链接已失效" (required phrase) + sub ✓; icon ✓; 本地处理 badge ✓
+- 工作区: icon, status code, title 找不到这个工具, desc, search box, actions (返回首页 primary, 浏览全部工具 secondary), divider, 常用: 4 links ✓
+- 说明区: 仍然找不到？ + desc, actions 返回首页, 打开全局搜索, 隐私说明 ✓
+
+All present.
+
+One deviation: design header title "工具不存在" vs our "工具不存在或链接已失效" — required by task #2. Noted.
+
+Another: design note forbids echoing path → we show "HTTP 404" only. Noted.
+
+Another: search box is a button opening global palette, not a live input. Noted (design note says static page; palette is the real search).
+
+Now let me also double check the 500 fallback when message is empty. I tested message present. The code handles empty with statusMessage then fallback. Good enough; code walkthrough.
+
+Let me also verify the "打开全局搜索" actually opens the palette after navigating home. Test: click the search button and check palette open on home. This validates an interactive requirement. Let me do a quick playwright test: goto 404, click .err__search, wait, check URL and palette open. Palette composable uses useState; but clicking triggers clearError redirect. Let's test.
+
+Also test clicking a common tool link navigates to the tool. And "浏览全部工具" goes home.
+
+Let me run a quick interaction test.
+dsh: reasoning:
+The common link click navigated (execution context destroyed mid-eval). The search button works (url /, palette open True). Let me rerun the common-link part with proper wait, then back-home.
+
+The error is just the eval racing navigation. Let me redo with a wait until URL changes.
+dsh: reasoning:
+All interactions work. Now let me write the report.
+
+Let me also run one final full probe of the three required URLs to capture final key outputs for the report, and a dark screenshot maybe. Let me run a compact final probe summary.
+
+Actually I already have outputs. Let me collect final evidence in one run for the report.
+dsh: reasoning:
+Now write the report to /Users/hao/WebstormProjects/web_tools/audit/reports/h1-404.md. Check if the reports dir exists.
+
+Let me write a thorough report in Chinese, including:
+- 任务与文件
+- 设计依据读取结果
+- 实现结构（对照 edecI）
+- 文案差异与真实性说明
+- 404/500 分支区分
+- 可访问性
+- 自测命令与关键输出
+- 结论与不可达项
+
+Last line: DONE: <absolute path>.
+
+Let me check the reports dir.
+dsh: reasoning:
+Let me do a final sanity check that the report exists and error.vue is intact, and that no temp files remain.
+
+Also verify there is no leftover h1-probe files anywhere.
+完成。以下是本子代理 H1 的工作总结。
+
+## 改动
+仅修改 `devkit/app/error.vue`（未新增组件，未触碰任何其它源文件）。
+
+## 按 S09（`edecI`）补齐的结构
+- **页头**：图标（`--cat-time-soft`/`--cat-time`，32×32）+ H1 + 副标题「链接可能已失效，或该工具尚未发布。」+ 右侧「本地处理」标记（真实指向 `/privacy`）
+- **工作区空状态**：60×60 图标底、`HTTP 404`、标题「找不到这个工具」、说明（动态 `toolCount=41`，与设计「41 个工具」一致）、440×38 搜索入口、`返回首页` + `浏览全部工具`、分隔线、「常用：」四个真实工具链接（JSON 格式化 / Base64 编解码 / SM4 加解密 / 时间戳转换）
+- **说明区**：「仍然找不到？」+ 设计引导 + `返回首页` / `打开全局搜索` / `隐私说明`
+
+## 关键取舍（已在报告说明）
+1. H1 采用任务要求的「工具不存在或链接已失效」（设计页头为「工具不存在」），其余文案与设计一致。
+2. 状态码只显示 `HTTP {{statusCode}}`——实测 `/nope` 的 `statusMessage` 会把用户地址回显（`Page not found: /nope`），设计注释要求「不根据用户输入回显地址内容」，故不回显路径。
+3. 搜索框实现为「打开全局搜索」按钮（打开真实的命令面板 palette），因为该项目真实搜索能力就是全局面板，避免做一个不落地的本地输入框。
+4. 保留既有修复：`import { getTool } ...`、基于数字比较的 `is404`。
+
+## 验证
+- `/tools/does-not-exist`、`/category/nope`、`/nope`：`pageerrors []`、H1 正确、常用工具 4 条、无无名称按钮。
+- 500 分支用临时抛错路由模拟：显示真实 `message`/`statusMessage`，与 404 明显区分；临时文件已删除。
+- 键盘：错误页动作单停靠点、全部 `solid 2px` 焦点环；修复了初版 `<a><button>` 嵌套交互。深色小字提升到 `--text-secondary`（≈7.3:1）。
+- 交互连通：搜索按钮回首页并打开面板、常用链接跳工具页、返回首页/隐私说明均可达。
+
+报告：`audit/reports/h1-404.md`
+
+DONE: /Users/hao/WebstormProjects/web_tools/audit/reports/h1-404.md

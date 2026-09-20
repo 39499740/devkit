@@ -1,0 +1,11 @@
+{
+  "id": 9007199254740993,
+  "name": "订单-2024-A",
+  "amount": 1899.50,
+  "tags": ["batch", "priority"],
+  "owner": {
+    "uid": 1024,
+    "vip": true
+  },
+  "memo": null
+}

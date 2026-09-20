@@ -1,0 +1,1718 @@
+dsh: reasoning:
+Let me start by reading the brief and understanding the task.
+
+I'm audit subagent #3 covering tools T15-T26. Let me read the BRIEF.md first.
+dsh: reasoning:
+Let me read the prompt for my subtask and the requirements doc. Let me also start exploring the actual implementation files.
+dsh: reasoning:
+Now let me look at the implementation files and the design boards. Let me start with the design finding.
+dsh: reasoning:
+Let me get an overview. I'll set up a todo list and start reading implementation files and design dumps. Given the volume (12 tools), I should parallelize. Let me first read the design text dumps for all boards in one go, then read the implementations.
+
+Let me start with the crypto tools since those need authoritative test vectors. Let me read t15, t16, t17.
+dsh: reasoning:
+The text command needs the id without the "2 " prefix. The find output format is "2 id type name width". So `pen.py text <id>` should use the id like `y2Dwo`. Let me check pen.py usage.
+dsh: reasoning:
+The find output is "depth id type name". So id is the second token. Let me redo. And the text output empty might be because it failed (root=None → texts iterates None → error?). Actually `texts(None)` would iterate `iter_nodes(None)` → `n.get` fails. But it output `[]` maybe because root was None and iter_nodes(None) yields None then `x.get` error. Hmm, it gave `[]`? Actually wait it output `[]` for each. Let me check: I passed "2" as id first then "y2Dwo". Actually the loop was `for id in 2 y2Dwo ...` and I ran `text $id`. For $id=2, root=None → texts(None) → iter_nodes(None) yields None, then x.get causes AttributeError... but output was empty. Hmm confusing. Let me just pass the real IDs.
+
+Let me batch dump text for all boards. I'll write a small helper to iterate. Actually let me just use pen.py find to get ids and then call text. Let me do T15 first.
+dsh: reasoning:
+Hmm, text returns []. Maybe the ids need quotes or the tree structure differs. Let me check `pen.py dump y2Dwo 2`.
+dsh: reasoning:
+The text extraction returns [] because the text nodes are nested inside `ref` components that are likely referenced, not inlined? Wait, dump only goes to depth 3 and stops at ref. Let me dump deeper.
+
+Actually the `text` command uses iter_nodes which should recurse into children. But ref nodes may not have children inline; they're references. So the actual text is in separate component definitions. The main board has refs to components. Let me check dump with depth 6.
+dsh: reasoning:
+The dump truncates text to 140 chars but the actual text values aren't shown because these are placeholder names, not actual text values. Actually the `text` command returned []. Wait — texts() looks for type == "text" and text not None. The dump shows nodes like Q2f7L [text] '页面标题' but no text= attribute, meaning `text` field isn't present? Actually dump adds `text=...` only if k in x. It didn't show text=, so the text nodes have no "text" key? That's odd. Maybe the text is stored in a different field like "content". Let me check the raw node.
+
+Wait, dump format: `extra` includes "text" key only if in x. None shown. So the text content must be somewhere else. Let me look at raw JSON node for a text node.
+
+Actually, this design file uses component refs where instances override text properties. The board's text nodes are inside main comp definitions? Hmm. Let me look at node Q2f7L raw.
+dsh: reasoning:
+The text field is `content`, not `text`. So pen.py's `text`/`texts` function is broken for this design file. I'll write my own extractor or just use dump: dump only shows `text` key. Let me write a quick python helper to extract content recursively. I'll create a temporary script in /tmp (allowed? workspace-write, /tmp may be writable). Better to write to audit/tmp? But red line says don't modify project source; writing a helper in audit is fine but let's just inline python.
+
+Let me write a reusable inline python function via a heredoc to a temp file under /tmp. Actually simpler: create `audit/tools/pen_text.py`? That modifies audit dir which is allowed (output dir). But BRIEF says only produce report; writing helper to audit/tools might be undesirable. I'll use /tmp.
+
+Let me create /tmp/pentext.py.
+dsh: reasoning:
+Now let me extract all T15-T26 boards text. But note: the text inside `ref` nodes won't be present because refs point to component definitions. The dump earlier showed nodes like Q2f7L text inside the board (they are actual inline nodes, not refs). So content extraction should work. However, ref nodes (like top nav '顶部导航') won't have children. That's fine.
+
+Let me extract T15 boards.
+dsh: reasoning:
+Now I have good design detail for T15. Let me read the implementation. Then set up the crypto test harness.
+
+Let me read t15-sm2.vue.
+dsh: reasoning:
+This is substantial. Key observations for T15:
+1. Design says key formats PEM/Hex/Base64, but implementation only supports Hex (public/private key inputs labeled "公钥（Hex）"). No PEM/Base64 support. Design prominently shows PEM. This is a major design-implementation divergence.
+2. `smCrypto` import: `import smCrypto from 'sm-crypto'`. sm-crypto is CommonJS; the default import may or may not work depending on build. Need to check `const { sm2 } = smCrypto`. Let me test.
+3. Design variants: 解密工作区, 签名成功, 验签不通过, 公钥格式错误. Implementation has these states. But "验签不通过" variant in design has step-by-step checks (逐步检查) — implementation doesn't show steps.
+4. The sample values claim "node + sm-crypto 真实生成并验证". Need to verify SAMPLE_CT_HEX decrypts, SAMPLE_SIG_RAW/DER verify with SAMPLE_PUB.
+5. The pub validation accepts compressed 02/03 keys but sm-crypto's doEncrypt may not support compressed keys. Need to test. If it accepts a compressed key format but sm-crypto throws, that's a false "格式有效".
+6. `doDecrypt` returns hex string or '' — the code treats '' as either C3 failure OR empty plaintext. But sm-crypto's doDecrypt returns '' on failure. Actually more importantly, sm-crypto doDecrypt returns the plaintext as a UTF-8 string? Let me check. In sm-crypto, `doDecrypt` returns string (utf8) when `output` not specified as 'array'? Let me verify.
+
+Actually there's a known bug: sm-crypto `doDecrypt` returns `''` on both failure and empty. The code's heuristic `hex.length === 192` means C2 is 0 bytes. For an empty plaintext, the ciphertext is C1(64)+C3(32) = 96 bytes = 192 hex. So that's right. OK.
+
+7. `hex.length < 192` check: 192 hex = 96 bytes. Correct.
+8. The design says C1 without 04 prefix. sm-crypto's doEncrypt output — does it include 04? Let me verify: sm-crypto C1 is 64 bytes (x||y) without prefix. Need to check. Actually sm-crypto doEncrypt returns cipher including C1 as 128 hex chars (no 04). Good.
+
+9. Error handling for invalid public key: pubErr only checks hex/length, not whether the point is on the curve. sm-crypto doEncrypt may throw or produce garbage for off-curve points. Need to test.
+
+Let me now read t16 and t17.
+dsh: reasoning:
+T16 looks reasonable. `sm3(Array.from(bytes))` — sm-crypto sm3 accepts array of bytes or string. Good. Base64 of `abc` SM3: let me verify `Zsfw9GLu7dnR8tRr3BDk4kFnxIdc8veiKX2gK49LqOA=`. Actually I'll verify with node.
+
+Design variant T16: 文件输入, Hex输入不合法. Implementation handles both. Fine.
+
+Now t17.
+dsh: reasoning:
+Now let me set up the crypto verification with node. First check how sm-crypto is imported and its API. Let me run the authoritative vectors.
+
+Note: `import smCrypto from 'sm-crypto'` — with Nuxt/Vite and CJS interop. But `const { sm2 } = smCrypto`. In node with require, `require('sm-crypto')` returns `{ sm2, sm3, sm4 }` (index.js). Let me check.
+
+Let me run the crypto tests now. I'll create a test script in /tmp.
+
+Test plan:
+1. SM3('abc') using sm-crypto's sm3. Input as string 'abc' and as array [97,98,99]. Compare to 66c7...
+2. SM3 base64 of expected.
+3. SM4 ECB standard vector: key=plaintext=0123456789abcdeffedcba9876543210 → 681edf34d206965e86b3e94f536e4246. Test both with hex key and with sm4.encrypt(array, hexkey, {mode:'ecb', padding:'none', output:'array'}).
+   Note: the requirement says standard ECB vector key/plaintext = 0123456789abcdeffedcba9876543210. With NoPadding, 16 bytes → 16 bytes output.
+4. SM4 CBC vector and PKCS#7 padding behavior.
+5. T17's SAMPLE_CT correctness (CBC PKCS#7 with SAMPLE_KEY utf8, SAMPLE_IV, SAMPLE_PT). It claims node computed. Base64 for SAMPLE_KEY_HEX = 4465764b69742d534d342d4b65793132 → 'DevKit-SM4-Key12'. Verify.
+6. SM2: generate keypair, encrypt/decrypt round trip; verify SAMPLE_CT_HEX decrypts to SAMPLE_PT; verify SAMPLE_SIG_RAW and SAMPLE_SIG_DER verify with SAMPLE_PUB and SAMPLE_SIGN_MSG; verify cross-checks; test compressed pub key (02/03) support in doEncrypt; test invalid pub key on-curve handling; test DER/raw distinction; check "解码成功 ≠ 验签成功" wording.
+
+Let me check sm-crypto version and API first.
+dsh: reasoning:
+SM3 matches the standard vector. Good.
+
+Now SM4. Let me test the standard ECB vector and CBC/padding.
+dsh: reasoning:
+SM4 standard vector passes. T17 sample vector verified. Good.
+
+Now SM2. Let me test the sample keys and signatures, plus edge cases.
+
+Important design divergence: T17 design mentions "复用当前设计；CBC/ECB、PKCS#7/NoPadding、密钥与IV编码、密钥显隐、输入输出编码". Implementation matches. Variant "结果待更新" (stale) - useToolRun handles stale. "ECB+NoPadding 参数状态" - implementation supports.
+
+But note: T17 key enc only supports utf8/hex, design says "密钥与IV编码" - IV only Hex. Design main board said key/IV encoding. Let me check the T17 design text to see if IV supports multiple encodings. Also design says key display toggle (密钥显隐) - implemented via `secret`.
+
+Let me now test SM2.
+dsh: reasoning:
+Interesting! SAMPLE_CT_HEX described as hex is 142 bytes (284 hex chars), so it's a valid ciphertext. Wait, in the design text it said "342 字符, 171 字节" for the sample ciphertext. The actual SAMPLE_CT_HEX is 142 bytes. That's fine — design example differs from implementation example.
+
+Wait, but the plaintext is "你好，DevKit！SM2 国密非对称加密。" which is 3*? Let's count: 你好，= 3 chars *3 bytes = 9; DevKit 6; ！ 3; SM2=3; space=1; 国密=6; space=1; 非对称加密=15; 。=3. Total ~47 bytes. 64+32+47=143? Close to 142. Let me not worry.
+
+SM2 samples verify. Compressed keys work with sm-crypto. Good.
+
+Now edge cases:
+- Invalid public key: a 130-hex with 04 prefix but point not on curve. pubErr returns '' (format valid), then doEncrypt may throw or silently produce wrong output. Let's test.
+- Also private key: 64 hex but 0 or > n (invalid scalar). sm-crypto may not validate.
+- Public key `04` + 128 zeros: is it on curve? No. Test doEncrypt.
+
+Also test signature raw mode with DER input and vice versa → doVerifySignature returns false or throws.
+
+Let me also test the "解码成功 ≠ 验签成功" wording. In the implementation, verify path: if sigHexErr passes, calls doVerifySignature. If it throws, markFail. Else pass status. The design variant "验签不通过" shows a step-by-step breakdown (签名解码成功, 格式检查通过, 公钥解析成功, 签名校验不通过). Implementation shows just the boolean. That's a design divergence but not a defect necessarily.
+
+Also design says "公开测试密钥" and displays PEM keys. Implementation uses Hex only. Design explicitly lists 密钥格式 PEM/Hex/Base64. Implementation has no format selector at all. This is a significant missing feature. Let me confirm by grep for 'PEM' in t15.
+
+Let me run edge case tests.
+dsh: reasoning:
+Confirmed: T15 supports only Hex keys (and Base64/Hex for ciphertext). No PEM key format despite design's prominent PEM/Hex/Base64 selector and PEM public/private key display. This is a high-severity design gap.
+
+Also important bug: `random point encrypt returned len: 202` — a random 128-hex with 04 prefix that is NOT a valid curve point is accepted by pubErr (format check only) and sm2.doEncrypt silently returns a ciphertext (202 len). Actually wait, it returned 202, meaning encryption "succeeded" with an invalid (off-curve) public key, producing ciphertext that can never be decrypted. That's a false-success / silent success bug. Let me confirm the point is off-curve. Random 04+128 hex has probability ~1/2^128 to be on curve, so it's off-curve. sm-crypto's doEncrypt apparently doesn't validate on-curve. So the tool shows "SM2 加密成功" with an undecryptable ciphertext. Design says "公钥格式错误已阻断本次计算" and "C1 点不在曲线上时会直接报错". For encryption, pubErr only validates format, not curve membership. This is a genuine functional defect: off-curve public key yields false success.
+
+Let me create a reproducible test: generate a random 04-prefixed 130-hex, run doEncrypt → returns ciphertext. The tool would markOk. Evidence code line: pubErr lines 48-60 only length/prefix; execute lines 134-140 calls doEncrypt without curve validation.
+
+Actually, to be fair, not all random points are off-curve; let me deterministically find an off-curve point and prove decryption fails. I'll use a known off-curve test: e.g., y from the valid key but flipped. Let me do that.
+
+Also private key scalar validation: privErr only checks 64 hex. priv=0 throws ('Cannot read properties of null'), and the tool catches and markFail with "SM2 解密失败：Cannot read properties of null (reading 'toBigInteger')" — an ugly internal error but at least it fails. A private key >= n could produce issues. Low severity.
+
+Also for decryption: `if (out === '' && hex.length === 192)` treats empty. But what about a ciphertext where C2 is empty but C3 invalid? sm-crypto returns '' either way, and the code would report "解密成功：明文为空字符串" even if C3 is wrong. Wait: for empty plaintext, the ciphertext is exactly 96 bytes (C1 64 + C3 32). If C3 is corrupted, hex.length is still 192, and out === '', so the code reports success! Let me verify sm-crypto returns '' when C3 mismatches for an empty-C2 ciphertext. Actually sm-crypto doDecrypt: computes C3 and compares; if mismatch returns '' (with default output). So yes, corrupted C3 with empty plaintext → false success. Let me test.
+
+Let me test:
+- Take encrypted empty string, flip a bit in C3, doDecrypt → '' 
+- The tool logic: hex.length===192 → markOk "C3 校验通过". That's FALSE. Because C3 was corrupted.
+
+Let me verify sm-crypto behavior.
+dsh: reasoning:
+Two concrete SM2 defects confirmed:
+1. Off-curve public key (valid format) → doEncrypt silently returns ciphertext → tool reports "SM2 加密成功". Contradicts design: "公钥解析失败时不会执行加密" and "C1 点不在曲线上时会直接报错". Reproduction shown.
+2. Empty plaintext with corrupted C3 → tool reports "解密成功：明文为空字符串，C3 校验通过" (false success). Code t15-sm2.vue:179-183.
+
+Now let me move to T18-T26. Let me read the implementations. I'll read several and use design dumps. Let me be efficient: read t18, t19, t20, t21 in parallel, then t22-t26.
+
+Actually given the volume, let me dump design texts for all T18-T26 boards and read implementations. Let me batch.
+
+Let me get text for T16/T17 variants too for completeness, and T18-T26. But the design text extraction is large. Let me focus on key info. I'll grab T16/T17 design texts quickly, then T18-T26.
+dsh: reasoning:
+The design for T17 explicitly shows key encoding options: "UTF-8 / Hex / Base64" and IV: "UTF-8 / Hex / Base64". Implementation only supports key Hex/UTF-8 and IV Hex only. So:
+- Key Base64 missing.
+- IV encoding only Hex; design says IV UTF-8/Hex/Base64.
+
+Also design T17 shows "密钥 字符16·字节16" with UTF-8/Hex/Base64 segmented. Implementation ok-ish.
+
+Let me get more of T17 design text (the rest).
+dsh: reasoning:
+Good. T17 implementation matches main design except key/IV Base64 encoding missing. Design also shows "输入编码" for decryption as "UTF-8 / Hex / Base64"? Actually design decryption shows "密文编码: UTF-8 / Hex / Base64" — implementation decryption ctEnc only Hex/Base64, no UTF-8. That's minor. And design encryption "明文编码 UTF-8/Hex/Base64" matched.
+
+Now, key severity: key format selectors are a real design requirement (explicitly "密钥与IV编码"). Implementation lacks Base64 for key and IV. Medium.
+
+Let me now read T18-T21 implementations. To save context, I'll read them but they are ~20-29KB each. Let me be strategic: read the script sections primarily. Let me read t18.
+dsh: reasoning:
+T18 is fairly thorough. Let me test the timezone logic and DST handling. Key concerns:
+
+1. `tzOffsetMin` uses `Math.floor(date.getTime()/1000)*1000` — strips ms. For dates with negative time (pre-1970), Math.floor works correctly for negative? Math.floor(-0.5) = -1. Fine.
+
+2. `parseTs` for seconds multiplies by 1000; for large seconds like 9999999999999, ms would exceed MAX_MS. It handles.
+
+3. `parseWallText` only accepts "YYYY-MM-DD HH:mm:ss" or with T. It doesn't accept ISO with timezone. Design says timestamp ↔ readable time; fine.
+
+4. DST detection via jan/jul offsets. For southern hemisphere (Sydney), standard offset = min(jan,jul). In Sydney, January is DST (+11), July standard (+10), min=+10 → std=10. Correct. For New York: Jan -5, Jul -4, min=-5. Correct.
+
+5. `resolveWall` for gap. For spring forward in New York 2026-03-08 02:30: o0 = offset at Date.UTC(2026,2,8,2,30) which is 02:30 UTC = 21:30 previous day EST (-5). cand = {-5}. inst = wallMs +5h = 2026-03-08 07:30 UTC = 02:30 EST? Actually 07:30 UTC = 02:30 EST (UTC-5). At that instant, offset is -5 (since transition at 07:00 UTC). So valid = {off:-5, inst: wallMs+5h}. Wait, but 02:30 EST is the instant just before the gap? The transition is at 07:00 UTC (02:00 EST → 03:00 EDT). At 07:30 UTC it's 03:30 EDT. Hmm, tzOffsetMin(new Date(07:30 UTC)) = -4 (EDT). So c=-5: inst=07:30UTC, offset at inst=-4 ≠ -5 → invalid. c=-4: inst=06:30UTC, offset at 06:30UTC=-5 ≠ -4 → invalid. So uniq empty → gap. Then approx = wallMs - o0*60000 = 07:30 UTC. actual offsets at approx ± hours: -4 (at 06:30? 06:30 UTC = 01:30 EST -5; at 08:30 = 04:30 EDT -4). pre = min = -5. picks = {off:-5, inst: 07:30 UTC}. The note says "已按切换前偏移 UTC-5 解释，实际对应 03:30 EDT". readableIn of 07:30 UTC = 03:30. Good.
+
+6. Ambiguous fall-back: 2026-11-01 01:30 New York. wallMs = 01:30 UTC. o0 = offset at 01:30 UTC = 2026-10-31 21:30 EDT (-4). cand = {-4, -3 (o0+60), ...}. c=-4: inst=05:30 UTC, offset at 05:30 UTC = -4 (transition at 06:00 UTC). valid. c=-3: inst=04:30 UTC, offset at 04:30 = -4 ≠ -3 invalid. Hmm, so only one valid? Wait ambiguous should produce two. Let's think: transition at 06:00 UTC (02:00 EDT → 01:00 EST). 01:30 occurs at 05:30 UTC (EDT, -4) and 06:30 UTC (EST, -5). For c=-5: inst = wallMs +5h = 06:30 UTC; offset at 06:30 = -5. valid. So cand needs -5, but o0=-4, cand = {-4,-3,-2,-1,...} includes o0-60=-5. Yes `for d of [-60,-30,30,60]` → -4 + (-60min) = -5. So valid has both. Good, ambiguous detection works.
+
+But wait — is `dstState` computed correctly with standardOffset using year from zone? Fine.
+
+7. `relTime` uses `Math.floor` for seconds etc. Minor.
+
+8. Issue: `parseTs` allows negative timestamps. For seconds, `ms = Number(t)*1000`; for huge values Number loses precision but they check `Number.isSafeInteger(ms)`. Good.
+
+9. Batch mode with `rows.length > 0` but all invalid: still displays. Good.
+
+10. `run.markOk` in ts2time single says "相对时间以 ... 为基准". Fine.
+
+Potential bug: `dstNoteFor` uses `shortOffset` for standard offset text. Fine.
+
+Potential bug: In time2ts, for ambiguous, picks[0] is the earlier inst. The note says "已取较早的 ...". Good.
+
+Potential bug: `resolveWall` only considers candidate offsets within ±60 min of o0. For zones with 30-min DST (Lord Howe) not in list. Fine.
+
+Potential bug: `parseWallText` doesn't validate negative years or years like 0000. Minor.
+
+Potential bug: ISO 8601 result `d.toISOString()` throws RangeError if date invalid? But ms validated within ±8.64e15, so Date is valid. Fine.
+
+Let me run the DST tests with node to confirm the implementation logic (reimplement in node quickly). Actually the function logic is in Vue; I could extract but easier to test the core idea. But the prompt wants real verification. Let me write a node script replicating tzOffsetMin/resolveWall or better, test via the running site? The site is at localhost:3000. Let me check if it's running. Probing might be heavy. Let me first check.
+
+Actually, let me focus. The critical question is whether there are real bugs. Let me test the timezone functions by extracting them into a node script. That's a fair "real run" of the same logic.
+
+Let me now read t19, t20, t21. Then batch test.
+
+Let me read t19.
+dsh: reasoning:
+T19 looks solid. Let me verify:
+- v7 generation: bytes[0..5] = 48-bit ms big-endian. Code:
+  b[0] = floor(ms/2^40) & 0xff  → top byte
+  b[1] = floor(ms/2^32) & 0xff
+  b[2] = floor(ms/2^24) & 0xff
+  b[3] = floor(ms/2^16) & 0xff
+  b[4] = floor(ms/2^8) & 0xff
+  b[5] = ms & 0xff
+  This is correct big-endian 48-bit.
+  b[6] version 7, b[8] variant. Correct.
+
+- v1 time parsing: 
+  ```
+  const lo = BigInt(`0x${lower.slice(0,8)}`)
+  const mid = BigInt(`0x${lower.slice(8,12)}`)
+  const hi = BigInt(`0x${lower.slice(13,16)}`)  // skip version nibble at index 12
+  const ticks = (hi << 48n) | (mid << 32n) | lo
+  ```
+  v1 layout: time_low (32 bits) = first 8 hex; time_mid (16 bits) = next 4; time_hi_and_version (16 bits) = next 4, where top nibble is version. So hi 12 bits = lower.slice(13,16) (3 hex = 12 bits). Correct.
+  ticks = hi<<48 | mid<<32 | lo. Correct.
+  ms = (ticks - epoch)/10000. epoch is in 100ns. Correct.
+
+  Let me verify SAMPLE_V1 ce332000-b4ea-11f1-... Let me compute.
+  lower.slice(13,16) = '1f1'? Wait canonical ce332000-b4ea-11f1-9234-aabbccddeeff. Without hyphens: ce332000b4ea11f19234aabbccddeeff. slice(0,8)="ce332000", slice(8,12)="b4ea", lower[12]='1' (version), lower.slice(13,16)="1f1". hi=0x1f1=497. mid=0xb4ea=46314. lo=0xce332000=3459465216. ticks=497*2^48 + 46314*2^32 + 3459465216. Let me just trust and verify with node.
+
+- Variant detection: varNib = parseInt(lower[16]). For 'aabb...' lower[16]='a' = 1010. (a & 0xc)=8 → rfc4122. Good.
+  Microsoft: (v & 0xe)==0xc → 110x. Good.
+  future: (v&0xe)==0xe → 111x. Good.
+  reserved otherwise (0xxx). Good.
+
+- Version text: `VERSION_MEANING[versionNum] ?? ...`. versionNum 0-8 covered.
+
+- Note: `versionNum` from lower[12]. For v7 canonical, lower[12]='7'. Good.
+
+One issue: the generator only supports v4/v7. Design requires v4/v7. Fine.
+
+Potential defect: v7 timestamps generated with `Date.now()` but only b[0..5] set; the rest is random. Good.
+
+Potential defect: parse accepts mixed separators? e.g., "01a0bc8d0e0f7820adafa5739f94c4d2" (32) accepted. Good.
+
+Potential defect: it doesn't verify the UUID is a valid variant to show "非法UUID"? Design variant "非法UUID" probably shows invalid chars/length. It handles.
+
+Potential bug: In parse, if input has hyphens but also extra whitespace inside, `raw.trim()` only trims ends; a UUID with internal spaces would be caught by non-hex. Fine.
+
+Potential defect: `readableBJ` uses en-CA and replaces only first comma. Fine.
+
+Let me verify the v1 sample math and v7 sample with node.
+
+Now t20 cron. This is complex. Let me read it.
+dsh: reasoning:
+The cron implementation is complex. Let me analyze carefully for bugs.
+
+**nextRuns algorithm** — it operates in "wall clock" space (UTC millis representing the local wall clock). It starts at `startWall = parseStartWall()` which is a Date.UTC of the wall clock. Then `off` initialized:
+```
+const o0 = tzOffsetMin(zone, new Date(wall))
+off = tzOffsetMin(zone, new Date(wall - o0 * 60000))
+```
+Hmm, this is a bit odd but roughly computes offset. Then loop:
+- compute y, m0, d, h from wall (UTC getters on wall).
+- if year not in year set → jump.
+- if month not in monSet → jump to next month.
+- if dayMatch fails → jump next day.
+- `nh = hourSet.find(v => v >= h)`. If nh === undefined or nh > h → jump. If nh === h, continue to minutes.
+- for each m in minSet, for each s in secSet: t = Date.UTC(...); if t <= startWall continue; inst = t - off*60000; if tzOffsetMin(zone, new Date(inst)) !== off continue; fires.push.
+- After minute loop, jump to next hour.
+
+Potential bug 1: **Seconds in Quartz when multiple seconds and the current minute**. Suppose secSet=[0,30], minSet=[0], hourSet=[0], startWall at 00:00:10. m=0,s=0 → t=00:00:00 <= startWall skip. s=30 → t=00:00:30 > startWall → fire. Good. But what if startWall is 00:00:10 and next minute? The inner loop only considers current hour h and all minutes. Since it iterates all minSet for hour h, and after that jumps to next hour, not next minute. Wait: for the current hour, it loops over ALL minutes in minSet and ALL seconds, adding those > startWall. That's correct because it processes all minutes within the hour. Then jumps to next hour. Good.
+
+Potential bug 2: **When nh > h**, jump to hour nh. But minute/sec cursor resets implicitly because wall = Date.UTC(y,m0,d,nh,0,0). Good.
+
+Potential bug 3: **`if (t <= startWall) continue`** uses `startWall` (fixed) not current wall. This means all fires must be after the start. But when iterating later hours/days, t will be > startWall naturally. Fine.
+
+Potential bug 4: **DST offset handling**. `off` is the offset at the current wall time. When iterating a day that spans a DST transition, the offset may change mid-day, but `off` is only updated via `sync` jumps. Within an hour loop, if the hour is after a DST transition but `off` wasn't synced... Actually `sync` is called on day jumps and hour jumps. In `sync`, it recomputes o from target wall, then utc = target - o*60000, then o2 = offset at utc, if o2!==o adjust. It sets off=o and returns `utc + o*60000` = target. Wait sync returns `utc + o*60000`. If o2===o, utc = target - o*60000, so returns target. So sync returns target unchanged but sets off to correct offset. Actually returns `utc + o*60000 = (target - o*60000) + o*60000 = target`. So sync essentially returns target and updates off. OK. So wall remains target. Good.
+
+But there's a subtle bug: In the fires loop, `inst = t - off*60000`; then check `tzOffsetMin(zone, new Date(inst)) !== off` → skip. This skips nonexistent wall times. Good for spring forward. For fall-back ambiguous times, there are two instants with same wall; the algorithm picks the one using `off`; after transition, off would be the new (smaller) offset, and the same wall time occurs twice. It will only produce one fire (the one matching current `off`). Quartz typically fires once. Acceptable.
+
+Potential bug 5: **The offset `off` is never updated when the loop stays within the same day but crosses DST at 2am**. Consider daily at 02:30 in New York. Start day before transition at 00:00. `off` = EST (-5). hour jump to 02 (nh=2 > h=0) → sync(Date.UTC(y,m0,d,2)) sets off based on wall 02:00 on that day. For 2026-03-08, wall 02:00 doesn't exist. sync: o0 = tzOffsetMin(zone, new Date(wall)) — wall is treated as an instant 02:00 UTC = 21:00 previous day EST → offset -5. Then utc = wall - (-5)*60000 = 07:00 UTC. o2 = offset at 07:00 UTC = -4 (transition at 07:00). o2 !== o → o=-4, utc = wall +4h = 06:00 UTC. off=-4, returns wall. Then t = Date.UTC(2026,2,8,2,30). inst = t - (-4)*60000 = 06:30 UTC. tzOffsetMin at 06:30 UTC = -5 (still EST until 07:00). -5 !== -4 → skip. Good, so 02:30 skipped. Then after minute loop, nh2 = hourSet.find(v>h=2) — if hourSet=[2], nh2 undefined → sync next day. Then next day 02:30 EST off=-4? On 03-09, offset is EDT -4. wall 02:30 EDT exists. Good. So 02:30 skip works.
+
+But consider `0 30 2 * * ?` with start 2026-03-08 00:00. It should skip 03-08 and fire 03-09 02:30. The note says that. Let me verify.
+
+Potential bug 6: **dayMatch for `nW`**: 
+```
+if (t === 'domW') {
+  const n = dom.m.n
+  let x = n
+  const wd = new Date(Date.UTC(y, m0, n)).getUTCDay()
+  if (wd === 6) x = n - 1 >= 1 ? n - 1 : n + 2
+  else if (wd === 0) x = n + 1 <= last ? n + 1 : n - 2
+  return d === x
+}
+```
+Quartz `nW`: nearest weekday to day n without crossing month boundary. If n is Saturday, use Friday (n-1); if n is Sunday, use Monday (n+1). But if n=1 and Saturday, nearest weekday is Monday the 3rd (n+2). Correct. If n=last day and Sunday, nearest is Friday (n-2). Correct. Edge: n=1 and Sunday → Monday the 2nd (n+1). Fine. n=31 in a 30-day month would be invalid; Quartz would error. Here `n` range check is 1-31, but if n > last (e.g., 31W in Feb), then x could be 31 and d never equals 31, so no fire. Actually Quartz would treat 31W in a month with <31 days as... probably not fire. Minor.
+
+Wait, there's a subtle bug: when n is Saturday and n-1 is a Friday but n-1 could be 0? only if n=1: x = 1-1=0 not >=1, so x= n+2=3. Correct (Saturday 1st → Monday 3rd). Fine.
+
+Potential bug 7: `domLW` = last weekday. If last is Saturday → x=last-1 (Friday); if Sunday → last-2 (Friday). Correct.
+
+Potential bug 8: **Unix `full()` semantics**. `full(p)` returns true if the set contains EVERY value in [min,max]. For dom, min=1 max=31. If dom='*', parseField yields set 1..31 → full true. For dow, min=0 max=7; '*' yields 0..7 (8 values) → full true. Then `if (!ds && !ws) return domHit() || dowHit()` (both restricted → OR). `return domHit() && dowHit()` otherwise. This matches Vixie: if either is unrestricted, AND; if both restricted, OR. Correct.
+
+But note: `domHit()` for a `set` returns `dom.m.vals.has(d)`; for Unix dom '*' set is 1..31. Fine. `dowHit()` for Unix: `return dow.m.vals.has(js) || (js === 0 && dow.m.vals.has(7))`. For '*' set 0..7, js always in. Fine.
+
+Potential bug 9: **Quartz dom/dow**: `if (cron.quartz) return dom.m.type === 'any' ? dowHit() : domHit()`. If dom is `?` (any) use dow, else use dom. Correct.
+
+Potential bug 10: **`describeField` for Unix dow when `vals.length === f.max - f.min + 1`** = 8. If dow set has 0..6 (7 values, e.g., `0-6`), not full, describes. Fine.
+
+Potential bug 11: **parseField `?` handling with regex `[LW#?]`**. If field is `?` only, ok. If a range contains letters L/W in a name? e.g., month names don't contain L except JUL, APR? JUL contains L! `t.match(/[LW#?]/g)` on "JUL" → matches 'L'! Then `if (!f.quartz) throw Unix doesn't support L`. But wait, for the monthly field in Unix, `JUL` should be valid. Let's check: parseField('JUL', monthDef). `sp = 'JUL'.match(/[LW#?]/g)` → ['L']. ch='L'. `if (ch === '?')` no. `if (!f.quartz) throw new Error('Unix 五字段方言不支持 L...')`. **So `JUL` (July) is rejected in Unix dialect!** That's a real bug. Similarly 'JUL' in Quartz: quartz=true, then `if (f.kind === 'dom')` no, `if (f.kind === 'dow')` no, then `throw new Error('字段「月」不支持 L')`. So `JUL` is rejected in BOTH dialects! Also any month name containing 'L': JUL only (months: JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC). JUL has L. Also 'W' appears in... none of month names. DOW names: SUN MON TUE WED THU FRI SAT — 'W' in WED! `WED` matches W. So `WED` in Unix → throws "Unix 不支持 W"; in Quartz → since f.kind==='dow', it goes into dow branch, t='WED', not 'L', not `^(\d)L$`, not `^(\d)#(\d)$`, → throw "字段「周」的 L/# 语法「WED」无法识别". So weekday names WED are rejected in both dialects. Also 'SAT'? no W/L. 'SUN','MON','TUE','THU','FRI' fine. But WED broken. Also 'JUL' broken.
+
+This is a solid, high-severity functional bug. Let me verify with a node extraction or by reading. The regex check happens before name parsing, so yes.
+
+Let me confirm: parseField raw='WED', t='WED', sp = t.match(/[LW#?]/g) → matches 'W'. ch='W'. Not '?'. `if (!f.quartz)` — in Unix, throws. In Quartz, f.kind==='dow', so `if (f.kind === 'dom')` false, then `if (f.kind === 'dow')`: t==='L'? no. dl match `^(\d)L$`? no. sh match? no. throw. Yes, broken.
+
+Also month `JUL` in Quartz: f.kind==='month', not dom/dow → throw `字段「月」不支持 L`. Broken.
+
+Great catch.
+
+Potential bug 12: **parseField range with names and step**: `*/15` works. `1-5` works. Names ranges like `MON-FRI` work (no L/W). But `WED` standalone broken.
+
+Potential bug 13: **`nW` for `W` in a list** e.g. `15W` fine. `LW` fine. But `L-3`? not supported (Quartz supports L-3 for last day minus offset). Not required by design.
+
+Potential bug 14: **`dowL` in Quartz returns set([7])** — design says "L（月末/最后一个周X）". `5L` = last Friday. `L` alone in dow field = Saturday (7). Correct per Quartz.
+
+Potential bug 15: **`n#m` with m up to 5** — correct.
+
+Potential bug 16: **Year field**: parseField for year has no nameVal; `*` → 1970..2199. Step etc. `2026` works. Range `2026-2030`. Fine. But `describeField` for year with `vals.length === f.max - f.min + 1` → "任意值（每一年）". Fine.
+
+Potential bug 17: **parseStartWall requires `T` separator and exactly YYYY-MM-DDTHH:mm**. datetime-local input provides that. But if user types 'YYYY-MM-DD HH:mm' with space, parse fails → error. The design says preview start time. Minor. Also `datetime-local` in some browsers includes seconds. Fine.
+
+Potential bug 18: The `onMounted` calls `fillNow()` then `execute()`. fillNow sets startLocal; watch on startLocal triggers execute too. But `expr` watch also triggers execute when expr changes. Fine.
+
+Potential bug 19: **`nextRuns` when `secSet` in Unix is [0] and minSet has multiple values but `h` current**. Good.
+
+Potential bug 20: **`horizon` computed as `y0 + 29` where y0 = new Date(startWall).getUTCFullYear()**. Fine.
+
+Potential bug 21: **No subsequent execution**: If expr is e.g. `0 0 30 2 *` (Feb 30), dayMatch never true, loop jumps month by month, until horizon y0+29 → returns notFound. Good.
+
+Potential bug 22: **iteration limit vs correctness**: Each loop iteration usually jumps hours/days, so 5M is plenty. But the inner minute loop can add. Fine.
+
+Potential bug 23: **`if (nh === undefined || nh > h)` block**. When nh === undefined (no hour >= current h), jump to next day at 00:00 via sync. But then `wall = sync(Date.UTC(y,m0,d+1))`. Date.UTC handles overflow. Good.
+
+Potential bug 24: **Quartz `*` in seconds** gives 0..59; secSet 60 values. Fine.
+
+Potential bug 25: **`parseField` for `0/15` syntax**: range='0', si>=0, step=15, lo=0, hi=f.max. For minute → 0,15,30,45. Correct. For dom `1/5` → 1,6,11,16,21,26,31. Quartz semantics? Usually `1/5` means every 5 starting at 1. OK.
+
+Potential bug 26: **Bounds check for step range**: `if (lo<f.min || lo>f.max || hi<f.min || hi>f.max)`. For `*/15` hi=f.max. Fine.
+
+Potential bug 27: **Unix dow '7'**: min 0 max 7. `dow = 7` set {7}. dowHit: js (0-6) has(js)? no; js===0 && vals.has(7) → true on Sunday. Good. `0-6` gives set 0..6; full? min 0 max 7, size 7 ≠ 8 → not full, so if dom is '*' (full) → AND; dowHit js in 0..6 always true; domHit true. Fine.
+
+Potential bug 28: The `describeField` for a full Unix dow: vals length 8 == f.max-f.min+1=8 → "每一星期（0/7=周日）". Good.
+
+Potential bug 29: **`cronDowNameFor`** uses `QUARTZ_DOW_NAME` for quartz. But `QUARTZ_DOW_NAME` maps 1..7. For Unix `UNIX_DOW_NAME` maps 0..7. Good.
+
+Now, the biggest bug is WED/JUL. Let me verify by running the parseField logic in node. Let me extract it.
+
+Also let me test nextRuns correctness against a known reference. I can implement a brute-force check: e.g., `*/15 * * * *` from a known start should produce times at :00,:15,:30,:45. Let me run the extracted functions in node.
+
+I'll write a node script that includes the relevant functions copied from the Vue file (or better, reimplement by importing? Can't import .vue). I'll copy the script portion. Let me create a test harness in /tmp that extracts the functions via regex? Simpler: manually copy the core functions. But that risks divergence. Alternatively, since the code is TypeScript in a Vue SFC, I could use a small transform. Hmm.
+
+Given time constraints, I'll copy the parseField + nextRuns code into a JS test file. It's long but doable. Actually, I can extract the <script setup> block, strip TS types crudely... risky.
+
+Better: I'll write a focused node test replicating exactly the parseField WED/JUL logic to demonstrate the bug (2 lines), and also test nextRuns by copying it. Actually I can be smart: Use `sed` to extract lines 100-380 (the parser + nextRuns) into a .mjs and replace TS annotations? TS syntax is mostly type annotations that Node can't parse.
+
+Alternative: run the actual running site and interact. The site is at localhost:3000; but automating browser is heavy. There's probe.py but it only probes a path and returns console errors; not interactive.
+
+I think copying the exact code is the most reliable. Let me create /tmp/cron-test.mjs by extracting lines from the vue file and manually converting. Given the code is ~280 lines, I'll do it. Actually, I can use esbuild if available to transpile TS. Let me check if esbuild is in devkit node_modules. That would let me extract the script block, strip `defineProps`/refs, and bundle. Too complex.
+
+Simplest: copy the pure functions (parseField, fieldDefs, parseCron, dayMatch, tzOffsetMin, nextRuns, daysInMonth, MONTHS, DOWS) into a JS file. I'll do that carefully by hand from the source. It's mechanical.
+
+Let me do it. This is worth it for cron correctness.
+
+Also I need to read t21-t26. Let me parallelize: read t21, t22 now while writing cron test later.
+
+Actually, let me read the remaining files first, then do all tests. Let me read t21, t22.
+dsh: reasoning:
+T21 looks solid. Potential issues:
+1. `detectDstChanges` is described as "按天采样检测". In the template, if no DST change detected it says "区间内两端时区未发生 UTC 偏移变化（按天采样检测）". But the detection samples at most 4000 points across the span. For very long spans (e.g., > 4000 days ≈ 11 years), sampling interval > 1 day, could miss transitions. But there's a subtlety: `samples = ceil(span/day)` capped at 4000. If span is 8000 days, samples=4000, step=2 days. DST transitions are twice a year, so a 2-day step still catches them (offset differs for months at a time). Fine.
+
+2. **A real bug**: The template shows `<p v-if="inputErr" class="t21__err">` but `execute()` returns early on error and sets `result.value = null`, so the `v-else` empty message shows, and the `inputErr` paragraph is inside `v-if="result"` so it never shows! Line 349 is inside `<template v-if="result">`. So when there's an input error, the error paragraph is not displayed. However, `run.markFail(s.error)` sets status bar message to inputErr. So the error is shown in the status bar. So not fully silent. Minor UI bug: the dedicated error paragraph is dead code.
+
+3. **Calendar diff when start/end dates cross but `endDateLess` compares wall-clock dates across different timezones**. The comment acknowledges. For cross-timezone, `diffMs` sign and calendar sign may differ. They handle by using wall dates. Fine.
+
+4. **`calendarDiff` bug**: borrowed days when d<0 uses previous month of `bm` (end month). Standard algorithm: if d<0, borrow from month before end. Actually the typical algorithm: 
+   ```
+   if (bd < ad) { bm--; bd += daysInMonth(by, bm) }
+   if (bm < am) { by--; bm += 12 }
+   y = by-ay; m = bm-am; d = bd-ad
+   ```
+   The code computes `d = bd - ad` first; if d<0, m-=1 (where m=bm-am), then adds daysInMonth(prevY, prevM) where prevM = bm-1, prevY=by (or by-1). That's equivalent-ish. Let's test: start 2026-03-31, end 2026-04-01. ay=2026,am=3,ad=31; by=2026,bm=4,bd=1. y=0,m=1,d=1-31=-30. d<0: m=0, prevM=3,prevY=2026, d+=31 → 1. m=0 not <0. Result 0y0m1d. Correct.
+   start 2026-01-31 → 2026-03-01: y=0,m=2,d=1-31=-30→ m=1, prevM=2 (bm-1=2), daysInMonth(2026,2)=28, d=-2? Wait d was -30, +28 = -2, still negative! Bug? Let's carefully: bm=3 (March), so prevM = bm-1 = 2 (Feb), daysInMonth(2026,2)=28. d = 1 - 31 = -30. d += 28 = -2. Then m=bm-am-1 = 3-1-1=1. d is still -2. Result 0y1m-2d. That's wrong: 2026-01-31 to 2026-03-01 should be 1 month 1 day (since Jan 31 + 1 month = Feb 28/29... hmm actually the calendar difference is ambiguous). Let me think about the correct algorithm.
+
+   The standard algorithm: first borrow days needed:
+   ```
+   if (bd < ad) {
+     bm -= 1
+     bd += daysInMonth(by, bm)   // days in the month preceding end
+   }
+   if (bm < am) { by -= 1; bm += 12 }
+   y = by - ay; m = bm - am; d = bd - ad
+   ```
+   For Jan 31 → Mar 1: bd=1 < ad=31 → bm=2 (Feb), bd = 1 + daysInMonth(by=2026, bm=2) = 1+28 = 29. Then bm(2) < am(1)? no. y=0, m=1, d=29-31 = -2. Still negative! Hmm, that's because the algorithm assumes valid day-of-month; Jan 31 + 1 month = Feb 31 which doesn't exist. The standard "calendar difference" is tricky.
+
+   Let's consider what the "correct" answer should be. From 2026-01-31 to 2026-03-01. Adding 1 month to Jan 31 → Feb 28 (clamped). Feb 28 + 1 day = Mar 1. So 1 month 1 day. The code's output 0y1m-2d is clearly wrong/invalid (negative day component). Let me verify with the exact code. Actually wait, in the code: `d = bd - ad = 1 - 31 = -30`. `if (d<0) { m -= 1; prevM = bm-1 (2); prevY=by (2026); d += daysInMonth(2026,2)=28 → d=-2 }`. Then `if (m<0)` no. Return y=0,m=1,d=-2. Yes, negative day.
+
+   This is a real bug: calendar diff can produce a negative day component. Let me find a cleaner example: start 2026-01-30, end 2026-03-01: d=1-30=-29, +28 = -1 → 0y1m-1d. Also wrong. start 2026-01-29 → Mar 1: d=1-29=-28, +28=0 → 0y1m0d. Hmm that gives 1 month exactly? Jan 29 + 1 month = Feb 28? That's 0 days? Actually Feb 28 to Mar 1 is 1 day, but the code says 0. Because it borrowed 28 days (Feb has 28), d = -28+28 = 0. So calendarDiff is buggy for month-end/leap cases.
+
+   But the d<0 borrow uses daysInMonth of the month *before end month*, regardless of start. A more correct approach (used by many libraries) computes the difference by anchoring: add years/months to start, then remaining days. Let me verify with a cleaner known bug:
+   - start 2024-01-31, end 2024-03-01 (leap year). Code: bm=3, prevM=2, daysInMonth(2024,2)=29. d=1-31=-30+29=-1. Result 0y1m-1d. Correct should be 1 month 1 day (Jan31+1m = Feb29, +1 day = Mar1). So bug.
+
+   Actually, hold on. Is the "calendar difference" uniquely defined? Different conventions exist. But a negative day field is definitely unacceptable. Let me test the code path in node to confirm.
+
+   Also check leap-day span: 2024-02-29 → 2025-02-28: y=1,m=0,d=28-29=-1 → m=-1, prevM=1, daysInMonth(2025,1)=31, d=30; m<0 → y=0, m=11. Result 0y11m30d. Correct is 1 year 0 months 0 days? Feb 29 2024 to Feb 28 2025 is usually "11 months 30 days" or "1 year minus 1 day". Ambiguous but 0y11m30d is defensible-ish. Actually many libraries give 11 months 30 days. OK.
+
+   The negative day is the clear bug. Let me confirm which inputs produce negative: any start with day > days-in-month-before-end and end day small. E.g., 2026-05-31 → 2026-07-01: bm=7, prevM=6, daysInMonth=30, d=1-31=-30+30=0 → 0y1m0d. Hmm 0. May 31 + 1 month = Jun 30, +1 day = Jul 1, so 1m1d expected; code gives 0y1m0d. Wrong.
+
+   The specific negative case: bm-1 month has fewer days than (ad - bd). E.g., start 2026-01-31, end 2026-03-01: borrow 28 < 30 → negative. Let me confirm with node.
+
+5. `daysInMonth(y, mo) = new Date(Date.UTC(y, mo, 0)).getUTCDate()` — for mo=12 (December), Date.UTC(y,12,0) = Dec 31. Good.
+
+6. Another issue: In `sideOf` for gap, `wallNote` uses `p` computed from r.inst. Fine.
+
+Now the design for T21 variant "结束早于开始" and "跨时区". Implementation handles.
+
+Let me now read t22-t26. I'll read t22, t23.
+dsh: reasoning:
+Continue reading t22.
+dsh: reasoning:
+Let me look at the RawNumber / json utils, and then finish t22. The `numberFamily` uses BigInt(raw) on raw string from RawNumber. Let me check json.ts to see how RawNumber is produced and whether scientific notation / big ints are handled.
+
+Also, there's a potential bug: `naming='keep'` with key containing dots (e.g., "a.b") — isLegalIdent fails, toCamel splits on non-alnum → 'aB'. Fine.
+
+Potential bug: `analyzeObject` for nested object field passes `hasNull=false` and `nullable` from child object type is false. Fine.
+
+Potential bug in `emitRecord`: The fields use `f.type` directly. If a field is primitive `int` but nullable (hasNull true), buildField wraps to Integer. Good. But for record with Lombok, warning says ignored but `collectImports` adds lombok only if styleMode==='pojo', so fine.
+
+Potential bug: record with Jackson annotations on record components. `@JsonProperty` on record component is allowed in recent Jackson. Fine.
+
+Potential bug: **`buildField` wraps nullable primitive into wrapper, but does it import java.util.List for List types nested in children?** collectImports walks children when withChildren. For top-level multi-file mode, each file's `filePrelude(c, false)` only walks that class fields (no children since children are separate files). Good.
+
+Potential bug: **`emitPojo` with nestChildren=true emits children inside the parent class, but `collectImports` in filePrelude(root, true) walks children imports. Good. However, if `useJackson` and a nested child field needs @JsonProperty, import added. Good.
+
+Potential bug: **Java type for big integer overflow**: `RawNumber` raw string. Does parseJson preserve big integers as RawNumber? Let me check json.ts. If JSON.parse is used, big ints would lose precision. They wrote custom parseJson. Let me read.
+
+Potential bug: `numberFamily` for a decimal like `128.5` returns 'decimal'; decimalType double/BigDecimal. In `scalarType`, for RawNumber decimal returns `{type: decimalType.value, nullable:false}`. But if decimalType='BigDecimal', it doesn't add import? collectImports checks `f.type.includes('BigDecimal')` → adds. Good.
+
+Potential bug: **`numberFamily` for `1e3`** — regex `/^-?\d+$/` fails → decimal. So scientific notation treated as decimal. Fine.
+
+Potential bug: **negative zero / -0**? BigInt('-0')=0 → int. Fine.
+
+Potential bug: **Integer long boundary**: 2147483648 → long. Good.
+
+Potential bug: **null type override 'Long' in an array or field**: `nullType` options [Object,String,Long,Boolean]. If chosen 'Long', buildField wraps? type='Long', nullable true, WRAPPERS['Long'] undefined so stays Long. Import? No import needed (java.lang). Fine. If chosen 'Object', fine.
+
+Potential bug: **`uncertain` options `['String','BigInteger','Object']` for overflow**; if user picks BigInteger, import added. Good.
+
+Potential bug: **top-level array**: rejected with message. Design says JSON input; T27 handles arrays. T22 says "JSON输入". Design variant "类型确认". Fine.
+
+Potential bug: **`parseJson` duplicate keys warning**. Fine.
+
+Potential bug: **empty object** → root with no fields. emitPojo: no getters, class empty. Fine. emitRecord: `public record X(\n) {` — let me check: `lines.push(`${pad}public record ${cls.name}(`)`, then fields.length==0 → `lines.push(`${pad}) {`)`. So output:
+```
+public record X(
+) {
+}
+```
+That's valid Java. Fine.
+
+Potential bug: **reserved word as class name for nested child** — e.g., key "class" → toPascal → "Class" (capital) not keyword. Fine. Key "int" → Pascal "Int". Fine.
+
+Potential bug: **`usedClassNames` collision between root and child named same as root**. root name added first. Child uniqueClassName avoids. Good. But in `analyzeObject` exactName branch: `ctx.usedClassNames.add(name)` without checking. Root name already added at line 519 then again at 257. Fine.
+
+Potential big bug: **`uniqueClassName` name collision across separate top-level files in toplevel mode and inner referencing**. For inner mode, child classes defined nested, names must be unique among themselves. uniqueClassName handles. Good.
+
+Potential bug: **`filePrelude` for inner mode adds `package` and imports once; nested classes are static. Fine.**
+
+Now let me check the design for T22 to see if record output and type confirmation match. Let me read design text quickly. Also verify generated Java compiles conceptually. I could actually try compiling with javac if available. Let me check `which javac`.
+
+Let me continue reading t22 template end (lines 700-900) briefly, then t23-t26.
+
+Actually the template is less critical. Let me read json.ts util since T22 depends on it and T27 (not mine) too.
+dsh: reasoning:
+javac is available. I could try compiling generated Java. Let me continue reading t23-t26 and then run tests. Given the sheer amount, let me delegate some of the independent non-crypto verification to subagents in parallel? The brief says I should do the work; subagents could help. But context: I have enough. Let me be efficient.
+
+Actually, I realize I should use subagents to parallelize the remaining tool analysis (T23-T26) and possibly T18-T21 verification, while I focus on crypto and cron. But subagents don't share context and might produce inconsistent quality. Given the task is an audit with specific requirements, I'll do it myself but quickly.
+
+Let me read t23, t24, t25, t26. They're smaller (11-23KB). Let me read t23 and t24 first.
+dsh: reasoning:
+T23 analysis:
+
+**Bug candidate: `\u` handling in unescape uses `String.fromCharCode` which does NOT support surrogate pairs, but Java `\uXXXX` also operates on UTF-16 code units. So `\uD83D\uDE00` → two surrogate code units → JS string with surrogate pair → fine. fromCharCode with each separately gives the pair. OK.
+
+**Bug: `\uuu4e2d` handling:** j starts at i+1 (the first 'u'), while src[j]==='u' j++. For `\uuu4e2d`: i points at backslash, e = src[i+1]='u'. j=i+1, then while src[j]==='u' → j increments past 3 u's to the '4'. hex = slice(j, j+4) = '4e2d'. Good. i = j+4. Good.
+
+**Bug: escape doesn't escape U+2028/U+2029 or other chars, but those are fine in Java string literals.
+
+**Bug: escape of NUL etc. uses `code.toString(16).padStart(4,'0')` and prefix `\u`. For code < 0x20. Good. For code 0x7f also. Java allows \uXXXX. But note: `\u` escapes are processed by the Java compiler *before* lexing, so `\u000a` would become a real newline and break the string literal! In Java, writing `"\u000a"` is actually illegal / becomes a line terminator; the correct escape for newline is `\n`. But the escape function emits `\n`,`\r`,`\t` for those. For other control chars like 0x00, `\u0000` is a valid unicode escape producing NUL, and it's not a line terminator. For 0x0A it uses \n. Good. For 0x0D \r. Fine. So no issue.
+
+**Bug: The escape function doesn't escape the vertical tab 0x0B or form feed 0x0C specially; emits `\u000b`, `\u000c`. Valid. Unescape handles \f and octal.
+
+**Bug: unescape `\0`**: e='0', digits='0'; checks next char if octal. parseInt('0',8)=0. Good.
+
+**Bug: unescape octal with e>'3' and 3 digits**: e.g. `\777`? digits: e='7' (not <= '3'), so only up to 2 digits → '77' = 63. In Java, `\777` is parsed as `\77` followed by '7' because first digit > 3 means max 2 digits. Correct! `\377` = 255. `\400` → first digit '4' > '3', so digits='40' = 32, then '0' remains literal. Java: `\400` = `\40` + '0'? Actually Java spec: OctalEscape: \ OctalDigit | \ OctalDigit OctalDigit | \ ZeroToThree OctalDigit OctalDigit. So `\400`: first digit 4 (not 0-3), so only `\40` valid then '0'. So code correct.
+
+**Bug: unescape ordering for `\u` vs `\\u`:** The comment says `\\u4e2d` should be literal backslash + u4e2d. In the state machine, `\\` case: e='\\' → out += '\\', i+=2. Then continues at 'u', '4'... as literal chars. Good.
+
+**Bug: This is a *simulation* of Java's `\u` pre-processing, which is more complex. E.g., Java processes `\u` escapes even inside comments and before lexing; `"\\u0041"` etc. But as a text tool, acceptable.
+
+**Bug: unescape does not handle line continuation `\<newline>` (Java text block only? Actually in text blocks `\` at end of line is continuation). Not needed.
+
+**Bug: escape text block: `javaTextBlock` replaces `\r` with `\\r` AFTER splitting on '\n'. If input has Windows CRLF `\r\n`, split('\n') yields lines ending with '\r', then `.replace(/\r/g, '\\r')` → line + `\r`. So CRLF becomes literal `\r` + newline in the text block. In a Java text block, `\r` escape is not... actually `\r` is valid. But Java text blocks normalize line terminators. Hmm. Minor.
+
+However, there's a subtle bug: `javaTextBlock` does NOT escape `\t`, `\b`, `\f`, `\u`, control chars. In a Java text block, tab is allowed literally (though "incidental whitespace" only applies to spaces, not tabs). Actually the note warns. Also if the string contains `"""`, the function escapes `"` so `\"\"\"` → fine. If the text ends with `"`, the closing `"""` could merge: e.g., text `abc"` → lines `abc\"`, then `\n"""` → `abc\"\n"""` — fine because escaped. Good.
+
+But text block with content containing a lone `\` at end of line: escaped to `\\`. Fine.
+
+**Potential escape bug**: `for (const ch of s)` iterates by code point, so astral chars (emoji) are single iteration with codePointAt = full code point > 0xFFFF. Then default branch: code >= 0x20 and != 0x7f → `out += ch` which appends the surrogate pair. Good. But then `code.toString(16)` would be 5 digits if it were a control char (not possible for astral). Fine.
+
+**Bug in unescape sample**: SAMPLE_UNESCAPE = '"C:\\\\Users\\\\hao\\\\config.json\\n第二行 \\u4e2d\\u6587"'. In JS, `\\\\` → `\\` (two backslashes in the actual string), `\\n` → `\n` (backslash-n), `\\u4e2d` → `\u4e2d` literal. So the actual input string is `"C:\\Users\\hao\\config.json\n第二行 \u4e2d\u6587"`. After trimming quotes: `C:\\Users\\hao\\config.json\n第二行 \u4e2d\u6587`. Unescape: `\\`→`\`, then `n` literal? Wait: `\n` in the source is backslash + n → newline. Good. `\\`→`\`. So output: `C:\Users\hao\config.json` + newline + `第二行 中文`. Good.
+
+T23 looks quite complete. Compare with design: design text T23. Let me check design requirements: 引号、反斜杠、换行、制表符; 反向还原; 非法转义. Implementation covers. Good.
+
+One concern: the escape output of non-ASCII: design says "中文换行文本" example. Implementation keeps Chinese literal. Java source encoding must be UTF-8; modern Java defaults to UTF-8 (Java 18+). Fine.
+
+Now t24, t25, t26. Let me read them.
+dsh: reasoning:
+T24 analysis. Key concerns:
+
+1. **`logicalLines` continuation**: rules for odd trailing backslashes. It joins `pending + raw.replace(/^[ \t\f]*/, '')`. But for a line with an escaped backslash `\\\\` (2 backslashes) → trailing=2 even → not continuation. Correct.
+
+2. **`propUnescape` unknown escapes**: default `out += e` drops the backslash. Java Properties: `\b` → backspace? Actually java.util.Properties `load` handles `\t \n \r \f \uXXXX` and for other escapes, the backslash is dropped (e.g., `\z` → `z`, `\=` → `=`, `\:` → `:`, `\#` → `#`, `\!` → `!`, `\\` → `\`). The code's default drops backslash for all including `\b`. Wait, java.util.Properties doesn't define `\b`? Let me recall: In `Properties.load`, the `loadConvert` method handles `\\uXXXX`, and switch on 't','n','r','f'; default: `out.append(aChar)` where aChar is the char after backslash. So `\b` → 'b' (backslash dropped), NOT backspace! Indeed Java Properties does NOT support `\b`. So the code's default `\b` → 'b' matches. Good. (The comment says consistent.)
+
+   But note: the design T24 says "Properties文本编码/Unicode转义策略". Fine.
+
+3. **`parseProperties` key termination**: handles escaped chars by copying `t.slice(i,i+2)` raw. If a backslash is the last char (i+1 beyond), `t.slice(i,i+2)` returns just '\', i+=2 → ends. Then keyRaw ends with '\'. propUnescape default: e undefined → out += '\\'. Fine.
+
+4. **`parseProperties`: comments only recognized at line start after leading whitespace. Correct.
+
+5. **Value `.trim()`**: java.util.Properties trims leading whitespace after separator but does NOT trim trailing whitespace? Actually `Properties.load` does not trim trailing whitespace — trailing spaces are preserved. The code does `.trim()` on value, which removes trailing spaces. That's a divergence from java.util.Properties. Minor. But it also trims leading, which is correct (leading whitespace after separator is skipped). Actually the parser already skipped leading whitespace before valueRaw. So `.trim()` additionally strips trailing whitespace, which java.util.Properties preserves. Low severity semantic bug.
+
+   Similarly `.trim()` on key. Fine.
+
+6. **buildTree conflicts**: `a=1` and `a.b=2`: entries order: a=1 creates root.child 'a' = val. Then a.b: parts ['a','b']; i=0, node=root, not val/arr, idx null, part='a', not last: next=val → conflict pushed, next replaced with map. So conflict. Output not produced (run.markFail and return). Good.
+
+   But wait: there's a bug: after conflict, the loop continues building. Since it returns early on any conflicts and doesn't output, fine.
+
+7. **`literalKeys` keyed by original key** for yaml→props uses `k` from object entries. For p2y uses entry key. Fine.
+
+8. **YAML → Properties with dotted key**: `flattenYaml` uses `escapePropKey(k)` which escapes `.`? No, escapePropKey only escapes `[\\=: #!]`, not dots. So a YAML key `my.app.version` becomes `my.app.version=1.0` in Properties. But for a literal key it keeps `k`. But for nested objects, key segments get joined with '.', and any key itself containing '.' would create ambiguity. The note and literal toggle handle. Fine.
+
+9. **Duplicate key handling for p2y**: properties duplicate keys → last wins, entry replaced. Note added. Fine.
+
+10. **JSON_SCHEMA for YAML**: `yaml.load(input, { schema: yaml.JSON_SCHEMA })`. JSON_SCHEMA does not resolve dates, so dates stay strings. But it also means `yes/no/on/off` are strings (JSON schema). Good. Actually js-yaml JSON_SCHEMA still parses `1.0` as number 1, and output `1` (as the note says). Good.
+
+11. **Potential bug: YAML anchors/aliases or merge keys**: JSON_SCHEMA may not support `<<` merge. Not required.
+
+12. **Potential bug: `flattenYaml` empty objects**: `{}` in YAML → typeof object, Object.entries empty → produces NO output lines, silently dropping the key. For example `a: {}` → no `a=` line. Similarly `a: []` → no line. This is data loss. The design says "默认保留字符串，冲突先报错". Empty object/array handling not specified. Minor.
+
+13. **Potential bug: `flattenYaml` for nested arrays of objects**: produces `prefix[0].field=...`. Good. But arrays use `[i]` without escaping; `escapePropKey` is applied to the object key but not to `prefix`. Fine.
+
+14. **Important: YAML → Properties escaping of special chars in keys**: `escapePropKey` escapes `=`, `:`, space, `#`, `!`, `\`. Good.
+
+15. **p2y output YAML with quoted values**: `yamlQuoteVal` always double-quotes. For a value containing a newline, escapes to `\n`. Good. But `yamlQuoteVal` does NOT escape `\u2028` etc. Fine.
+
+16. **`yamlQuoteKey` for literal key**: force quotes. Fine.
+
+17. **A real bug candidate: `emitArr` for arrays of objects.** Let's check. For item map, `inner = emitMap(item, indent+1)`. emitMap uses `ind = '  '.repeat(indent+1)`. Then `inner[0] = ind + '- ' + inner[0].slice(ind.length + 2)`. ind = '  '.repeat(indent) (for the array level). inner[0] starts with '  '.repeat(indent+1) = ind + '  '. slice(ind.length+2) removes ind + 2 spaces, leaving the rest. So `inner[0]` = ind + '- ' + rest. Correct YAML:
+```
+key:
+  - field: value
+    field2: value
+```
+Wait, but emitMap for the item uses indent+1, so subsequent lines have '  '.repeat(indent+1) = ind + '  '. The first line becomes ind + '- ' + rest. Since '- ' is 2 chars, alignment matches. Good.
+
+18. **`arrayStrategy`**: when 'keep', `a.b[0]` becomes key `a.b[0]` as a literal map key. Then emitMap emits `"a.b[0]": "..."` (quoted because key contains '['). Fine.
+
+19. **`decodeUnicode` false**: propUnescape keeps `\uXXXX` literal. Fine. But if decode=false, the unicodeDecoded note isn't added. Fine.
+
+20. **Sample**: SAMPLE has `app.title=Java \\u5f00...` in a JS template literal. In the actual string that's `Java \u5f00\u53d1\u5de5\u5177` (single backslash). propUnescape decodes to 开发工具. Good.
+
+21. **Potential bug: parsing keys with `\uXXXX`**: okay.
+
+22. **`logicalLines` trailing whitespace after a continuation backslash**: Java Properties requires the backslash be the last char before line terminator; trailing whitespace after backslash makes it not a continuation. The regex `/(\\+)$/` requires backslash at end. If there's trailing space, no match. Correct.
+
+23. **Bug: `logicalLines` with `\r\n` split** handled by regex. Good.
+
+Now T24 design: let me check the "父子键冲突" variant and "YAML回转Properties". Implementation handles.
+
+Wait — a notable potential bug: **`flattenYaml` for a literal key in a nested structure** uses `literalKeys.value[k]` where k is just the segment, not the full path. And `buildTree` (p2y) uses `literalKeys.value[key]` full key. Inconsistent but workable.
+
+Also `collectDottedKeys` only recurses into plain objects and skips arrays (`if typeof value !== 'object' || Array.isArray(value) return`). So dotted keys inside arrays aren't collected. Minor.
+
+Now, one important thing: **p2y `literalKeys` default false**. The design says "含点的字面键" example `my.app.version`. With default, `my.app.version=1.0` → nested `my: app: version: "1.0"`. That's intended (design sample says my.app.version is a literal key but tool asks confirmation). Fine.
+
+Let me now read t25 and t26.
+dsh: reasoning:
+T25 analysis:
+
+**Sample parsing order issue**: In the SAMPLE, there's a log line 229 that contains "com.example.order.OrderServiceException: 创建订单失败..." embedded in the log message. The parser's main-header detection requires `!/^\s/.test(line)`. Line 229 starts with `2026-09-20 ...` which is not whitespace, so it tries EXC_RE on the trimmed line. EXC_RE = `/^((?:[A-Za-z_$][\w$]*\/)?(?:[A-Za-z_$][\w$]*\.)+[A-Za-z_$][\w$]*)(?::\s?(.*))?$/`. The line starts with "2026-09-20..." which doesn't match a class name. So pushLog. Good.
+
+**The main exception header at line 230** `com.example.order.OrderServiceException: ...` — not indented, EXC_RE matches type with message, next line is `\tat ...` → looksLikeStackContination true → new trace. Good.
+
+**Suppressed handling**: line 239 `\tSuppressed: com.example...`. SUPPRESS_RE matches `^\s*Suppressed:\s*`. rest = `com.example.order.InventoryLockException: ...`. EXC_RE matches. owner = cur (main exception). Adds suppressed. cur = exc. Then frames go to suppressed. Then `... 2 more` sets cur.commonOmitted (the suppressed exc). Good. Then `Caused by:` creates new exc pushed to seg.chain (main chain). cur = caused. Good.
+
+But here's a subtlety: `Suppressed` frames are stored in `exc.groups`, while `... 2 more` after the suppressed frames sets `cur.commonOmitted` where cur is the suppressed exc. Good.
+
+**classifyAndGroup** recurses into suppressed. Good.
+
+**Potential bug: `tidyExc` for suppressed**. `tidyExc(exc)` iterates exc.groups and appends frames; then `for (const s of exc.suppressed) tidyExc(s, out)`. For the main exc, suppressed printed after frames, before commonRaw. Good. But note suppressed frames within `tidyExc` are appended with their raw lines; the `Suppressed:` header itself is in `s.rawHeader` and printed. Good.
+
+**Potential bug: `... N more` semantics.** In the sample, the suppressed block has `... 2 more` meaning 2 frames omitted that are common with the enclosing stack. The parser stores commonRaw and tidyExc prints it. The UI shows a custom line "… N more（与前一个异常重叠的公共帧，堆栈省略标记）" instead of the raw. Good.
+
+**Potential bug: order of `commonRaw` for main vs suppressed**. Fine.
+
+**Potential bug: The main-header heuristic requires next line to be a stack continuation OR the class name ends with Exception/Error/Throwable**. If a stack trace header is followed by a blank line then `at` lines (unusual), it won't detect. Edge.
+
+**Potential bug: A log line like `INFO com.example.Foo - something`**. Line not indented, EXC_RE: does "INFO com.example.Foo - something" match? EXC_RE requires the whole string match `type(: msg)?` where type is dotted class. "INFO com.example.Foo - something" has spaces, so no. Good. But `com.example.Foo` alone log line followed by `at ...` would be treated as exception header. Rare.
+
+**Potential bug: `looksLikeStackContination`**: checks `at`, MORE, SUPPRESS, CAUSED. Good.
+
+**Design variant "无法识别堆栈"**: implementation markFail with message and input preserved. Good. "普通日志混入": labeled. Good.
+
+**Bug candidate**: The right panel only renders when `segments.length`, but on error (no traces) segments may be non-empty (logs) — wait, `execute` sets `segments.value = segs` BEFORE checking traces. If no traces, segs contains only log segments. So right panel shows the logs labeled "非堆栈内容", plus the status bar error. The design variant "无法识别堆栈" should show that. Good.
+
+**Bug: copyTidy disabled unless status ok.** Fine.
+
+Now t26.
+dsh: reasoning:
+T26 analysis:
+
+**Bug: The `watch([source, target], execute)` and also `execute` called in template buttons.** The `execute` function is only re-run on source/target changes and manual button. But there is NO watch on `input`. So when the user edits the input, the output is NOT marked stale (the `sig` includes input though). Actually `useToolRun(sig)` presumably watches sig to mark stale. Let me check useToolRun. If sig changes, status → stale. So output becomes stale. Good.
+
+**Bug: `mavenToGradle` returns `{lines, ok}` but if some deps failed, `res.ok` counts successful. Good. `manual` gets entries. Good.
+
+**Bug: Maven version property `${...}` detection:** `/\$\{[^}]*\}/` on v. Good. But `g` or `a` could contain `${}` too — not checked. Minor.
+
+**Bug: Maven scope mapping for `compile` in Gradle → implementation without scope. Correct. But design says "scope与configuration不等价时要求选择映射". The implementation auto-maps compile→implementation, provided→compileOnly, test→testImplementation, runtime→runtimeOnly. That's a fixed mapping, no user selection. Design says "scope与configuration不等价时要求选择映射". The tool does hardcode mappings without offering choice (e.g., compile could be `api` or `implementation`). This is a design divergence: design requires a mapping choice dialog. Medium.
+
+**Bug: Parent POM inheritance**: The tool only parses `<dependency>` blocks; it cannot know parent POM's dependencyManagement (versions). It outputs `${version}` placeholder when missing. Design variant "缺少version" and "父 POM 继承" — the prompt says "父 POM 继承、`${}` 表达式、需要手动映射". For missing version, warns. Good. But it does NOT detect if version comes from parent dependencyManagement — it just warns. Acceptable.
+
+**Bug: Gradle → Maven `CONFIG_TO_SCOPE`: implementation: null, api: null.** For `implementation`, `scope = CONFIG_TO_SCOPE['implementation'] = null`. Then `if (scope === undefined)` is false (null !== undefined), so proceeds; `scope: scope ?? null` → null. So Maven output has no `<scope>` (default compile). Good. For `api`, null → no scope. But `api` in Gradle typically maps to `compile` in Maven (which is default), so no scope is fine. Good.
+
+**Bug: `testCompileOnly`, `testRuntimeOnly`, `annotationProcessor`, `platform`, `enforcedPlatform` are in GRADLE_LINE_RE, but `CONFIG_TO_SCOPE` lacks testCompileOnly/testRuntimeOnly/annotationProcessor.** So `if (scope === undefined)` → error "configuration ... 无直接 Maven scope 等价". Good, they go to manual. But wait: `annotationProcessor` has no Maven direct equivalent (provided-ish?). Fine.
+
+**Bug: Gradle coordinate with `@jar`**: strips and warns. Good.
+
+**Bug: Gradle line with `implementation "g:a:v"` (Kotlin uses `implementation("...")` or `implementation("...")`). Regex handles optional `(`. Good.
+
+**Bug: Gradle dependency with `implementation(group = "...", name = "...", version = "...")`** not handled → GRADLE_LINE_RE won't match → `matched` stays 0 → returns null → "未找到可解析的依赖声明行". Design says "不支持的表达式" should be flagged. Hmm, if there's a mix of supported and unsupported lines, `matched`>0 and unsupported lines silently ignored! E.g.:
+```
+implementation 'a:b:1.0'
+implementation group: 'x', name: 'y', version: 'z'
+```
+The second line won't match GRADLE_LINE_RE (since after `implementation` comes `group:` not a quote), so it's silently skipped. The tool reports "已转换 1 条依赖" without mentioning the skipped one. That's a silent-drop / false success. Design requires "不支持的表达式" handling. This is a genuine defect: unsupported Gradle lines are silently ignored when at least one supported line exists.
+
+Similarly, a line like `implementation 'g:a:1.0' { exclude group: 'x' }` would match the coordinate and ignore the exclude silently (design might expect flagging).
+
+Also Maven: `<dependencyManagement>` blocks contain `<dependency>` too. The regex `/<dependency\b.../` matches dependencies inside `<dependencyManagement>` as well, and also `<plugin><dependencies>` etc. The tool would convert BOM-managed dependencies as regular deps. Actually the design says import scope handled, but dependencies under dependencyManagement are typically version-less. The tool would warn about missing version. Acceptable-ish but potentially confusing.
+
+**Bug: `block` uses `tag(block,'scope') ?? 'compile'`.** If `<scope>` appears in an embedded `<exclusions>`? no. Fine.
+
+**Bug: classifier coord order**: Maven coordinate is g:a:packaging:classifier:version for Gradle. The compacts form for classifier: `g:a:classifier:version` — actually Gradle's short notation is `group:name:version` and optionally `group:name:version:classifier` (classifier last!) or `group:name:version@ext`. Hmm. The correct Gradle string dependency notation is `group:name:version:classifier` (classifier as 4th part) OR `group:name:version@extension`. Actually Gradle supports `group:name:version:classifier` (e.g., `org.foo:bar:1.0:sources`). The code produces `${g}:${a}:${classifier}:${v}` — classifier BEFORE version. That's likely WRONG ordering. Let me verify Gradle's syntax.
+
+Gradle dependency notation: `group:name:version:classifier@extension`. From Gradle docs: "group:name:version:classifier". E.g. `com.google.guava:guava:23.0:sources`. So classifier comes after version. The code outputs `g:a:classifier:version`, which Gradle would interpret as version=classifier, classifier=version — wrong. And the reverse parser: `parts.length===4` → cls=parts[2], version=parts[3]. If Gradle notation is g:a:version:classifier, then parts[2]=version, parts[3]=classifier; the code treats parts[2] as classifier and parts[3] as version → **swapped**. This is a real bug in both directions.
+
+Let me double check Gradle docs. Yes: Groovy DSL `implementation 'org.springframework:spring-core:5.3.23:sources'` — hmm. Actually the Gradle format for classifiers: `group:name:version:classifier`. Reference: Gradle dependency notations: `group:name:version:classifier@extension`. So order is version then classifier. The code is wrong.
+
+This is a solid bug. Let me note it. Severity medium/high.
+
+Also the Maven→Gradle classifier should produce `g:a:version:classifier`, but code produces `g:a:classifier:version`. Wrong output.
+
+**Bug: `mavenToGradle` `target.value` could be 'maven'?** When source='maven', targetOptions only groovy/kotlin, and watch resets. Fine.
+
+**Design divergence: Gradle target syntax.** Design main board T26 "Maven转Gradle". Variants: 需要手动映射, 缺少version, 不支持的表达式. Implementation produces manual list for these. Good.
+
+**Bug: Maven `<version>` with `${...}`**: it continues (skips) and lists as error. But then if all deps skipped, res.ok=0 → error. Good.
+
+Now, let me also check T20 design and other design texts to compare. But I have enough for most.
+
+Let me now run the verification tests:
+1. Cron WED/JUL bug — copy parseField to node.
+2. Cron nextRuns correctness — copy.
+3. T18 timestamp sample and DST.
+4. T19 UUID v1 math.
+5. T21 calendarDiff bug.
+6. T22 compile generated Java with javac.
+7. T24 round-trip.
+8. T23 round-trip.
+9. T26 classifier ordering (just note).
+10. T20 no-future.
+
+Given the effort, let me delegate some verification to subagents to parallelize, while I do cron myself. Actually, let me just write focused node scripts.
+
+Let me start with the cron test harness. I'll create /tmp/cron.mjs by copying the exact functions. Let me extract lines 37-380 from the vue file programmatically and strip TypeScript. Actually, easier: I'll hand-write a JS version mirroring the logic exactly. But to be faithful, copying is better.
+
+Let me try extracting the script and compiling with esbuild if available. Check `devkit/node_modules/.bin/esbuild`.
+dsh: reasoning:
+esbuild is available. I can extract the <script setup> block from t20-cron.vue, strip the Vue-specific bits (defineProps, ref, watch, onMounted, useClipboard, useToast, useToolRun, errMessage), and transpile with esbuild to run the pure functions. That's complex because of refs.
+
+Alternative: Extract just the pure functions (fieldDefs, parseField, parseCron, dayMatch, tzOffsetMin, nextRuns, daysInMonth, MONTHS, DOWS) and prepend the constants. I'll write a script that uses esbuild to strip types from a copied snippet. Let me just create a JS file by copying the relevant code but using plain `const`/`let` instead of TS types, and use esbuild to transpile only if needed. Actually the pure functions have TS type annotations; I can strip them with esbuild.
+
+Plan: Create /tmp/cron-src.ts containing extracted lines 37-380 (constants + parser + dayMatch + tzOffsetMin + nextRuns). But it references `errMessage`, `clipboard`, `toast`, `run`, `ref`? Let's see: lines 37-380 contain only MONTHS, DOWS, QUARTZ_DOW_NAME, UNIX_DOW_NAME, FieldDef, fieldDefs, parseField, ParsedField, Cron, parseCron, daysInMonth, dayMatch, tzOffsetMin, MAX_ITER, Fire, nextRuns. These are self-contained except TS types (fine with esbuild) and `new Set`, `Intl`. No refs. 
+
+Let me extract lines 37-380 to a file, append test code, and bundle with esbuild. Actually I can use esbuild to transform TS in-memory via CLI: `esbuild --loader=ts` on stdin. But I need to also run it. Let me use node with esbuild's transform via require? Simpler: `node_modules/.bin/esbuild /tmp/cron-src.ts --bundle --format=esm --outfile=/tmp/cron-bundle.mjs`. Then append a test entry? I'll make cron-src.ts export nothing but include the functions, and add my test code at the end referencing them (they're module-scope). Since esbuild bundles into one file, my appended test code can call them if they're declared in the same module. Add `console.log` calls at the end.
+
+But the extracted code uses types like `ParsedField`, `Cron`, etc. esbuild strips types. Good.
+
+Let me do it: sed -n '37,380p' t20-cron.vue > /tmp/cron-src.ts, then append tests. But lines 37-380: verify line 380 ends nextRuns closing brace. Yes line 380 is `}`. Good. Line 37 is `const MONTHS`? Actually line 37 is `const MONTHS = ...`. Let me check: line 36 blank, line 37 `const MONTHS`. Yes.
+
+Let me create it and run esbuild.
+dsh: reasoning:
+Excellent! Confirmed the WED/JUL bug:
+- Unix: WED → error; JUL → error.
+- Quartz: WED → error; JUL → error (the error message says "Unix 五字段方言不支持 L" even though quartz=true! That's because... wait, the error for Quartz JUL says "Unix 五字段方言不支持 L". That means `f.quartz` was falsy for the month field! Look at fieldDefs: for quartz, the month def is `{ name:'月', kind:'month', min:1,max:12, nameVal:monthNameVal }` — it does NOT set `quartz:true`. Only dom and dow get `quartz:true`. The parseField checks `if (!f.quartz) throw new Error('Unix 五字段方言不支持...')` — it uses the FIELD's quartz flag, not the dialect! So in Quartz mode, month/second/minute/hour/year fields have `quartz` undefined, so any L/W/# in those fields (including JUL's L) triggers the "Unix 五字段方言" error. But actually the bigger issue: in Quartz mode, `?` is only allowed on dom/dow (correct), and L/W/# only meaningful on dom/dow (correct). So the `!f.quartz` check accidentally also handles quartz mode for non-quartz fields. But the error message is misleading ("Unix 五字段方言" in Quartz mode). More importantly, the JUL/WED bug stands.
+
+Actually wait: in fieldDefs(quartz=true), second/minute/hour/month/year defs lack `quartz:true`. So the check `if (!f.quartz)` is true → "Unix 五字段方言不支持 L". This is a bug in the error message but behaviorally, names containing L/W still fail. The core bug: names are parsed AFTER the L/W/# check.
+
+Now the nextRuns crashed: `get("year")` returns undefined for Unix (no year field), then `.m` throws. But in the Vue code, line 319: `const yearM = get('year').m as ... | undefined`. For Unix, `get('year')` is undefined → `.m` throws TypeError. This would happen for EVERY Unix expression! But wait — the tool supposedly works for Unix. Let me re-read line 319:
+```
+const yearM = get('year').m as { type: string; vals: Set<number> } | undefined
+```
+`get(k) = cron.fields.find((p) => p.def.kind === k)!` returns undefined for 'year' in Unix. Then `.m` → TypeError. So `nextRuns` would throw for all Unix expressions. In `execute()`, `nextRuns` is called at line 519 WITHOUT a try/catch (the try/catch only wraps parseCron at 485-491). So the error would propagate out of execute() as an unhandled exception in the watch callback → the tool would break/crash for Unix dialect!
+
+Wait, but is that real? Let me double check line 319. Yes:
+```
+const yearM = get('year').m as { type: string; vals: Set<number> } | undefined
+```
+Hmm, but maybe `fieldDefs(false)` includes a year field? No, it returns 5 fields without year. So `get('year')` is undefined. `.m` throws.
+
+This is a severe bug: **the Unix five-field dialect always throws a TypeError in nextRuns**, because it unconditionally dereferences `get('year').m`. This means the whole "Unix 五字段" mode (the default!) is broken: no field explanation? Actually fieldRows are set before nextRuns (line 493), but the fireList computation throws. Let me verify by running my harness — it crashed exactly there. So in the real app, onMounted → execute → nextRuns throws → uncaught error. The UI would show fieldRows but no fires, and status remains whatever. Actually the exception propagates from `execute()` called in `onMounted` and in watch; Vue may log an error. The tool would appear partially broken.
+
+Hold on — this seems too severe for a shipped tool. Let me re-read the actual source lines 313-320 to be sure I extracted correctly and that `get('year')` isn't guarded.
+
+Line 319: `const yearM = get('year').m as { type: string; vals: Set<number> } | undefined`. Yes, unguarded. And `get` is defined at 314: `const get = (k: string) => cron.fields.find((p) => p.def.kind === k)!;`. The `!` only affects TS. At runtime undefined.
+
+So `get('year').m` throws for Unix. This is a **blocking** defect for T20's default Unix mode. Unless... the `as` cast somehow? No.
+
+Wait, but maybe the build/transpile does something? No, TS `as` is erased. It throws.
+
+Let me confirm by fixing my harness to call with quartz (which has year only if 7 fields). For Quartz 6-field, there's also no year field! `fieldDefs(true)` returns 6 fields; year only added when fs.length===7. So `get('year')` also undefined for 6-field Quartz. So the crash affects both Unix and 6-field Quartz. Only 7-field Quartz expressions work. That's a huge bug.
+
+Hmm, that can't be right for a tool that claims to be verified. Let me check git blame / whether there's a different version. Let me re-read lines 313-320 carefully from the file.
+
+Actually wait, maybe I misread and it's `get('year')?.m`. Let me grep.
+dsh: reasoning:
+Confirmed: `get('year').m` at line 319 unconditionally dereferences undefined for both Unix and Quartz-6-field. This is a blocking bug. Let me verify the runtime behavior precisely by patching my harness to catch it — I already saw the TypeError. Let me also verify the intended fix (`?.m`) makes it work, to confirm it's the only blocker.
+
+Let me create a patched version of nextRuns with `get('year')?.m` and run the correctness tests. This will let me evaluate the rest of the cron logic despite the bug.
+dsh: reasoning:
+My test harness references `wallString` which is defined in the Vue file outside lines 37-380. Let me add `wallString`/`pad` myself. Let me patch the test file. Actually the extraction is lines 37-380, `wallString` is at line 458. Let me just append a local definition before tests. I'll redo.
+dsh: reasoning:
+With the `?.` fix, the core cron logic works correctly:
+- */15 from 2026-01-15 00:07:30 Shanghai → 00:15, 00:30, ... correct.
+- 0 0 12 L * ? → last day of each month at 12:00. Correct.
+- NY DST: 2026-03-07 02:30, then 2026-03-09 02:30 (skips 03-08 which doesn't exist). Correct.
+- Never fires: 0 0 30 2 * (Jan 30? Wait `0 0 30 2 *` = minute 0, hour 0, day 30, month 2. Feb 30 never exists → notFound after 29 years. Correct.)
+- Unix OR: 30 4 1,15 * 5 → Jan 1,2,9,15... Let me verify: dom 1,15; dow 5 (Friday). OR: matches day 1, day 15, or Fridays. Jan 1 2026 is Thursday. Jan 2 is Friday. Jan 9 Friday. Jan 15 Thursday. Correct OR semantics.
+
+So the ONLY blocking bug in cron's runtime is the `get('year').m` dereference. Everything else works. Great finding.
+
+But wait — the real tool would crash on line 319. Let me double-check that this actually manifests in the running app, since maybe TypeScript's `!` and esbuild transform... No, runtime is runtime. Let me confirm by checking the actual built bundle or running the site. The site at localhost:3000 — let me probe the cron page. If it's running, I can check console errors. Let me check if localhost:3000 is up.
+
+Actually, better: let me verify useToolRun and whether execute exceptions are caught. `nextRuns` is called at line 519 outside try. `execute` is called from watch callback and onMounted. An exception would propagate. Vue would log it. On initial mount, the template renders fieldRows (set at 493) but fireList empty, and status likely remains 'idle'. So the user sees the field explanation but "未找到执行时间" and possibly no error. Let me confirm actual behavior via probe if server is up.
+
+Let me check server.
+dsh: reasoning:
+The cron page URL is wrong; /tools/cron-parse returned 404. Let me find the correct slug from tools.ts. There's also "NUXT_E1005 Error caught during app initialization" on the 404 page. Let me find the slug for T20. Let me grep tools.ts.
+dsh: reasoning:
+The running site at /tools/cron shows an error page: H3Error: "Cannot read properties of undefined (reading 'm')". This confirms the blocking bug! And the initial error is "getTool is not defined" pageerror. Wait, the title is "出错了" (error page). The error is exactly the yearM deref. Excellent, definitive evidence from the running site.
+
+Actually the pageerror 'getTool is not defined' might be a separate issue on the error page itself. But the H3Error Cannot read properties of undefined (reading 'm') is our cron bug. This is a **blocking** defect: T20 is completely broken in the browser (SSR error → error page).
+
+Let me confirm with another probe and also check other pages (t18, t22, etc.) for runtime errors. Let me probe all T15-T26 pages.
+
+Slugs: t15 sm2, t16 sm3, t17 sm4, t18 timestamp, t19 uuid, t20 cron, t21 date-diff, t22 json2java, t23 java-escape, t24 properties-yaml, t25 stack-trace, t26 maven-gradle. Let me read tools.ts lines for slugs.
+dsh: reasoning:
+Confirmed: only `cron` is broken at page load. The others render. Good.
+
+Now let me verify T18/T19/T21/T22/T23/T24/T25/T26 logic via extracted code / node tests. Let me do the key ones:
+
+1. T18 timestamp: test the sample `1727208000` and DST gap/ambiguous with the extracted resolveWall logic. Also test a potential bug: `dstState` and `parseWallText`.
+2. T19 UUID: verify v1 sample and v7 sample.
+3. T21: calendarDiff negative day bug.
+4. T22: generate Java from sample and compile with javac.
+5. T24: round-trip Properties/YAML with sample, and conflict.
+6. T23: round-trip.
+7. T26: classifier ordering.
+
+Let me extract T18 and T21 script functions with esbuild similarly. Actually T18's functions use `ref` — but I only need the pure timezone/date functions. Let me extract lines 1-... hmm. Easier: I'll copy the specific functions into a test file manually (tzOffsetMin, resolveWall, parseWallText, parseTs). They're short.
+
+Actually, for T18 the most important verification is whether the sample and DST logic are correct. Let me write a node script that implements the same tzOffsetMin and resolveWall and tests. But re-implementing risks divergence. Let me extract via sed + esbuild, stubbing refs.
+
+T18 relevant functions: tzOffsetMin (48-72), standardOffset (97-102), dstState (105-111), resolveWall (114-135), parseTs (159-169), isLeap, parseWallText (175-192). These reference `cachedDtf` (38-46), ZONES, refs. Let me extract lines 36-192 and append a test; but it references `unit` ref in parseTs and `tz` etc. Hmm.
+
+Simpler: I'll test with sed extraction of the whole script and replace `ref(...)` calls with plain objects? Too messy.
+
+Let me just create a standalone test file by copying the pure functions (I'll copy them verbatim from the source with types stripped manually via esbuild? I can copy the block and let esbuild strip types, but the `unit` variable reference in parseTs will be undefined at runtime if not defined. I can define `const unit = {value:'ms'}` before. Let me do that.
+
+Approach: create /tmp/t18.ts with:
+- cachedDtf/dtfCache
+- tzOffsetMin
+- standardOffset, dstState
+- resolveWall
+- parseWallText
+- relTime
+- define `const unit = { value: 'ms' }` and adapt parseTs? parseTs uses `unit.value`. I'll define `const unit = { value: 'ms' as 's'|'ms' }`.
+- Test.
+
+Copying manually is fine; I'll copy the exact code. Let me do it. Actually, I can extract lines 38-192 from the vue and prepend a definition of `unit` and `cachedDtf` is included. Let me check line 38-192 includes dtfCache and cachedDtf. Lines 38-46: dtfCache+cachedDtf. 48-72 tzOffsetMin. 97-135 offset/dst/resolve (96 comment, 97 standardOffset). 137-155 relTime. 157 MAX_MS. 159-169 parseTs. 171-192 parseWallText. So lines 38-192 covers it, but includes `const MAX_MS`. It references `unit` in parseTs. Define `const unit = { value: 'ms' }` before. Does anything else reference outer vars? dstNoteFor is at 226 (not included). buildRow not included. Good.
+
+Let me extract 38-192 and prepend `const unit = { value: 'ms' };` then tests.
+
+For T21: extract lines 36-144 (dtfCache/makeDtf, tzOffsetMin, wallParts, shortOffset, resolveWall, parseLocal, pad, isLeap, daysInMonth, calendarDiff). These reference nothing external. Good. Append tests for calendarDiff.
+
+Let me do both.
+dsh: reasoning:
+T18 logic is correct:
+- Sample matches (UTC 2024-09-24 20:00, Shanghai 2024-09-25 04:00).
+- Invalid dates handled.
+- DST gap detected: NY 2026-03-08 02:30 → gap, picks inst 07:30 UTC = 03:30 EDT, off -300 (EST). The note says "已按切换前偏移 UTC-5 解释，实际对应 03:30". Good.
+- Ambiguous: picks 05:30 UTC (EDT -240) and 06:30 UTC (EST -300), takes earlier. Good.
+- dstState: NY July dst, Jan standard; Shanghai none; Sydney Jan dst (std 600 = +10). Correct.
+
+One minor thing: `parseTs('99999999999999999999')` error message says "毫秒 × 1000 后须在 ±8.64e15 内" even though unit was ms — the message is misleading ("× 1000" only applies to seconds). Actually the code: `时间戳 ${t} 超出可表示范围（${unit.value === 's' ? '秒' : '毫秒'} × 1000 后须在 ±8.64e15 内）`. For ms it says "毫秒 × 1000 后" which is wrong (ms isn't multiplied by 1000). Minor wording bug.
+
+Also T18 batch mode with `unit.value` etc. Fine.
+
+Now T21 calendarDiff. Let me test.
+dsh: reasoning:
+Confirmed T21 calendarDiff bug: negative day components for month-end start dates:
+- 2026-01-31 → 2026-03-01: `0年1月-2日` (invalid)
+- 2026-01-30 → 2026-03-01: `0年1月-1日`
+- 2024-01-31 → 2024-03-01: `0年1月-1日`
+
+The UI would display `{{ result.calY }} 年 {{ result.calM }} 月 {{ result.calD }} 日` → "0 年 1 月 -2 日". That's a real, user-visible bug. Severity medium/high (wrong result display).
+
+Also May31->Jul1 gives 0y1m0d, which is arguably wrong (should be 1m1d by the "clamp then add days" convention, or at least not negative). But the negative day is clearly a bug.
+
+The normal sample (91,800,000 ms) and DST sample (47 hours) are correct. End-before-start gives negative diff. Good.
+
+Now T19 UUID. Let me verify the v1/v7 sample math and generation layout.
+dsh: reasoning:
+T19 samples all verify. v1 math correct, v7 correct, v4/v7/v1 version & variant correct.
+
+One thing to check: T19 `SAMPLE_V7` is 2026-09-20, and current date in this environment seems to be 2026-09-20 (gen v7 now = 1789877545908 → 2026-09-20). Fine.
+
+T19 looks solid. Minor: the design requires v4/v7; implemented. Batch copy/download implemented. Parse handles illegal input. Good.
+
+Now T22: generate Java for the sample and compile with javac. I need to run the analyze functions. Let me extract the t22 script and stub imports (parseJson/RawNumber from utils, refs). This is more involved. The script uses `ref`, `computed`, `useClipboard`, `useToast`? It uses useClipboard, parseJson, RawNumber, downloadText, useToolRun, errMessage. Many Vue dependencies. But the code generation functions (analyzeObject, emitPojo, emitRecord, etc.) are pure except `ref` for overrides, naming, etc.
+
+Approach: extract the whole script block, but replace the Vue-global usages with stubs. I can use esbuild with `--define`? Simpler: write a preamble that defines `ref = (x)=>({value:x})`, `computed`, `useClipboard`, `useToolRun`, `defineProps`, `useToast`, `onMounted`, `onUnmounted`, `watch`, `downloadText`, `errMessage`, and imports for parseJson/RawNumber. But the file has an import statement; esbuild bundling with an alias? Actually I can create a small shim module and rewrite the import path.
+
+Alternative simpler approach: I'll extract just the code-generation functions and reproduce the input handling manually. The generation pipeline needs `heavily`: analyzeObject + emit. Let me copy the relevant functions (lines 36-97 for helpers? plus 99-460) into a test file. That's a lot but I can sed extract lines 36-460 and provide stubs.
+
+Let me try the sed+esbuild approach with a preamble module. The script block imports `parseJson, jsonErrorPosition, RawNumber from '~/utils/json'`. I can replace that import with a local implementation. Easiest: sed the import line out and prepend a local `parseJson` (JSON.parse with RawNumber handling). But for big ints, I need the real RawNumber behavior. I can implement a minimal RawNumber and parseJson that mimics utils/json.ts (which I've read). Since T22's big-int handling is what I want to test, I should use the real utils/json.ts. I can bundle it: replace `~/utils/json` with the actual path and let esbuild resolve.
+
+Let me do:
+1. Extract lines 1-581 (script) from t22.
+2. Replace `import type { ToolMeta } from '~/data/tools'` with nothing (or a stub).
+3. Replace `import { parseJson, jsonErrorPosition, RawNumber } from '~/utils/json'` with `import { parseJson, jsonErrorPosition, RawNumber } from '/Users/.../app/utils/json.ts'`.
+4. Prepend stubs for Vue globals: `const ref=(v)=>({value:v})`, `computed=(f)=>({get value(){return f()}})`, `defineProps=()=>{}` (but it's a compiler macro used as `const props = defineProps<...>()` — esbuild will see `defineProps` call; stub returns undefined), `useToolRun`, `useClipboard`, `useToast`, `watch`, `onMounted`, `onUnmounted`, `downloadText`, `errMessage`.
+5. The script uses `useToolRun(sig)` returning `{status:{value},markOk,markFail,markIdle,staleNote,errorMsg}`. Stub.
+6. `props` is unused mostly. `clipboard`, `toast` unused in script? clipboard used in copyFile; toast not. 
+7. At the end, remove `onMounted(...)` calls or stub them.
+8. The template is after `</script>`; I'll only extract up to line 581.
+9. Then append test code that sets `input.value = SAMPLE`, calls execute(), and prints `files.value[0].code`.
+
+But the script's `execute` uses `overrides.value`, `naming.value`, etc. Fine.
+
+Then use javac to compile the generated code. For nested inner classes, one file. Let me test POJO and record, with Jackson/Lombok off.
+
+Let me build it. The `defineProps` returns undefined but assigned to `props`; `props` not used except `props.tool`? grep shows `const props = defineProps...` and not used. Fine.
+
+`useToolRun(sig)` returns object with `status` ref, `markOk`, etc. I'll stub.
+
+Let me write the preamble.
+
+Actually, `sig` uses `overrides.value` etc. fine.
+
+Potential issue: `computed` used for? `targetOptions`? no that's t26. In t22, no computed? Let me grep. There's `currentFile()` function. I don't see computed. Good.
+
+Let me extract and run.
+dsh: reasoning:
+I included line 581 which is `</script>`? Actually the script ends at line 581 `</script>`. Let me use 3..580 instead. Let me check: line 580 is `onUnmounted(...)`, 581 `</script>`. So sed 3,580. Let me redo.
+dsh: reasoning:
+The generated code has a bug: `private List<Items> items;` but the nested class is `Items`. Wait, that's the same name? `List<Items>` refers to the nested static class `Items` — that's fine since it's nested. Actually yes, inside `Order`, `Items` resolves to `Order.Items`. That compiles.
+
+But there's a naming concern: the JSON key is "items", toPascal → "Items". The field is `items`. Java is case-sensitive, so `List<Items> items;` is valid. Good.
+
+Now let me compile with javac. The output above got truncated at 140 lines; the full code likely includes both nested classes. Let me write it to a file and compile. Also test record and Jackson and BigDecimal and overflow.
+
+Let me capture generated code for several cases and compile. Let me write a script that generates and writes files, then javac.
+
+Let me check the full output first and then compile.
+dsh: reasoning:
+javac needs the output dir to exist. Let me mkdir -p each. The "javac exit=0" is misleading because of the `&&` after head pipeline. Let me redo properly.
+dsh: reasoning:
+- jackson fails only because Jackson isn't on classpath — that's expected, not a code bug. I could compile with a dummy annotation, but it's fine.
+- record fails because the default JDK is older? Let me check java version. The design says record requires Java 16+. If the local JDK is <16, that explains. Let me check `java -version`. If JDK is 8/11, record isn't supported. Let me check.
+- badnames, bigdec, empty, overflow, pojo, pojoMulti all compile. 
+
+Let me check the record output content and java version. Also inspect overflow and badnames outputs for correctness (BigInteger import, overflow String, keyword handling).
+
+Let me view outputs.
+dsh: reasoning:
+Interesting findings:
+
+1. **record output appears syntactically valid** (Java 16+). Local JDK is 1.8, so can't compile. I'll note it as "could not compile locally (JDK 8), syntax appears correct". But wait, there's a subtle Java issue: a record's body containing nested records with no semicolon? Records don't need semicolons. Fine. Actually, `public record Order(...) { public record Items(...) {} }` is valid. Good.
+
+2. **badnames: `"中文键":5` produced field named `field`**. Let me trace: key "中文键" → naming camel → toCamel: parts = key.split(/[^A-Za-z0-9]+/) → [''] filtered → [] → returns ''. Then javaFieldName: name = '' ; isLegalIdent('') false → fixed = toCamel(key) || 'field' = 'field'; warning. Then sibling check: sibling already has ... 'field1abc'? No. Actually order of keys: class, int, my-key, 1abc, 中文键. 
+   - "class" → toCamel('class')='class'; isLegalIdent('class')? 'class' is keyword → false → fixed = toCamel('class')='class'... wait isLegalIdent returns false because keyword. Then name='class' (since isLegalIdent false → fixed = toCamel(key) || 'field' = 'class'). Then JAVA_KEYWORDS.has('class') → name='classValue'. warning. Good.
+   - "int" → 'int' keyword → 'intValue'. 
+   - "my-key" → toCamel → 'myKey'.
+   - "1abc" → toCamel('1abc'): parts=['1abc']; first = '1abc' (not all-upper), charAt(0).toLowerCase()+'abc' = '1abc'; out='1abc'; !/^[A-Za-z_$]/ → out='field'+'1'+... = 'field1abc'? Wait code: `out = 'field' + out.charAt(0).toUpperCase() + out.slice(1)` → 'field' + '1' + 'abc' = 'field1abc'. Good.
+   - "中文键" → toCamel → '' → isLegalIdent('') false → fixed='field' → name='field'. Good.
+   All unique. Compiles. Good.
+
+3. **overflow: `big` is a huge integer 123456789012345678901234567890.** The `scalarType` for RawNumber family 'overflow' calls uncertain(...) with options ['String','BigInteger','Object'] and default 'String'. Result: `private String big;`. Good. But wait — the design/prompt says "大整数" should be handled. String default with override option. Good.
+
+   But there's a subtle issue: `List<Object> arr` for `[1,"x",null]` — mixed array → Object. Fine.
+   `n: null` → Object. Fine.
+
+4. **`numberFamily` for the huge integer**: works.
+
+Now, one important check: the SAMPLE's `orderId: 1234567890123456789` (19 digits, > int, < long) → long. Output `private long orderId;`. Good. And `sku_id: 987654321012345678` (18 digits) → long. Good.
+
+5. **`amount: 128.5` → double. Good.
+
+6. **null `remark` → Object with nullable flag. Output `private Object remark;`. Good.
+
+Now potential T22 bug: **`naming='keep'` with an invalid key like "my-key"**: javaFieldName: name='my-key'; isLegalIdent false → fixed = toCamel('my-key')='myKey'. Fine.
+
+Potential bug: **`naming='keep'` with JSON key that is a Java keyword** e.g. "class": isLegalIdent('class') false → fixed = toCamel('class')='class' → then keyword check → 'classValue'. Good.
+
+Potential bug: **Jackson `@JsonProperty` placement for record components**: The generated record has `@JsonProperty("sku_id")` before the component? Let me check the jackson record generation. Actually in emitRecord, `if (needJsonProperty(f)) lines.push(inner @JsonProperty)` then the component. That's valid for records (annotation on record component). Good.
+
+Potential bug: **duplicate nested class names**. e.g., two different arrays both with key "items" at different paths → toPascal both "Items"; uniqueClassName renames second to Items2. Good.
+
+Potential bug: **`analyzeMerged` for arrays of objects with a field present as object in one and scalar in another** — handled with warnings.
+
+Potential issue: **`List<Items>` refers to nested class `Items` while `emitPojo` with nestChildren emits children after fields. Fine.
+
+Potential issue: **top-level multi-file mode with `List<Items>`**: In pojoMulti, Items.java is a top-level class and Order.java references `Items`. Since same package, no import needed. Compiles. Good. But if the root class references a nested child that was flattened, the type name is just `Items`. Good.
+
+Potential issue: **`List<Object>` import java.util.List added. Good.
+
+Now, is there anything clearly wrong in T22? One thing: the design requires "非法类名" handling and it works (validateClassName). "record输出" works syntactically. "类型推断允许覆盖" works. I'd say T22 is solid. The only unverifiable is record compilation (JDK 8). I could check with `javac --release 16`? JDK 8 javac doesn't support --release 16. So note as not locally compilable, syntax reviewed manually.
+
+Hmm, but I should check if there's a newer JDK in version-fox. `which javac` showed `/Users/hao/.version-fox/sdks/java/bin/javac` = JDK 8. Maybe other versions installed. Let me check `ls ~/.version-fox/sdks/` or `vfox`. Not critical.
+
+Let me now test T23 escape round-trip, T24 properties/yaml, T25 stack trace, T26. These I can test by extracting or by reasoning. Let me do targeted node tests using the actual functions.
+
+For T23: extract functions javaEscapeBody, javaUnescape, javaTextBlock. Easy, pure. Let me test round trips and edge cases.
+
+For T24: extract parseProperties/logicalLines/propUnescape/buildTree/emitMap etc. plus yaml import. More involved but doable with esbuild and js-yaml (installed).
+
+For T25: extract parseTrace/classifyAndGroup/tidyExc. Pure except regex. Doable.
+
+For T26: extract mavenToGradle/gradleToMaven. Pure except `manual` ref and `target` ref. Doable.
+
+Let me do T23 first (quick).
+dsh: reasoning:
+T23 passes all round-trips, escape table correct, octal edge cases match Java semantics (`\400` → `\40`+`0` = space + '0'; `\777` → `\77`+`7` = '?' + '7'). 
+
+The text block output: 
+```
+"""
+line1
+C:\\x	\"q\"
+line3
+"""
+```
+Note: the tab is literal in the text block. In a Java text block, a literal tab is preserved but trailing whitespace is stripped. Here tab is mid-line so fine. Also `"q"` escaped. Good.
+
+One issue: In the text block, if content ends with a newline, e.g. `line3\n`, `s.split('\n')` gives ['...','line3',''], join('\n') → `line3\n`, then `"""\n...line3\n\n"""` — there's an extra blank line. The actual text block content would be `line1\n...\nline3\n` plus a trailing newline from the closing delimiter's line. Java text blocks: the content ends before the closing delimiter; if closing delimiter is on its own line, the newline before it is not included. So `"""\nA\n"""` → "A\n"? Actually Java text block: line terminators are normalized and the content includes a newline after each line including the last line before the closing delimiter? Let me recall: `"""\nA\n"""` produces "A\n"? No — text block content is determined by the lines between the opening `"""` and closing `"""`. The closing delimiter on its own line means the last line break is not part of content. So `"""\nA\n"""` = "A" (no trailing newline). Hmm, actually the spec: the content begins on the line after the opening delimiter and ends at the last line before the closing delimiter. If closing is on its own line, the content includes the newline at the end of the last content line? Let me think: 
+```java
+String s = """
+    A
+    """;
+```
+s = "A\n". Because the line "A\n" is included. Right, a text block always ends with a newline if the closing delimiter is on its own line. Actually the JLS says incidental white space removal and the content ends with a line terminator. So `"""\nA\n"""` yields "A\n". So javaTextBlock for input "line1\n...\nline3" (no trailing newline) produces content with a trailing newline, which adds an unwanted `\n`. Hmm.
+
+Let's carefully evaluate: javaTextBlock(s) returns:
+```
+"""
+${lines.join('\n')}
+"""
+```
+For s = "A" (no newline), lines=['A'], output = `"""\nA\n"""`. Java parses that as text block with content "A\n". So the round-trip adds a trailing newline. For s="A\nB", lines=['A','B'], output=`"""\nA\nB\n"""` → content "A\nB\n". Added trailing newline. So the text block mode does NOT round-trip exactly; it appends a trailing newline. The note does warn about incidental whitespace, but not about the trailing newline. Is this a bug? The design says "文本块如提供必须注明目标语法版本". It does note Java 15+. The trailing newline is a real semantic difference. However, it's a minor issue and arguably acceptable since the tool notes "请人工核对". I'll mention as low.
+
+Actually, to produce exact content, one would use `\` line continuation before the closing delimiter:
+```
+"""
+A"""
+```
+But that changes indentation. Anyway, minor.
+
+Now let me test T24. Extract functions and use js-yaml. Let me build the harness. The relevant functions reference `literalKeys.value`, `arrayStrategy.value`, `decodeUnicode.value`, `escapeUnicodeOut.value`. I'll define these as `{value:...}`. Also `yaml` import. Let me extract lines 1-498? Actually only functions matter. Let me extract the whole script lines 1-497 minus imports, stub `ref`, `computed`, etc.
+
+Simpler: extract lines 20-368 (the parsing/tree/yaml functions) plus needed imports and refs definitions. Let me check line ranges: 1-4 imports, 5 defineProps, 7-18 refs. 20-136 properties parsing. 138-238 buildTree. 240-318 yaml output. 320-368 yaml->props. Those functions reference `literalKeys`, `arrayStrategy`, `decodeUnicode`, `escapeUnicodeOut` refs. I can extract lines 20-368 and prepend `const yaml = require('js-yaml')` (or import) and `const literalKeys={value:{}}, arrayStrategy={value:'array'}, decodeUnicode={value:true}, escapeUnicodeOut={value:false}`. But the `.value` accesses — if I define plain objects, works. Good.
+
+Wait, `literalKeys` is used as `literalKeys.value[key]` and reassigned in toggleLiteral (outside range, not needed). Fine.
+
+Let me extract lines 20-368 and add tests: parse sample, build tree, emit, check conflicts; yaml→props sample; round trip.
+
+But note lines 20-368 include type definitions (interfaces) — esbuild handles. It also references `yaml` from line 3 import. I'll add `import yaml from '/Users/.../node_modules/js-yaml/index.js'`. Let me find js-yaml main. `require('js-yaml')` works. In ESM, `import yaml from 'js-yaml'` will resolve via node_modules if I bundle with esbuild and the file is under /tmp — esbuild resolves relative to the file location /tmp, won't find node_modules. I can set `--resolve-dir`? Or import via absolute path `import yaml from '/Users/hao/WebstormProjects/web_tools/devkit/node_modules/js-yaml/index.js'`. js-yaml main is index.js CJS. esbuild can bundle CJS default import. Let me do that.
+
+Let me build.
+dsh: reasoning:
+T24 findings:
+1. Sample p2y works. But note `app.title=Java \u5f00\u53d1` decoded to "Java 开发". Good. `my.app.version` nested as `my: app: version` (default), which the design sample wants as a literal key but tool asks confirmation. Fine.
+2. Conflicts detected both orders. Good.
+3. Array keep works.
+4. **Trailing whitespace bug confirmed**: `a=value   ` → value "value" (trailing spaces stripped). java.util.Properties preserves trailing spaces: `Properties.load` gives "value   ". Actually, let me double-check: In Java Properties, leading whitespace after the key/separator is skipped, but trailing whitespace is part of the value. Yes. So `.trim()` is a divergence. Also `b=x\ y` → "x y" (escaped space) — correct.
+5. Continuation works: `a=1\<newline>   2` → "12". Correct (backslash continuation strips leading whitespace).
+6. Unknown escapes `\z\b\q` → "zbq". Matches Java Properties. Good.
+7. Unicode off → `a: "\\u4e2d"` in YAML; the YAML double-quoted string escapes the backslash, so reading YAML back gives literal `\u4e2d`. Correct.
+8. y2p sample works. `my.app.version: 1.0` becomes `my.app.version=1` because js-yaml parses 1.0 as number 1. The note documents this. Acceptable but a real semantic change; design says "值类型策略；默认保留字符串". Hmm — design says "值类型策略；默认保留字符串". The tool uses JSON_SCHEMA and converts numbers to bare strings, losing the original "1.0" representation. The note says "1.0 这类数字字面会按解析值输出为 1". This is a documented limitation, but it IS a data-loss for values like `1.0`, `1e3`, `0x10`, leading zeros, etc. Design explicitly asks for a "值类型策略" (value type strategy) option — the implementation has no such selector. It just always converts. This is a design divergence (medium). Also "默认保留字符串" — arguably should preserve original scalar text.
+
+   Actually, since js-yaml with JSON_SCHEMA parses `1.0` to number 1, the original "1.0" is lost. To preserve strings, you'd need to parse with a schema that keeps scalars as strings (e.g., CORE_SCHEMA? no). This could be flagged.
+
+9. **y2p empty object/array data loss**: `a: {}` and `b: []` produce no output lines at all (silently dropped). Confirmed: output only `c=1`. This is silent data loss. Design says "冲突先报错" but doesn't specifically cover empty containers. Medium/low.
+
+10. Date preserved as string. Good.
+11. Special chars key escaping: `"a b"` → `a\ b=1`; `"x=y"` → `x\=y=2`. Correct.
+
+Now, a critical issue: **YAML → Properties round-trip for dotted keys is broken/ambiguous** but the tool provides literal toggle. Fine.
+
+Another potential bug: `escapePropValue` escapes `\` first then others. For a value containing literal `\n` (backslash-n), input YAML `a: "\\n"` → string `\n` (two chars backslash+n) → escapePropValue: replace `\` → `\\`, so output `a=\\n`. Reading Properties gives `\n`? propUnescape: `\\`→`\`, then `n` → "n"? Wait output is `a=\\n` (backslash backslash n). propUnescape: i=0 c='\\', e='\\' → out='\\', i=2; then c='n' → out='\\n' (backslash + n). Correct. Good.
+
+Let me also check p2y `propUnescape` for a value ending with backslash: handled.
+
+Now potential serious bug in T24: **`logicalLines` continuation with `#` comment after backslash**? Edge.
+
+I think T24's main issues: value trailing whitespace trim, YAML empty container drop, no value-type strategy, and 1.0 normalization. All documented partially.
+
+Now T25 stack trace. Let me test with the SAMPLE. Extract parseTrace/classifyAndGroup/tidyExc. These reference FRAMEWORK_PREFIXES, EXC_RE, etc. Let me extract lines 12-227 (constants through buildTidy). It references `segments.value` in buildTidy. I'll define `segments={value:[]}`. Let me test with SAMPLE (lines 229-250). I'll embed the sample.
+
+Let me do it.
+dsh: reasoning:
+T25 findings:
+
+**Bug candidate: `tidyExc` prints BOTH the collapsed framework group marker AND the `commonRaw` "... N more" line, leading to duplicate/confusing output.** Look at tidy output:
+```
+	... 6 more (collapsed)      <- collapsed framework group
+	Suppressed: ...
+		...
+		... 1 more (collapsed)  <- collapsed framework group in suppressed
+		... 2 more              <- commonRaw for suppressed
+```
+That's expected: the "collapsed" line replaces the framework frames, and the original `... 2 more` is preserved. It's a bit redundant but intentional per the docs ("复制整理文本 = 完整原文，但被折叠的框架帧替换为 ... N more (collapsed) 行"). The original `... N more` is genuine Java stack content, so keeping it is correct. Fine.
+
+**Bug candidate: The main trace's `... 1 more` (the original commonRaw) is NOT printed for the "caused" exception at the end?** Let me check: output shows for caused:
+```
+	at com.example.order.web.PriceFilter.apply(PriceFilter.java:22)
+	... 1 more (collapsed)
+	... 1 more
+```
+Wait, the caused exception has 1 framework frame (java.util.Objects.requireNonNull) and commonOmitted=1. The output shows `... 1 more (collapsed)` then `... 1 more`. The first is the collapsed framework frame (Objects), the second is the original `... 1 more`. Correct.
+
+**Bug: `rawHeader` for pseudo main is '' and tidyExc skips pseudo header. Good.
+
+**Observation: `fqcn` includes the method name!** In parseTrace: `const fqcn = stripModule(fqRaw)` where fqRaw = `com.example.order.OrderService.create`. So fqcn = "com.example.order.OrderService.create", and `method = fqcn.slice(dot+1)` = "create". But `fqcn` should be the class name "com.example.order.OrderService", not including method. This affects `classifyAndGroup`: `bizRe.test(f.fqcn)` still matches prefix, and `FRAMEWORK_PREFIXES.some(p => f.fqcn.startsWith(p))` still works. So classification is fine, but the naming is misleading. Not user-visible except `fqcn` isn't displayed. Minor code smell.
+
+**Real bug: `bizRe.test()` with a global regex?** The user-provided regex could have `g` flag? `new RegExp(bizPrefix.value)` no flags. Fine.
+
+**Real bug: The "unrecognized input" test returns a single log segment, and `execute` sets segments then markFail. The UI shows logs. Good.
+
+**Real bug: A stack trace with a header line whose class doesn't end in Exception/Error/Throwable and whose next line is blank, then `at` frames — not detected. Edge.
+
+**Potential bug: `Suppressed:` at top-level (not nested) without a `cur`** — `owner = cur ?? seg.chain[0]`; if no trace, ensureTrace creates seg with empty chain, owner undefined → suppressed lost. Edge.
+
+**Potential bug: The main header detection `EXC_RE` allows a line like `com.example.Foo` (a class name without Exception suffix) if next line is `at`. Fine.
+
+**Design requirement: "不声称自动定位根因"** — the UI note says exactly that. Good.
+
+**Design requirement: "折叠框架调用、突出业务包"** — done.
+
+Overall T25 is solid. I'll note the `fqcn` includes method as a minor code issue.
+
+Now T26. Let me test mavenToGradle/gradleToMaven with the sample and edge cases, especially classifier ordering and silent drop. Extract functions and stub manual/target/source refs. Let me do it.
+
+Lines: 13-191 contain SCOPE_MAP, CONFIG_TO_SCOPE, xmlEscape, tag, mavenToGradle, GRADLE_LINE_RE, gradleToMaven, buildMavenXml. `mavenToGradle` references `manual.value` and `target.value`; `gradleToMaven` references `manual.value`. Define these refs.
+
+Let me run.
+dsh: reasoning:
+Line 13-191 includes targetOptions computed at line 27. Let me add computed stub. Also `watch` at 36. I extracted 13-191 which includes `watch(source,...)`. Let me add stubs for computed and watch. Actually line 27-34 targetOptions, line 36 watch. Let me add.
+dsh: reasoning:
+sed on macOS with `-i` and filename starting with /tmp works but the expression contains `/`? No. The error "undefined label '26.ts'" suggests the sed expression ended with `...=>{};#` and the `#` delimiter... Actually I used `#` as delimiter but the replacement contains `#`? No. Wait, the expression contains `#` nowhere. Hmm, the issue: `1s#...#...#` — macOS sed interprets `-i` as requiring an argument (backup suffix). And the replacement text contains `#`? No. The error is odd. Let me just rewrite the file with python.
+dsh: reasoning:
+`source` is a ref defined at line 8. I need to define it. Add `const source={value:'maven'}`. Let me add to line 0.
+dsh: reasoning:
+T26 confirmed bugs:
+
+1. **Classifier ordering is wrong.**
+   - Maven → Gradle: `classifier=sources, version=1.0` → produces `implementation 'g:a:sources:1.0'`. Gradle's notation is `group:name:version:classifier`, so the correct output is `g:a:1.0:sources`. The produced string would be interpreted by Gradle as version="sources", classifier="1.0" — wrong.
+   - Gradle → Maven: input `g:a:1.0:sources` → produces `<version>sources</version><classifier>1.0</classifier>`, swapping them. Should be `<version>1.0</version><classifier>sources</classifier>`.
+   This is a real correctness bug (medium-high; silently produces wrong coordinates).
+
+2. **Silent drop of unsupported Gradle declarations**: mixing `implementation 'org.foo:bar:1.0'` and `implementation group: 'x', name: 'y', version: 'z'` → reports ok=2 (the two string ones) and `manual=[]`, silently ignoring the map-form declaration. Design says "不支持的表达式" must be surfaced. This is a false-success/silent-drop bug.
+
+   Note: in this test, `testImplementation 'j:k:2.0'` was picked up as the 2nd, and the map-form was ignored. So the tool says "已转换 2 条依赖" while one line was silently dropped.
+
+3. `maven no version` → output `g:a:${version}` and warning. But in a Gradle Groovy single-quoted string, `${version}` is NOT interpolated (single quotes are literal in Groovy!). So the placeholder is literally `${version}` in Gradle Groovy — the user must replace it. The warning says so. But it's slightly problematic: the tool labels it a placeholder; design says "缺少version" should be flagged. It is. OK. But note the output uses single quotes for Groovy; `${version}` won't interpolate. Fine, it's a placeholder for manual edit.
+
+4. Maven property version → error, excluded. Good.
+
+5. provided/test mapping correct. api → no scope. Good.
+
+6. @jar extension handled with warning. Good.
+
+Also, another potential bug: `SCOPE_MAP` has `compile: 'implementation'`. But Gradle's modern equivalent of Maven `compile` is `api` OR `implementation`; design says scope/config not equivalent requires choice. The tool hardcodes. I'll note as a design gap (medium).
+
+Also: `CONFIG_TO_SCOPE` maps `api: null` → no `<scope>` (default compile). Fine.
+
+Also: `runtime: 'runtimeOnly'`. Maven `runtime` → Gradle `runtimeOnly`. Fine.
+
+Now, one more T26 issue: The tool's `mavenToGradle` regex `/<dependency\b[^>]*>([\s\S]*?)<\/dependency\s*>/g` will also match `<dependency>` inside `<dependencyManagement>`, and it ignores parent POM inheritance. Design mentions "父 POM 继承". The tool can't resolve; it warns on missing version. Acceptable.
+
+Now let me also check T15's design vs implementation more: PEM missing. And T17 key/IV Base64 missing. Let me also confirm T15 design variant "解密工作区" etc. present.
+
+Now let me also verify the T25 "getTool is not defined" pageerror seen on cron error page — that's on the error page, likely a separate global issue (maybe error.vue). Not my scope but could be mentioned: the error page itself throws `getTool is not defined`. Actually that pageerror appeared while probing /tools/cron (the error page). It might affect all error pages. Let me check the error page component. But it's likely another agent's scope (S-system pages). I'll mention briefly as it's triggered by T20.
+
+Actually, let me verify: probing a 404 page earlier showed NUXT_E1005 and pageerror? For /tools/cron-parse (404) it showed NUXT_E1005 warning but no pageerror printed (I only printed console). Later for /tools/cron, pageerror 'getTool is not defined'. Let me check the error page quickly.
+
+Let me grep getTool.
+dsh: reasoning:
+`app/error.vue:11` uses `getTool(s)` but doesn't import it. Let me check error.vue imports. This is a general bug (error page broken), triggered whenever any page errors (like T20). It's not in my T15-T26 scope strictly, but it's relevant as it compounds T20's failure. I'll mention it as a secondary finding with evidence, since triggering T20 surfaces it. Let me confirm the import list.
+dsh: reasoning:
+Confirmed: `error.vue` references `getTool` without importing it (line 11), so the error page itself fails with "getTool is not defined". This means when T20 crashes, the fallback error page also breaks. This is a cross-cutting bug worth reporting (it's arguably in another agent's scope for S-pages, but it directly affects T20's failure mode). I'll include it as a secondary/related finding and note it.
+
+Now let me look at the design texts for T18-T26 to identify design-implementation divergences. I have some. Let me quickly extract the design text for T18, T19, T20, T21, T22, T23, T24, T25, T26 main boards and note divergences. I already have T22 partial. Let me get T18-T26 design text filtered to key labels.
+
+Actually, let me be efficient and use the probes/screenshots? The design text extraction is the main way. Let me dump text for T18 main and variants, T19, T20, T21, T25, T26. I'll grep for option labels.
+
+Let me just extract all remaining boards' text and skim. Given context limits, I'll extract to a file and grep for distinctive terms.
+dsh: reasoning:
+T18 design includes an "输出格式: ISO 8601 / 本地化" option. The implementation always outputs both the zone-formatted string and ISO 8601; no output-format selector. Also design mentions "时区规则" display, "可表示范围". Implementation lacks an explicit output format toggle. Minor/medium design divergence.
+
+Also design T18 variant "秒与毫秒对照" — implementation shows seconds/ms comparison in the result. Good.
+
+Design says "时间 → 时间戳" should support batch too? The design variant "日期无效" shows local time "每行一个" (batch of local times). The implementation's time→ts direction only supports a single datetime-local input, no batch. Design main board says "批量输入" generally. The implementation only supports batch in ts→time direction. Medium design divergence.
+
+Let me check T19-T21 design quickly. Let me grep the file.
+
+Actually, given time, let me focus on the most important design divergences:
+- T15: PEM/Hex/Base64 key format selector missing (no PEM at all). HIGH.
+- T17: key/IV Base64 missing; IV only Hex. MEDIUM.
+- T18: output format selector missing; time→ts batch missing. MEDIUM.
+- T20: no Quartz 7-field variant? It supports 7. Design says 六/七. Good. But "-broken".
+- T26: scope→configuration mapping choice missing (hardcoded). MEDIUM.
+
+Let me quickly get T19/T20/T21/T25/T26 design text to confirm. Let me grep for option labels in a compact way.
+dsh: reasoning:
+Key design divergences confirmed:
+
+**T25**: Design "普通日志混入" variant has a "仅复制堆栈" button and "只复制原始堆栈行" — implementation only has "复制原文" and "复制整理文本". Missing "仅复制堆栈" option. Also design shows stats "堆栈帧 16 · 折叠 14 · 非堆栈行 4" — implementation shows "异常 N, 业务帧 N, 框架帧 N" (different metrics). Minor.
+Design "无法识别堆栈" says "无法识别时不报错，只作为普通行保留" — but the implementation DOES markFail (error status) when no traces. Design main says "无法识别时不报错" for non-stack lines, but the "无法识别堆栈" variant shows a "未识别到异常堆栈" state. So markFail is arguably OK for the whole-input case. Minor.
+
+**T26**: Design explicitly: "作用域映射由你确认", "映射会列出来让你确认", "provided 为什么映射成 compileOnly？这是常见默认，但两者语义并不完全相同，映射条上标注为待确认，可手动改。" The implementation hardcodes mappings with NO confirmation UI. This is a **design divergence (medium-high)**: the design requires the user to confirm/adjust scope mappings; implementation auto-converts silently (only *failures* go to manual list). E.g., Maven `compile`→`implementation` and `provided`→`compileOnly` are auto-applied without showing a mapping bar.
+
+**T20**: design says "无后续执行" variant uses "未来 5 年内无匹配" (5 years), implementation searches 29 years. Design text in main board: "执行时间按所选时区与字段规则推导（起点 12:00:00 不含在内）". Implementation's start handling: `if (t <= startWall) continue` — excludes the start instant. Good.
+
+**T21**: design mentions "支持 YYYY-MM-DD HH:mm:ss 与 ISO 8601"; implementation uses datetime-local only (accepts `YYYY-MM-DDTHH:mm`). Actually `parseLocal` accepts `YYYY-MM-DDTHH:mm(:ss)?`, not space-separated or timezone-offset ISO. Design says ISO 8601 support. The datetime-local input enforces the T format. Minor. Also design mentions "日历单位差（按本地日历逐单位相减）" — implementation. Good.
+
+Now let me also confirm T18 design output format and time→ts batch. From the extracted text: "输出格式 ISO 8601 / 本地化". So missing selector. And the invalid-date variant shows local time input每行一个 (batch). So time→ts batch missing.
+
+Let me now also check T15 design for key format and T17. I already have T15 design text: "密钥格式 PEM / Hex / Base64". Implementation only Hex. Confirmed.
+
+Now, let me verify the T15 sample signature "验证" claim and test T15 in the browser? Not necessary; node tests confirmed samples.
+
+Let me also double check T15 `pubErr` with a compressed key — sm-crypto supports it (tested). Good. But `pubHelp` says "格式有效" for compressed. Fine.
+
+One more T15 issue: The `sig` used for stale detection includes `sigInput`, and when signing, `sigInput.value = out` changes the sig, potentially immediately marking the result stale! Let's think: `run = useToolRun(sig)`. After `sign`, it sets sigInput.value = out, which changes the sig → the run may be marked stale. Need to check useToolRun semantics. Let me read useToolRun. If setting sigInput after markOk triggers a watcher that marks stale, then the "签名成功" result would immediately show "结果待更新", and the copy button would be disabled. That's a potential bug. Let me check useToolRun.
+dsh: reasoning:
+In `markOk`, it sets `armed = true` and `lastSig = getSignature()`. The watch is async (Vue watcher flush 'pre' by default). When `execute` sign path does:
+```
+signResult.value = ...
+sigInput.value = out   // changes signature
+run.markOk(...)        // sets status ok, armed=true, snapshot of sig AFTER sigInput set
+```
+Order: sigInput.value is set BEFORE run.markOk. So when markOk snapshots getSignature(), it includes the new sigInput. Then the watcher for sigInput fires after the synchronous block, sees the new sig equal to lastSig? The watcher callback compares nothing (it just checks armed and status). It will mark stale whenever signature changes while ok/error. But the watcher may fire for the change that happened before markOk. Vue batches watchers: during the synchronous execute(), sigInput.value changes, which schedules the watcher. Then markOk sets status='ok' and armed=true. After execute returns, the watcher flushes and calls the callback with the new sig. Since armed is now true and status is 'ok', it sets status='stale'! Because there's no comparison to lastSig.
+
+So T15 sign would immediately mark the result stale! Let me verify: The watcher callback doesn't compare `sig === lastSig`; it unconditionally marks stale if armed and status ok/error. Since the sigInput change happened during execute before markOk but the watcher flushes after, it WILL mark stale. This is a bug — the sign result would show "结果待更新" right after signing, and the copy button disabled.
+
+Wait, but `lastSig` is set but never used in the watcher. So even if the signature didn't change, any reactive trigger that causes the watcher to run would mark stale. Actually the watcher only runs on signature change. In this case the signature DID change (sigInput). So stale.
+
+Hmm, but maybe Vue's watcher flush ordering: watchers are queued and flushed in a microtask. The `execute` is called from a click handler. Within execute, sigInput.value = out triggers the watcher's getter to be re-evaluated (since it's a reactive dep) and scheduled. markOk sets status ok. After the handler, microtask runs watcher callback → status stale. Yes.
+
+Unless `markOk`'s `lastSig` is meant to be used but isn't. This is a genuine bug affecting T15 sign (and possibly other tools that mutate inputs during execute).
+
+Let me verify with the actual site? Hard to interact. But I can reason. Actually, let me check if any other tool sets an input/ref within its sig during execute:
+- T15 sign sets sigInput.
+- T25? no.
+- T18 fillNow sets tsInput then execute (user action). That would mark stale too. But fillNow calls execute() after setting tsInput; the watcher for tsInput is `watch([...], execute)` which also fires. Complex.
+- T22 execute doesn't change sig inputs.
+- T24 execute doesn't.
+- T26 doesn't.
+
+Actually wait, T18 `watch([dir, unit, tz, tsInput, batchInput, dateInput, batch], execute)` plus `useToolRun(sig)` with sig including those. When user types in tsInput, both the execute watcher and the run watcher fire. execute() runs, markOk sets status ok. Then the run watcher fires → status stale. But that watcher is triggered by the same change; order matters. Let me think: both watchers are triggered by the same reactive change. Vue flushes them in creation order: `run` watch is created when `useToolRun(sig)` is called (line 34), and the `watch([...], execute)` is at line 353 (later). So run's watcher is registered first → it runs first: status becomes stale (if ok). Then execute watcher runs → markOk sets ok. Final status ok. So T18 is fine because execute watch is registered after run watch. 
+
+Wait, order of watcher callbacks in Vue: watchers with the same flush timing run in the order they were created (by id). `useToolRun`'s watch created at line 34 (id smaller) runs before the user `watch` at 353 (id larger). So run watcher marks stale, then execute runs and markOk → ok. Good.
+
+But T15's problem is different: the sigInput change happens *inside* execute (not via a separate watcher that runs after). The run watcher is triggered by sigInput change and flushes after the whole click handler. There's no subsequent execute to reset status. So status ends stale.
+
+Hmm, actually let's reconsider: in T15 `execute()` sets `sigInput.value = out` and then calls `run.markOk(...)`. The run watcher is triggered by sigInput's change. But markOk sets `armed=true` and `lastSig`. The watcher callback doesn't check lastSig, so it marks stale. 
+
+BUT: Does Vue's watcher get re-triggered by changes that occurred before the watcher first became "armed"? The watcher's getter `getSignature()` reads all the refs including sigInput. When sigInput changes, the watcher is scheduled. markOk sets armed=true synchronously. Then the scheduled watcher callback runs → armed true, status ok → stale. Yes, bug.
+
+Actually, wait: is `watch` with a getter and no `{flush}` default to 'pre'? Yes. In a click handler, it flushes before next render but after the handler. So yes.
+
+Let me confirm this is real by checking if there's any other mechanism. The `lastSig` variable is assigned but never read — a code smell strongly suggesting the intended logic was `if (sig === lastSig) return`. This confirms the bug class. But does it actually manifest? Let me test with a minimal Vue reactivity simulation? Hard. Let me instead check the running site by driving it? probe.py isn't interactive.
+
+Alternatively, I can check if the sign sample path ends up stale by using the site's SSR? No.
+
+Let me think about whether Vue's `watch` callback receives the new sig and the old sig. The callback signature is `(sig)`. It could compare `sig !== lastSig` but doesn't. So yes.
+
+Hmm, but hold on: `lastSig = getSignature()` inside markOk is called AFTER sigInput.value = out. The watcher callback will run later. If the code had `if (sig === lastSig) return`, it would not mark stale. Without it, it marks stale. So the assigned-but-unused `lastSig` is exactly the missing guard. This is likely a real bug that affects T15 sign.
+
+But wait — maybe Vue dedupes: if the signature value changed during execute and then markOk reads the same new signature, the watcher is still scheduled from the change. It will call the callback with the new value. The callback marks stale. So yes.
+
+Let me verify empirically with a tiny Vue reactivity test using `@vue/reactivity` + `@vue/runtime-core` watch? Complex. Alternatively, check other tools that do the same and see if there's a known pattern. Actually, many tools might set input inside execute. Let me grep for patterns where an execute function sets a ref that's in sig right before markOk.
+
+For T15 sign specifically it's clear. I'll report it as a high-likelihood bug with the code evidence and the unused `lastSig` supporting it. Let me try to reproduce with the actual browser using a headless approach. Is there a way? `probe.py` uses playwright presumably. Let me check probe.py to see if I can extend or if there's a browser available. Let me look.
+
+Actually, I can write a small Playwright script to open the page, click "签名示例", and read the status bar text. Let me check if playwright is installed (probe.py uses it). Let me read probe.py.
+dsh: reasoning:
+Playwright is available. I can write a quick interactive script to test T15's stale-after-sign behavior and T20's error, and other interactive behaviors. Let me write /tmp/interact.py.
+
+Test T15:
+1. goto /tools/sm2
+2. click "签名示例" button (text). This calls loadSignSample → execute.
+3. Read the status bar text and whether copy button disabled. Also read the result text.
+4. Check if status shows "结果待更新".
+
+Let me inspect the DOM structure. The status bar likely has a class. Let me just read all text and look for "结果待更新" or "签名成功".
+
+Let me write the script. Need to be careful with the Chinese button text. Use get_by_role button with name.
+
+Let me also test T15 encryption similarly, and T18 default state, and T26 sample.
+
+Let me write a general interaction script.
+dsh: reasoning:
+The "签名示例" button only appears when ws==='sign'. Default ws is 'cipher' (加解密). I need to first click the "签名验签" segment. The DkSegmented options are buttons? Let me click by text "签名验签". Let me inspect. Let me just click text. Also there may be a strict-mode issue. Let me adjust: click `text=签名验签` then `button:has-text("签名示例")`.
+
+Let me first dump all buttons on the page.
+dsh: reasoning:
+Confirmed! After clicking "签名示例", the status shows "结果待更新" ("输入或参数已修改，结果待更新") instead of "签名成功", and the copy button is disabled (`disabled: True`). This is the stale bug caused by `sigInput.value = out` inside execute followed by markOk, with the run watcher not comparing lastSig.
+
+Wait, but is the signature result actually present? The snippet shows "签名结果" but no signature value in snippet (filtered). Status is stale. So the tool computes the signature but immediately marks it stale and disables copy. That's a real user-visible bug: **"签名成功" state is unreachable** (design variant Q9BlV requires 签名成功). Actually the design variant is "签名成功" but the implementation never shows it because it immediately goes stale. This is high severity (not blocking, but the required success state is broken).
+
+Let me double-check: maybe the user is expected to click "签名" button after loading the sample? The "签名示例" button calls execute() directly. And the main "签名" button also calls execute → same issue. Let me test clicking "签名" manually with sample loaded. Actually loadSignSample already executed and set sigInput. If user then clicks "签名" again, execute runs: sigInput.value = out (new random signature) → changes sig → markOk → watcher marks stale again. So always stale. Unless the new signature happens to equal the old (impossible). So the sign result is ALWAYS stale. Confirmed bug.
+
+Similarly, T15 verification: loadVerifySample sets sigInput BEFORE execute, so no change during execute → status ok. Good. So only signing is broken.
+
+This is a significant finding. Let me also check other tools for the same pattern (setting a sig-included ref during execute). Let me grep for `.value =` inside execute functions where the ref is in sig. Hard to grep generally, but let me check each tool's execute for assignments to refs included in sig.
+
+T15: sigInput (sign). Confirmed.
+T18: fillNow sets tsInput then execute — but that's a user action, and fillNow calls execute after setting; the run watcher fires after, marking stale, and the execute watcher also fires (registered later) → markOk after stale → ok. Order: run watch (id smaller) then execute watch. Actually fillNow directly calls execute() synchronously too. Sequence: fillNow sets tsInput.value (schedules run watch + execute watch), then calls execute() → markOk ok. After handler, watchers flush: run watch first → marks stale; execute watch second → markOk ok. Final ok. Good.
+T19: generate doesn't change sig inputs. loadParseSample sets tab/parseInput then executeParse. tab is in sig. Similar to T18: executeParse called, markOk; then watchers flush (run watch then watch([tab])). Final ok. Good.
+T20: fillNow sets startLocal then execute. watch([expr,dialect,tz,startLocal], execute) registered after run watch. Final ok. But cron crashes anyway.
+T22: `input = SAMPLE; execute()` in template — setting input (in sig) then execute; watchers: run watch then the big watch([...],execute). Final ok.
+T24: `input = ...; execute()` similar. Final ok.
+T25: set input then execute. watch([bizPrefix]) only. run watch registered first, then watch bizPrefix. The input change doesn't trigger any execute watch, but does trigger run watch → stale after markOk? Let's see: template `@click="input = SAMPLE; execute()"`. Setting input schedules run watch (input in sig). execute() markOk ok. After handler, run watch flushes → status stale, and there's no later watcher to reset (watch is only [bizPrefix]). So T25 "载入示例" would ALSO end stale! Let me verify. Actually T25's watch list is `watch([bizPrefix], execute)`, so input changes don't re-execute. The run watch is the only one triggered by input. So markOk then stale → stale.
+
+Hmm, but wait: the same applies to T15's template? T15's loadSignSample is called from a button, and it sets ws/cOp/etc then execute. ws is in sig, so run watch triggered. Also no execute watcher. So T15 sample also stale due to ws change, independent of sigInput. For T25, yes.
+
+T23: `dir` watch executes; loadSample sets dir? loadSample only sets input and execute (dir unchanged). input in sig → run watch triggered → stale after markOk. So T23 "载入示例" also stale! But T23's watch is `watch([dir,outForm], execute)`, not input. So setting input schedules run watch only → stale.
+
+T24: template sets input then execute; watch([...]) includes literalKeys/decodeUnicode/etc but not input. So input change triggers run watch only → stale after markOk. So T24 "载入示例" stale too!
+
+T26: template sets input then execute; watch([source,target],execute) not input → same stale.
+
+T22: template sets input then execute; watch list does NOT include input either! `watch([className, pkg, styleMode, nestMode, naming, useLombok, useJackson, decimalType, overrides], execute)`. So input change → run watch only → stale after markOk. So T22 "载入示例" stale.
+
+Hmm, this is a widespread pattern. But wait — does the run watcher really fire for input changes when execute is called synchronously in the same tick? Let me reconsider Vue's scheduler. When `input.value = SAMPLE` is set, the run watcher's getter `getSignature()` depends on `input.value`. The watcher is scheduled (queued). Then `execute()` is called synchronously, which calls `run.markOk`, setting status ok and armed true. Then after the click handler completes, the scheduler flushes the queued watcher. The callback runs: armed true, status 'ok' → sets stale. So yes, stale.
+
+But for T22, after markOk, the `watch([...])` at line 546 — is it triggered? The watch sources are className, pkg, etc., NOT input. Setting input doesn't trigger it. So no reset. So T22 sample → stale.
+
+Hold on, T22's execute sets `files.value`, `warnings.value`, `uncertains.value`, `selected.value`. None are in sig. So no additional trigger. So stale.
+
+So basically EVERY tool whose "载入示例" button sets `input` (which is in the sig) and calls execute synchronously will end up stale, UNLESS there's an execute watcher on `input` that runs after the run watcher. Let me check each:
+- T18: input tsInput in sig; watch includes tsInput → execute watcher registered after run watch → resets to ok. Good.
+- T19 gen: generated/count. `generate()` doesn't change sig inputs (count unchanged, version unchanged). markOk ok; no watcher triggered. Good. loadParseSample sets tab (in sig) + parseInput (in sig) then executeParse; watch([tab]) is registered (line 255) which will run after run watch → executeParse again → markOk → ok. But watch(parseInput) at 258 also. So good.
+- T20: broken anyway.
+- T15: no execute watcher on ws/cInput etc. → stale. Confirmed empirically.
+- T21: loadNormalSample sets startTz/endTz/startLocal/endLocal, all in sig, and watch([startLocal,endLocal,startTz,endTz], execute) → execute watcher registered after run watch → resets ok. Good.
+- T22: no input watcher → stale.
+- T23: no input watcher → stale.
+- T24: no input watcher → stale.
+- T25: no input watcher → stale.
+- T26: no input watcher → stale.
+
+Wait, but is this actually a bug in useToolRun or in the tools? The intended pattern is probably that useToolRun should ignore the watcher run caused by the same execution. The `lastSig` variable was clearly intended for that. Since it's unused, the pattern breaks whenever execute is invoked in the same tick as a sig input mutation.
+
+Let me empirically verify T23, T24, T25, T26, T22 "载入示例" → stale. And T16/T17 too (T16 loadSample sets text then execute; watch([...])? T16 has no watch on text; run sig includes text → run watch only → stale!). Let me check T16: `watch` not used at all in t16 except run's internal watch. So clicking "载入示例" → text='abc'; execute() markOk; run watch fires → stale. So T16 sample stale too!
+
+Let me verify with the live site across tools. This could be a systemic finding. But careful: maybe Vue's watcher with default flush 'pre' and the fact that markOk reads getSignature() ... no, the callback doesn't compare.
+
+Actually, wait. Let me reconsider whether the watcher is even triggered if the value changes before the watcher is created/armed. `armed` starts false. The run watch is created at setup. `input.value` change schedules the job. The job's `run` checks `if (!armed) return`. At the time of scheduling, armed was false, but the job executes later when armed is true. The check happens at execution time, not scheduling. So it proceeds. Yes.
+
+Let me empirically verify a few. Let me write a generic script that for each tool clicks "载入示例" and checks for "待更新". But T15 crypto pages: sm3, sm4 have 载入示例. Let me test.
+
+Actually, let me focus: The prompt asks for "伪造成功状态" and code defects. This stale bug is a systemic issue. Let me verify empirically for the tools where the success state matters.
+
+Let me write a script to test each tool's sample button and report status.
+dsh: reasoning:
+Confirmed systemic bug: clicking "载入示例"/"加密示例"/"解密示例" on SM2, SM3, SM4, JSON→Java, Properties/YAML, Stack Trace, Maven/Gradle leaves the tool in "结果待更新" state, disabling copy/download. The tools that work (timestamp, date-diff, java-escape) are those whose sample handler also triggers a watcher that re-runs execute after the run watcher.
+
+Wait, "after_click_待更新": true for T23 java-escape? It says false. Because the script clicked the first sample button which is "还原示例" (loadUnescapeSample) — that sets dir='unescape' and input then execute. dir is in watch([dir,outForm], execute) → the execute watcher runs after run watch → resets ok. So false. But clicking the SAMPLES buttons (Windows路径 etc., via loadSample) only sets input+execute; dir already 'escape' unchanged, so run watch triggers stale. Let me verify T23's "Windows 路径" sample. Also T15 is the sign case.
+
+Also note: for T15, clicking "加密示例" gives stale too. So the encryption result is stale.
+
+This is a major systemic finding: the `useToolRun` watcher unconditionally marks stale when the signature changes, even if the change was made programmatically as part of loading a sample and executing in the same tick. The root cause is `lastSig` being computed but never compared. Given useToolRun is shared, this affects many tools but my scope is T15-T26; I'll report the affected ones.
+
+Actually, wait. Is this really a useToolRun bug, or intended? The tools that work rely on a second watcher re-executing. The bug is that `markOk` snapshots `lastSig` but the watcher never uses it. If the watcher had `if (sig === lastSig) return`, all would be fine. So it's a composable bug.
+
+Hmm, but there's an important nuance: when the user types in the input manually, the run watcher should mark stale. With the `sig===lastSig` guard, typing changes sig != lastSig → stale. Good. And when execute is called programmatically after setting the input, markOk snapshots the new sig; the queued watcher then sees sig === lastSig → skip. Good. So the intended guard is clearly missing. This is a definite bug in `useToolRun.ts` (shared), with wide impact. But it's likely another agent's scope (shared components). I'll report it as a cross-cutting finding relevant to T15-T26, with per-tool evidence.
+
+Let me confirm T23 Windows path sample and T16 file variant. Also I should test whether clicking the main action button after loading a sample yields ok (for T15 sign it doesn't due to sigInput). Let me test T15 sign specifically already done (stale).
+
+Let me also check the `DkStatusBar` text "成功" — for T18 the status_lines showed just "成功"? That seems odd; maybe the status bar message is "转换成功". Fine.
+
+Now let me also verify the T15 encryption result value is present but stale, and copy disabled. Already saw copy disabled for sign. Good enough.
+
+Let me now also check T24 sample output is produced (stale but present). And T22 output produced. Fine.
+
+Now, one more important check: the prompt says "检查'伪造成功状态'：未实现/未校验的功能是否仍显示成功或可复制". The stale issue means results are NOT copyable, which is over-cautious but still a functional regression. The tools still show the result. It's a bug.
+
+Now let me consider whether the cron bug (`get('year').m`) is due to a code change. It's clear.
+
+Let me now verify the T15 design "解密工作区" etc. are present. Yes.
+
+Let me also spot-check T17's design "结果待更新" variant — the stale mechanism exists generally but is buggy as above.
+
+Now let me gather a few more code-level issues I can cite with file:line.
+
+Let me compile the list of confirmed defects:
+
+**T15 SM2**
+1. [HIGH] Key format selector PEM/Hex/Base64 from design not implemented: only Hex keys. Design text (y2Dwo/XPSvz) shows 密钥格式 PEM/Hex/Base64 and PEM key samples. Code: t15-sm2.vue:414-452 only Hex inputs. No PEM parsing.
+2. [HIGH/中] Off-curve public key with valid Hex format silently encrypts → tool reports "SM2 加密成功" but ciphertext is undecryptable. Code pubErr lines 48-60 only checks prefix/length; execute 134-140. Repro: `node -e` flipping y bit → doEncrypt returns ct. Contradicts design "C1 点不在曲线上时会直接报错".
+3. [中] Empty-plaintext with corrupted C3 reports "解密成功…C3 校验通过" (false success). Code t15-sm2.vue:179-183. sm-crypto returns '' for both. Repro shown.
+4. [中] Sign success state unreachable: "签名成功" immediately becomes "结果待更新" because sigInput is written during execute (t15-sm2.vue:229) and useToolRun watcher marks stale. Live evidence.
+5. [低] No step-by-step verification display (design g8o9dO "逐步检查"). Design variant requires distinguishing 解码成功/验签通过; implementation only shows boolean.
+
+Actually defect #4 belongs to the systemic stale bug. Let me categorize it under a systemic section but list T15 sign as the worst case.
+
+**T16 SM3**
+- Verified correct (abc vector, base64). 
+- [低] Sample load stale (systemic).
+- Design variant "Hex输入不合法" - implemented. Good.
+
+**T17 SM4**
+- Verified standard ECB vector + CBC/PKCS7 sample + round trip. Correct.
+- [中] Key encoding Base64 missing; IV supports only Hex (design shows key & IV UTF-8/Hex/Base64). Code t17-sm4.vue:12-14, 39-48, 69-77.
+- [低] decryption "密文编码" lacks UTF-8 option that design shows (design d8Uvqe shows 密文编码 UTF-8/Hex/Base64). Minor.
+- [低] Sample load stale (systemic).
+
+**T18 timestamp**
+- Logic verified correct (sample, DST gap/ambiguous, invalid dates).
+- [中] Design "输出格式 ISO 8601 / 本地化" selector missing; always outputs both.
+- [中] time→ts batch not supported (design invalid-date variant shows 每行一个 local times); only single datetime-local.
+- [低] Error message for ms overflow says "毫秒 × 1000 后" incorrectly (t18:166).
+
+**T19 UUID**
+- Verified v1/v4/v7 parsing & generation correct; batch/copy/download; illegal input handling.
+- [低] Sample buttons are "v7 示例" etc. (not "载入示例") and parse-only; no stale issue. Good.
+- Possibly note: no download for parse; fine.
+
+**T20 Cron**
+- [阻断] `get('year').m` throws TypeError for ALL Unix 5-field and Quartz 6-field expressions → page crashes to error page. t20-cron.vue:319. Live evidence title "出错了" + pageerror.
+- [高] WED/JUL names rejected: parseField checks `[LW#?]` before name parsing. t20-cron.vue:114-122, 134-152, 174. Repro output.
+- [中] error page itself broken (`getTool is not defined`, app/error.vue:11) compounding.
+- With year guard, core nextRuns verified correct.
+- [低] Design says "无后续执行" search 5 years; impl uses 29 years. Minor.
+
+**T21 date-diff**
+- [中/高] calendarDiff produces negative day field for month-end starts: 2026-01-31→2026-03-01 = 0年1月-2日. t21-date-diff.vue:129-144. Repro.
+- [低] `inputErr` paragraph is inside `v-if="result"` but result is set null on error → error paragraph dead code (only status bar shows). t21-date-diff.vue:349, 233-245.
+- Actual duration on DST verified 47h; normal 91,800,000ms. Good.
+
+**T22 JSON→Java**
+- Generated POJO/record/multi-file/BigDecimal/overflow/badnames compile (except jackson due to missing dep; record needs JDK16+; local JDK8).
+- [低] `record` output not locally compilable (JDK8) — not a code bug, environment.
+- [低] Sample load stale (systemic).
+- Possibly: top-level JSON array rejected (by design for this tool). Fine.
+- Check: does the "类型确认" default Object for null and mixed arrays work? Yes.
+- [低] `useJackson` with record: @JsonProperty on record component is allowed in Jackson 2.12+; fine.
+
+Let me double check one potential T22 bug: the generated `List<Items>` for array elements uses `Items` which is nested; but for a JSON array of objects the class name is derived from the key `items` → toPascal → `Items`; the field is also `items`. Fine. What if the key is a Java keyword passed to toPascal, e.g., `"class"` array? toPascal('class') → 'Class'. Fine.
+
+Another potential T22 bug: **`toCamel` for an all-uppercase single token like "ID"** → firstRaw='ID' all upper → 'id'. Good. For "URLs"? not all upper → 'uRLs'. Minor.
+
+**T23 Java escape**
+- Verified full escape table, octal, unicode, round trip. Correct.
+- [低] text block adds trailing newline to content (semantic difference); notes warn about whitespace but not trailing newline. t23:46-49.
+- [低] Windows-path sample button sets input+execute → stale? The test clicked "还原示例" which is fine; let me verify the "Windows 路径" case. I'll test.
+
+**T24 Properties/YAML**
+- Verified p2y nesting, conflicts, array, continuation, unicode. 
+- [中] No "值类型策略" option despite design; YAML→Properties normalizes numeric literals (1.0→1, etc.) losing original text. t24:445,475.
+- [中] Empty YAML map/array silently dropped (a: {}, b: [] produce no keys). t24:347-354.
+- [低] Properties value `.trim()` strips trailing whitespace that java.util.Properties preserves. t24:121-122.
+- [低] Sample load stale (systemic).
+
+**T25 stack trace**
+- Verified sample parsing, cause chain, suppressed, `... N more`, mixed logs, unrecognized. 
+- [低] `fqcn` includes method name (t25:108-109) — internal mislabel, not user-visible.
+- [中] Design "普通日志混入" requires "仅复制堆栈" / "只复制原始堆栈行" option; implementation only 复制原文/复制整理文本. 
+- [低] stats metrics differ from design (堆栈帧/折叠/非堆栈行 vs 异常/业务/框架).
+- [低] "无法识别堆栈" design says "无法识别时不报错，只作为普通行保留" but impl sets error status. Minor.
+- [低] Sample load stale (systemic).
+
+**T26 Maven/Gradle**
+- [高] classifier ordering swapped both directions. t26:91-96, 166-171. Repro.
+- [高/中] Unsupported Gradle map-form declarations silently dropped when mixed with supported lines (matched>0), no manual entry. t26:132-133. Repro.
+- [中] Design requires scope→configuration mapping confirmation UI; implementation hardcodes. t26:13-18.
+- [低] parent POM dependencyManagement not resolved (warns missing version) — acceptable but design mentions 父 POM 继承.
+- [低] Sample load stale (systemic).
+
+**Systemic (useToolRun)**
+- [高] `lastSig` computed but never compared; programmatic input mutation + execute in same tick → result immediately "待更新" and copy/download disabled. Affects T15(enc/dec/sign), T16, T17, T22, T23(partial), T24, T25, T26. Evidence from live site. useToolRun.ts:12,19,30. 
+- [中] error.vue:11 references getTool without import → error page itself crashes with "getTool is not defined" (observed when T20 crashes). Cross-cutting.
+
+Now, I should double check the T23 Windows sample and T16 file. Let me quickly test T23 "Windows 路径" sample and T16 file input. Also verify T20 is truly the only crash.
+
+Let me also verify the "getTool is not defined" is indeed from error.vue and appears on any error page (e.g., 404). The earlier 404 probe showed NUXT_E1005 but not pageerror (I didn't capture pageerrors for 404). Let me test a 404 page's pageerror. Actually not critical.
+
+Let me run the T23 sample test and a couple more, then write the report.
+
+Also, I should verify the T18 "时区" DST note and T21 cross-timezone works. Good enough.
+
+Let me test T23 Windows path quickly and T16 (SM3) sample already stale confirmed.
+
+Let me also confirm the design IDs for evidence. Design board IDs:
+- T15 main y2Dwo, variants nWK56/Q9BlV/g8o9dO/XXObg.
+- T16 ZDsh2/j4jp6/d95Zo7.
+- T17 Ja13I/d8Uvqe/XPSvz/j17w1/zM6Tx/DEUUC.
+- T18 QWTJw/hUIGC/zbk9m/O4HY0.
+- T19 lRTwq/r6P1F/nzE4G/e1nfd.
+- T20 N9xCsh/wkqXY/Xuzy5/yKSz6.
+- T21 EZa3E/Hf0j2/oqCBG.
+- T22 kOwO2/tjYyC/yXoD1/R8FXjp.
+- T23 SmqEA/xZ8CS/tPBda.
+- T24 h3sKnL/IyUnI/hCbM5.
+- T25 man9y/hQHEM/YUnUe.
+- T26 RWdXA/H4Oxfk/jEz9K/AMdd4.
+
+Good.
+
+Now, one more thing: I should verify the T15 "公钥格式错误" variant's claim that a bad public key blocks computation. In implementation, pubErr only triggers for hex/length. A valid-format off-curve key passes. Also a PEM key (as in design) would fail `cleanHex` (non-hex) → error "公钥 Hex 非法". So PEM input is rejected with a Hex error, which is a poor message but at least blocks.
+
+Let me also check: the design's "公钥格式错误" example is a truncated PEM missing END. The implementation can't accept PEM at all, so it would say "公钥 Hex 非法". Divergence.
+
+Now, let me verify T20's page error one more time and capture the exact status. Already have.
+
+Let me quickly run the T23 Windows sample test to complete the stale matrix, and also test T16 file? Not necessary.
+
+Let me also double-check the T18 time→ts with an actual DST example via live site? The logic is verified via node. Fine.
+
+Let me now check whether the T22 generated code for the sample with `useJackson` places `@JsonProperty` correctly and whether the import is added. I saw the jackson compile failed only due to missing dep. Let me view the jackson output to ensure annotation placement.
+
+Actually, let me quickly view jackson output header.
+dsh: reasoning:
+- T23 Windows path sample → stale (confirms systemic bug for T23).
+- 404 page: title "页面不存在", no pageerror. So the `getTool is not defined` only manifests on non-404 errors (title 出错了). Interesting — maybe error.vue's commonTools is only computed when not 404? Let me check error.vue template. Actually `commonTools` is computed at line 11 unconditionally, so it should throw for 404 too. But the 404 page didn't show pageerror. Maybe `getTool` is auto-imported by Nuxt for functions in app/data/tools.ts? Nuxt auto-imports composables and utils, not arbitrary data exports. Hmm. But `getTool` might be auto-imported because it's in `app/data/tools.ts`? Nuxt auto-imports from `composables/` and `utils/`, not `data/`. Yet the /tools/[slug].vue at line 2 explicitly imports `getTool`, meaning it's NOT auto-imported. So error.vue:11 should fail.
+
+Wait, the 404 page title is "页面不存在" and no pageerror. Maybe error.vue's `commonTools` line throws, but Nuxt catches it differently, or the template doesn't use commonTools for 404. But the computation happens in setup regardless. Unless `getTool` is globally available via Nuxt's auto-import because `app/data/tools.ts` is somehow registered. Let me check nuxt.config for autoImports dirs.
+
+Actually, the earlier /tools/cron probe showed pageerror "getTool is not defined" AND title "出错了". For the 404 page, no pageerror. This suggests the error.vue setup succeeded for 404 but not for the 500-ish error. Contradiction unless the error page logic differs. Let me look at the full error.vue to understand. Possibly commonTools is used only in a branch, and `getTool` call is conditional? No, it's a top-level const.
+
+Hmm, maybe for the 404 case, Nuxt's built-in 404 handling renders a different page? No, title "页面不存在 · DevKit" comes from error.vue's useSeoMeta (is404). So error.vue rendered. And `getTool` must have resolved or the line didn't throw. Could `getTool` be auto-imported after all? If so, why did /tools/cron show "getTool is not defined"? Because the cron error occurred during setup of the tool page, and the error page render might have a different module context? That doesn't make sense.
+
+Wait — maybe the "getTool is not defined" pageerror for /tools/cron came from the tool page itself, not error.vue. Does t20-cron.vue use getTool? No. Hmm.
+
+Let me re-run the /tools/cron probe and look carefully. Actually, the sequence: goto /tools/cron → server-side (SSR) error H3Error → Nuxt client renders error.vue. During hydration, maybe error.vue setup throws getTool. For a true 404 route, Nuxt also renders error.vue but perhaps `commonTools` is not evaluated because of tree-shaking? No.
+
+Let me actually check whether error.vue imports getTool. It doesn't (lines 1-16 shown). Let me check the full file and nuxt.config autoImports. Let me grep error.vue for commonTools usage.
+dsh: reasoning:
+So error.vue uses `getTool` without importing. But the 404 page did not produce a pageerror. Why? Possibly because Nuxt auto-imports `getTool` from `app/data/tools.ts`? Nuxt 4 auto-imports functions from `app/utils/` and `app/composables/`, and also from `shared/utils`. It does not auto-import `app/data`. But maybe `getTool` is globally available via `#imports` due to `imports` config? Let me check nuxt.config.ts. Let me read it.
+
+Actually, wait: maybe the 404 page renders fine because `getTool` IS auto-imported, and the "getTool is not defined" pageerror for /tools/cron was a *server-side* error string surfaced differently. The pageerror list for /tools/cron included "getTool is not defined". Hmm.
+
+Let me test directly: create a page that errors at setup (not 404) and see. Actually, the cron crash is a server-side (SSR) H3Error. When SSR fails, Nuxt returns the error page from the server; on the client, hydration of error.vue might occur in a context where auto-imports work. The pageerror "getTool is not defined" suggests it didn't.
+
+For the true 404, the server renders error.vue successfully (getTool auto-imported server-side), and client hydration also succeeds. So auto-import works. Then why did cron show getTool undefined? Possibly because the SSR H3Error caused the client to re-render the error boundary, and in that client-side error render, the auto-import module for `data/tools.ts` wasn't included in the client bundle chunk for the tool page, so `getTool` wasn't in scope. That is a real bug but nuanced.
+
+Actually, maybe `getTool` auto-import only works when the tools data module is bundled; for pages that import it (like [slug].vue), it's available. For error.vue, Nuxt may not auto-import it consistently. The 404 test not reproducing could be due to the 404 being server-rendered with the full bundle. On client-only error (cron), it fails.
+
+Let me get more definitive evidence: take a screenshot / read the error page body for /tools/cron to see if the "常用工具" section is broken. The pageerror is enough. But I should be careful attributing it. It's a secondary finding; I'll state it as "observed pageerror 'getTool is not defined' on the T20 crash error page; error.vue:11 references getTool without an explicit import". That's factual.
+
+Let me verify whether /tools/cron error page shows the 常用工具 list. Let me probe and read body text.
+
+Actually, I've spent a lot. Let me wrap up evidence collection and write the report. But first, let me check one more T20 thing: the design "无后续执行" requires no-future handling; with the year guard, the logic works. Fine.
+
+Let me also verify T20's `parseStartWall` requires `T` separator; the datetime-local input provides it. Fine.
+
+Let me quickly confirm the 404 vs error difference with a body check for /tools/cron.
+dsh: reasoning:
+Confirmed: the error page for the T20 crash does not render "常用工具" (because getTool threw), and pageerror "getTool is not defined". The nav links still render. So error.vue:11 broken on client-side error rendering. This is a secondary cross-cutting bug.
+
+Now I have enough. Let me also gather line numbers for the systemic stale bug and check `lastSig` usage (unused). Already have useToolRun.ts:12,19,30 (lastSig assigned but never read).
+
+Let me now check a couple more things for completeness:
+
+1. T15 design requires "密文编码" — implemented (Hex/Base64). And "密钥格式 PEM/Hex/Base64" — not implemented. Good.
+
+2. T17 design "密钥显隐" — implementation uses `secret` on DkField. Good. Let me confirm DkField secret renders a reveal toggle. Probably.
+
+3. T19 design "v4不能伪造生成时间" — implementation note says v4 no time. Good.
+
+4. T20 design "?、L、W、#不跨方言混用" — implementation rejects in Unix. Good (except the WED/JUL bug).
+
+5. T22 design "金额可选BigDecimal" — implemented (decimalType). "null类型不能凭空确定" — implemented. Good.
+
+6. T24 design "默认保留字符串，冲突先报错" — conflicts enforced; but "值类型策略" missing.
+
+7. T25 "不声称自动定位根因" — stated.
+
+8. T26 "不自动查询版本或下载依赖" — stated.
+
+Now let me write the report. It needs:
+- 结论摘要 (overall coverage + top 3-5 severe issues)
+- 覆盖对照表 (per tool one line: requirement → implemented → evidence)
+- 设计还原问题 (per item)
+- 功能与代码缺陷 (per item, file:line + repro)
+- 无法验证/存疑项
+- 修复优先级建议
+- Last line DONE: <path>
+
+Let me organize the confirmed defects with severity.
+
+Before writing, let me double-check the T20 `get('year').m` is the *only* blocker and that the fix would make it work. I already verified with the `?.` fix. Good. Also I should confirm the exact crash in the browser is from that line: pageerror "Cannot read properties of undefined (reading 'm')" matches. Yes.
+
+Also, I should double check the T15 sign stale is really due to sigInput and not ws. The live test clicked "签名示例" which sets ws='sign' (from default 'cipher') AND sigInput. Both changes are in sig. Even if sigInput weren't set, ws change alone would cause stale. So the sign success state is broken regardless. But encryption "加密示例" also sets pubKey, privKey, cInput etc. → stale. So the whole sample flow is stale. For a user manually typing the private key and message then clicking "签名", no sig-input mutation occurs, but execute sets sigInput → stale. So sign always stale. For encryption manually: user types pubkey+cInput, clicks 加密 → execute doesn't mutate any sig input → markOk ok, no watcher triggered → status ok. Let me verify that: on T15, switch to sig workspace, type a valid privkey + message, click 签名 → stale due to sigInput assignment. And encryption with manual inputs → ok. So the sign workspace specifically is broken because it writes sigInput.
+
+Let me verify this precisely to strengthen the report: use the sample then manually click the primary "签名" button (not the sample). Actually after loading sample it's already stale; clicking 签名 again triggers another execute, sigInput changes again → stale again. So it stays stale. Let me verify via live: load sign sample, then click "签名" button, check stale.
+
+Actually the first test already clicked "签名示例" (loads and signs) → stale. Let me additionally click the primary "签名" and confirm still stale. Let me do it quickly. Also test encryption manual success. Let me just do the sign re-click.
+
+Actually, I'm confident. Let me also test T15 verification sample → should be ok (no sigInput mutation). Let me verify to contrast.
+
+Let me run one quick test.
+dsh: reasoning:
+Interesting:
+- VERIFY sample: 待更新=True AND 验签通过=True. So even verify sample is marked stale (because loadVerifySample sets ws='sign', sOp='verify', pubKey, sMsg, sigInput then execute; ws is in sig → run watch triggers → stale). But the result "验签通过" is shown, just copy disabled.
+- SIGN re-click: still stale (sigInput mutation).
+- ENC sample: stale (ws/pubKey/etc set).
+- ENC re-click: NOT stale, 加密成功=True. Confirms manual encryption works and status ok.
+
+So the systemic bug affects sample loading and sign. This is consistent.
+
+Note: for sign, even without sample, execute always writes sigInput → always stale. For encrypt, execute doesn't write sig inputs → ok.
+
+Great, definitive.
+
+Now let me write the report. I'll be comprehensive but concise. I'll include the coverage table with one row per tool.
+
+Let me gather exact line numbers for each defect:
+- useToolRun.ts: line 12 `let lastSig = ''`, line 15-24 watch (no comparison), line 30 `lastSig = getSignature()`.
+- t15: pubErr 48-60; execute enc 134-140; dec empty heuristic 179-183; sigInput assignment line 229; key inputs 414-452; no PEM.
+- t16: loadSample 117-123; execute markOk.
+- t17: keyEnc 12, keyHex 39-48, iv 69-77; dec ctEnc 16.
+- t18: parseTs error 165-167; output format selector absent; time→ts single only (311-350); batch only ts2time (259-282).
+- t19: no defects found.
+- t20: line 319 `get('year').m`; parseField 114-122/134-152/174; error.vue:11.
+- t21: calendarDiff 129-144; inputErr dead code 349 / execute 233-245.
+- t22: no major defects; sample stale.
+- t23: javaTextBlock 46-49 (trailing newline); sample stale.
+- t24: flattenYaml 347-354 (empty containers); propUnescape trim 121-122; no value-type strategy.
+- t25: fqcn 108-109; no 仅复制堆栈 button; sample stale.
+- t26: classifier 89-97 mavenToGradle, 166-171 gradleToMaven; silent drop 132-133; mapping hardcoded 13-25; sample stale.
+
+Let me also note the T15 compressed-key "格式有效" is actually supported by sm-crypto (verified), so not a bug.
+
+Also T15's off-curve issue: let me make the repro command concise for the report:
+```
+cd devkit && node -e "const {sm2}=require('sm-crypto');const kp=sm2.generateKeyPairHex();let y=kp.publicKey.slice(66);y=y.slice(0,-1)+((parseInt(y.slice(-1),16)^1).toString(16));const off='04'+kp.publicKey.slice(2,66)+y;console.log('ct len',sm2.doEncrypt('secret',off,1).length)"
+```
+Output: `ct len 204`. And the tool would markOk.
+
+Empty C3 false success repro:
+```
+node -e "const {sm2}=require('sm-crypto');const kp=sm2.generateKeyPairHex();const ct=sm2.doEncrypt('',kp.publicKey,1);const bad=ct.slice(0,128)+'f'.repeat(64);const out=sm2.doDecrypt(bad,kp.privateKey,1);console.log(JSON.stringify(out),hexLen=bad.length)"
+```
+→ `"" 192`, and t15 code would say success.
+
+SM3/SM4 vector commands:
+```
+node -e "const {sm3,sm4}=require('sm-crypto');console.log(sm3('abc'));console.log(Buffer.from(sm4.encrypt(Array.from(Buffer.from('0123456789abcdeffedcba9876543210','hex')),'0123456789abcdeffedcba9876543210',{mode:'ecb',padding:'none',output:'array'})).toString('hex'))"
+```
+
+Cron repro: the browser (probe /tools/cron) or the harness. I'll cite both.
+
+WED/JUL repro output from harness.
+
+T21 calendarDiff output.
+
+T26 classifier output.
+
+Now write the report. I'll write to audit/reports/r3-tools-t15-t26.md.
+
+Let me draft. I need to be mindful of not leaking secrets — the sample keys are test keys, fine (they're already public in the code and design). BRIEF says don't leak key-like content; these are explicitly public test keys. I'll avoid reproducing private keys anyway (not necessary).
+
+Let me write the report now. I'll aim for thorough but readable.
+
+Coverage table: per tool one line with: 需求子项 / 实现状态 / 证据.
+
+Let me structure:
+
+## 结论摘要
+- 覆盖：T15-T26 共 12 个工具，全部有实现与设计画板；密码学向量核对通过；但 1 个阻断（T20 页面崩溃）、若干高。
+- Top issues:
+  1. [阻断] T20 Cron 页面必崩 (get('year').m) → 错误页
+  2. [高] T15 SM2 公钥未做曲线点校验 → 非法公钥仍"加密成功"；空明文 C3 被篡改仍报"校验通过"
+  3. [高] 全站 useToolRun 待更新误判：载入示例/签名后立即"结果待更新"，复制下载禁用
+  4. [高] T26 classifier 顺序颠倒（双向）
+  5. [中高] T20 WED/JUL 名称被误判为 L/W/#；T21 日历差出现负数日；T26 不支持的 Gradle 声明被静默丢弃
+
+## 覆盖对照表
+12 rows.
+
+## 设计还原问题
+- T15 PEM/Base64 缺失
+- T17 Buffer key/IV Base64
+- T18 output format & time→ts batch
+- T20 (design vs crash)
+- T25 仅复制堆栈
+- T26 scope mapping confirm UI
+- T24 值类型策略
+
+## 功能与代码缺陷
+Crypto section with vectors.
+Then each.
+
+## 无法验证/存疑项
+- record compile (JDK8)
+- Jackson compile (dep not on classpath)
+- T22 generated code compiles for POJO etc.
+- Some design variants not directly compared.
+
+## 修复优先级建议
+
+Let me write it.
+
+I should double-check the T18 batch design claim. The design zbk9m text showed "输入 · 本地时间（每行一个）" and "2 行日期无效". So yes time→ts batch is in design. Implementation only single input. Good.
+
+Also T18 design "输出格式 ISO 8601 / 本地化". Implementation no selector. Good.
+
+T25 design "仅复制堆栈" — from hQHEM text "仅复制堆栈". Implementation lacks. Good.
+
+T24 design "值类型策略" — from requirement line 330 "值类型策略；默认保留字符串". Implementation has no selector and normalizes numbers. Good.
+
+T26 design mapping confirmation — clear.
+
+Now, let me also mention T15 design variant requires "逐步检查" (decode/format/pubkey/sig steps) — implementation only boolean.
+
+Let me write the file.
+
+One more: I should record the coverage verification method for each crypto. Done.
+
+Let me produce the report.
+
+For line references in useToolRun, note `lastSig` unused.
+
+Let me write.
+dsh: reasoning:
+I mistakenly used "arguments" field. Let me use the write tool correctly with file_path and content. The content is long; I'll write it properly. Let me compose the full markdown.
+
+I'll write in multiple steps? The write tool replaces the whole file. Let me produce the complete report content in one write.
+
+Let me draft the whole report carefully.
+dsh: reasoning:
+Let me verify the report was written and check the last line. Also, I want to double check the T19 stale claim: I said timestamp/date-diff/uuid false. Good.
+
+Let me verify the file's last line and do a quick sanity check of the content. Also, I should double check the T22 javac claim about `empty` compiling — I wrote "抽查可编译（POJO/多文件/BigDecimal/溢出/非法名）". Good.
+
+Let me confirm the report exists and the last line is DONE.
+
+Also I referenced design board ids; good.
+
+Let me quickly verify there are no obvious factual errors: I claimed T15 "解码成功不等于验签通过" not directly shown — the design requires it. Actually the implementation's verify error message says "解码成功 · 尚未验签"? Let me not overstate. I wrote "文案层面有区分（…未直接出现…但失败原因列表已提及）". Fine.
+
+Let me check the file tail.
+dsh: reasoning:
+The report is written. Let me do a final review of a couple of potentially uncertain claims:
+
+1. I claimed T23 "Windows 路径" sample → stale true. Verified.
+2. I claimed `parseProperties('a=value   \n')` → "value". Verified.
+3. I claimed `y2p('a: {}\nb: []\nc: 1\n')` → only c=1. Verified.
+4. T20 fix verification via harness. Verified.
+5. T26 classifier. Verified.
+6. T21 calendarDiff. Verified.
+7. T15 off-curve / empty C3. Verified.
+
+All good. The task is complete. Let me provide a concise summary to the user.
+
+I should update the todo list to completed. Actually the todo list is internal; let me mark it complete quickly for cleanliness. Not strictly necessary but good. I'll do it.
+审核完成，报告已写入 `audit/reports/r3-tools-t15-t26.md`（329 行）。
+
+## 关键发现
+
+**密码学权威向量核对（真实运行 `sm-crypto` 0.3.14）**
+- ✅ SM3(`abc`) = `66c7f0…4ba8e0`，与国标一致。
+- ✅ SM4 标准 ECB 向量 `0123…3210 → 681edf34d206965e86b3e94f536e4246`，页面 CBC/PKCS#7 示例密文、往返、UTF-8 字节数均正确。
+- ✅ SM2 页面自带密文可解密、raw/DER 签名验签均通过；压缩公钥确实被支持。
+- ❌ 但发现两处**伪造成功**：格式合法但不在曲线上的公钥仍报“加密成功”（密文不可解）；空明文密文 C3 被篡改仍报“C3 校验通过”。
+
+**最严重问题**
+1. `[阻断]` **T20 Cron 打开即崩**：`t20-cron.vue:319` 无条件 `get('year').m`，Unix 五字段/Quartz 六字段无 year 字段 → TypeError。实测 `/tools/cron` 变“出错了”页；用 `?.` 修正后，抽取函数验证核心算法（每15分钟、月末 L、纽约 DST 跳过、永不触发、OR 语义）全部正确。
+2. `[高]` **全站“结果待更新”误判**：`useToolRun.ts` 的 `lastSig` 赋值后从未读取，示例按钮/示例载入后结果立即失效、复制禁用；T15 因 execute 内写 `sigInput` 导致“签名成功”**永不可达**。Playwright 在 8 个工具复现。
+3. `[高]` **T26 classifier 顺序双向颠倒**（`g:a:classifier:version` 应为 `g:a:version:classifier`）；不支持 map 形式的 Gradle 声明在混排时被静默丢弃。
+4. `[高]` **T20 WED/JUL 名称被误判为 L/W/# 扩展符**（Unix 与 Quartz 都报错）。
+5. `[中/高]` **T21 日历差出现负数日**（2026-01-31→03-01 = “0 年 1 月 -2 日”）；T24 空 YAML 对象/数组静默丢失、值尾空白被 trim。
+
+另记录设计还原缺口（T15 PEM/Base64 密钥、T17 Base64 密钥/IV、T18 输出格式与反向批量、T24 值类型策略、T25“仅复制堆栈”、T26 映射确认 UI），以及 `error.vue:11` 未导入 `getTool` 导致崩溃错误页自身报错。
+
+**通过项**：T16 SM3、T19 UUID（v1/v4/v7 生成与解析数学全部复核正确）、T22 生成 Java（POJO/多文件/BigDecimal/溢出/非法名经 `javac` 编译通过；record 因本机 JDK8 无法编译，人工判定语法正确）、T23 转义/还原/八进制/非法转义全部正确、T25 cause 链/Suppressed/`... N more`/混入日志解析正确、T21 实际时长与 DST=47h 正确。

@@ -1,0 +1,645 @@
+{
+ "url": "http://localhost:3000/privacy",
+ "console": [],
+ "pageerrors": [],
+ "failed_requests": [],
+ "status": 200,
+ "title": "本地处理与隐私说明 · DevKit",
+ "metrics": {
+  "body": {
+   "x": 0,
+   "y": 0,
+   "w": 1366,
+   "h": 974,
+   "bg": "rgb(244, 245, 247)",
+   "color": "rgb(18, 22, 31)",
+   "font": "\"Noto Sans SC\", -apple-system, \"system-ui\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+   "size": "14px",
+   "border": "rgb(18, 22, 31)"
+  },
+  "header": {
+   "x": 0,
+   "y": 0,
+   "w": 1366,
+   "h": 60,
+   "bg": "rgb(255, 255, 255)",
+   "color": "rgb(18, 22, 31)",
+   "font": "\"Noto Sans SC\", -apple-system, \"system-ui\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+   "size": "14px",
+   "border": "rgb(18, 22, 31) rgb(18, 22, 31) rgb(228, 231, 236)"
+  },
+  "nav": {
+   "x": 0,
+   "y": 60,
+   "w": 236,
+   "h": 708,
+   "bg": "rgb(255, 255, 255)",
+   "color": "rgb(18, 22, 31)",
+   "font": "\"Noto Sans SC\", -apple-system, \"system-ui\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+   "size": "14px",
+   "border": "rgb(18, 22, 31) rgb(228, 231, 236) rgb(18, 22, 31) rgb(18, 22, 31)"
+  },
+  "sidebar": {
+   "x": 0,
+   "y": 60,
+   "w": 236,
+   "h": 708,
+   "bg": "rgba(0, 0, 0, 0)",
+   "color": "rgb(18, 22, 31)",
+   "font": "\"Noto Sans SC\", -apple-system, \"system-ui\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+   "size": "14px",
+   "border": "rgb(18, 22, 31)"
+  },
+  "main": {
+   "x": 236,
+   "y": 60,
+   "w": 1130,
+   "h": 914,
+   "bg": "rgba(0, 0, 0, 0)",
+   "color": "rgb(18, 22, 31)",
+   "font": "\"Noto Sans SC\", -apple-system, \"system-ui\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+   "size": "14px",
+   "border": "rgb(18, 22, 31)"
+  },
+  "h1": {
+   "x": 421,
+   "y": 84,
+   "w": 760,
+   "h": 35,
+   "bg": "rgba(0, 0, 0, 0)",
+   "color": "rgb(18, 22, 31)",
+   "font": "\"Noto Sans SC\", -apple-system, \"system-ui\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+   "size": "22px",
+   "border": "rgb(18, 22, 31)"
+  },
+  "h2": {
+   "x": 486,
+   "y": 181,
+   "w": 678,
+   "h": 22,
+   "bg": "rgba(0, 0, 0, 0)",
+   "color": "rgb(18, 22, 31)",
+   "font": "\"Noto Sans SC\", -apple-system, \"system-ui\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+   "size": "14px",
+   "border": "rgb(18, 22, 31)"
+  },
+  "htmlBg": "rgba(0, 0, 0, 0)",
+  "cssVars": {
+   "--bg": "#f4f5f7",
+   "--surface": "#ffffff",
+   "--surface-subtle": "#f4f6f9",
+   "--border": "#e4e7ec",
+   "--text-primary": "#12161f",
+   "--text-secondary": "#5a6472",
+   "--text-tertiary": "#8b94a3",
+   "--accent": "#2563eb",
+   "--accent-soft": "#eff4ff"
+  },
+  "textSample": [
+   {
+    "t": "DevKit",
+    "tag": "SPAN",
+    "size": "16px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "搜索工具，例如 JSON、国密、时间戳",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "⌘",
+    "tag": "KBD",
+    "size": "11px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "K",
+    "tag": "KBD",
+    "size": "11px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "源码",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "全部工具",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "41",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "我的收藏",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "0",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "最近使用",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "0",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "工具分类",
+    "tag": "P",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "数据格式",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "4",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "JSON 格式化",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "JSON 差异比较",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "JSON / YAML 转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "CSV / JSON 转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "编码与文本",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "7",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "Base64 编解码",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "URL 编解码",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "Unicode / 字节编码转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "文本去重与整理",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "命名风格转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "文本差异比较",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "正则表达式测试",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "摘要与加密",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "6",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "MD5 / SHA 摘要",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "HMAC 计算与校验",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "AES 加解密",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "SM2 加解密与签名",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "SM3 摘要",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "SM4 加解密",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "时间与标识",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "4",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "时间戳转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "UUID 生成与解析",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "Cron 解析与执行预览",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "日期时间差计算",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "Java 开发",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "5",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "JSON 转 Java 类",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "Java 字符串转义",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "Properties / YAML 转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "Java 异常堆栈整理",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "Maven / Gradle 依赖转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "Web / Vue",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "6",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "JSON 转 TypeScript 类型",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "Vue 单文件组件模板",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "CSS 单位换算",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "颜色转换与对比度",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "SVG 预览与优化",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "HTML / CSS / JS 格式化",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "接口辅助",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "4",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "JWT 解析与验签",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "URL 参数编辑",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "curl / fetch / Axios 转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "HTTP 状态码速查",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "文件与图片",
+    "tag": "SPAN",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "5",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "文件摘要与批量校验",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "图片压缩与格式转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "二维码生成与识别",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "文本文件编码转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "文件 / Base64 转换",
+    "tag": "SPAN",
+    "size": "12px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "所有计算在浏览器内完成，输入内容不会上传到服务器。",
+    "tag": "SPAN",
+    "size": "11px",
+    "color": "rgb(139, 148, 163)"
+   },
+   {
+    "t": "本地处理与隐私说明",
+    "tag": "H1",
+    "size": "22px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "DevKit 是纯浏览器本地工具箱，这一页解释它的工作方式与边界。",
+    "tag": "P",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "计算发生在你的浏览器里",
+    "tag": "H2",
+    "size": "14px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "DevKit 的全部工具——格式化、转换、摘要、加解密、文件处理——都在你的设备上由浏览器执行。没有账号体系，没有云端处理服务，不存在把你的输入发送到服务器计算的环节。",
+    "tag": "P",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "静态资源仍需加载",
+    "tag": "H2",
+    "size": "14px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "网站本身是静态部署的：首次打开需要从托管服务器下载页面与脚本；之后浏览器会使用缓存。工具一旦加载完成，计算不再依赖网络（你可以断网验证）。已缓存的工具离线可用；首次访问且未缓存的工具在离线时无法加载，见「离线状态」页。",
+    "tag": "P",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "哪些内容会保存在本地",
+    "tag": "H2",
+    "size": "14px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "只有三类非敏感偏好会写入浏览器 localStorage：主题与编辑器偏好（字号、缩进、换行）、收藏的工具标识、最近使用的工具名称与访问时间。它们都可在「偏好设置」中随时清除。",
+    "tag": "P",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "输入内容不默认持久化",
+    "tag": "H2",
+    "size": "14px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "你在工具中输入的正文、密钥、Token、以及拖入的文件，默认只存在于当前页面内存中：刷新、关闭标签页或切换工具后即消失，不会被写入 localStorage，也不会被上传。请不要把本站当作长期保存密钥的地方。",
+    "tag": "P",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "剪贴板与下载由你主动触发",
+    "tag": "H2",
+    "size": "14px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "复制结果、下载文件都是你点击按钮后发生的显式操作，本站不会在你不知情时读写剪贴板或创建下载。剪贴板权限被浏览器拒绝时，工具会提示你手动选择复制。",
+    "tag": "P",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "本站不提供的能力",
+    "tag": "H2",
+    "size": "14px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "没有云端历史、没有跨设备同步、没有账号与付费墙、没有广告与统计埋点、没有服务器代理请求、没有在线 JVM 或 Maven 构建、没有数据库连接。离线可用性以实际缓存状态为准，不代表所有工具已缓存。",
+    "tag": "P",
+    "size": "13px",
+    "color": "rgb(90, 100, 114)"
+   },
+   {
+    "t": "[[]]",
+    "tag": "SCRIPT",
+    "size": "14px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "window.__NUXT__={};window.__NUXT__.config={public:{},app:{baseURL:\"/\",buildId:\"dev\",buildAssetsDir:\"/_nuxt/\",cdnURL:\"\"}}",
+    "tag": "SCRIPT",
+    "size": "14px",
+    "color": "rgb(18, 22, 31)"
+   },
+   {
+    "t": "[[\"ShallowReactive\",1],{\"data\":2,\"state\":4,\"once\":15,\"_errors\":16,\"serverRendered\":10,\"path\":18},[\"ShallowReactive\",3],{",
+    "tag": "SCRIPT",
+    "size": "14px",
+    "color": "rgb(18, 22, 31)"
+   }
+  ],
+  "counts": {
+   "a": 49,
+   "button": 14,
+   "input": 0,
+   "imgs": 0,
+   "svg": 26
+  },
+  "doc": {
+   "w": 1366,
+   "h": 974
+  },
+  "a11y": {
+   "buttonsNoName": 0,
+   "imgNoAlt": 0,
+   "inputsNoLabel": 0,
+   "landmarks": {
+    "header": true,
+    "nav": true,
+    "main": true,
+    "footer": false
+   }
+  }
+ }
+}

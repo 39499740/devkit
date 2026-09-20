@@ -1,0 +1,1072 @@
+dsh: reasoning:
+Let me start by reading the audit reports and the files in scope.
+dsh: reasoning:
+Now let's read the other reports for offline.vue and code quality, and then my files.
+dsh: reasoning:
+Now let me read my assigned files. Let me start with the T35, T34, T36, T38, and offline.vue.
+dsh: reasoning:
+Now I understand T35. The issue: SAFE_KEY regex includes `-`. A legal JS identifier is `/^[A-Za-z_$][A-Za-z0-9_$]*$/` (also unicode letters, but for header keys, ASCII is fine). Actually reserved words like `default`, `class`, `delete` would also be problematic as identifiers in object literal? No — object literal keys can be reserved words (e.g. `{default: 1}` is valid). So reserved words are fine. But `-` is not. Also `$` should be allowed. Let me fix SAFE_KEY to `/^[A-Za-z_$][A-Za-z0-9_$]*$/`. Note header like `Content-Type` becomes quoted. Good.
+
+Wait, but header keys could also have digits starting? Actually header names can't start with digit typically, but if a key starts with digit, quote it. Good.
+
+Now let me read T34.
+dsh: reasoning:
+T34 fix: In `parse()` catch, set `base.value = null` and `rows.value = []`. That's the fix.
+
+Now T36.
+dsh: reasoning:
+T36: Add 424 Failed Dependency. Also "校对 305/306 的废弃说明是否准确". The task says: "状态码数据缺 424 Failed Dependency，请补全，并校对 305/306 的废弃说明是否准确。"
+
+Wait, the data doesn't have 305 or 306 at all. D10 says missing vs IANA: [305, 306, 424]. So 305/306 are missing as well. The task says "校对 305/306 的废弃说明是否准确" — implies maybe there's a note somewhere? Let me grep for 305/306 in the file. There's none. Hmm.
+
+Actually let me re-read: "【T36｜低】状态码数据缺 424 Failed Dependency，请补全，并校对 305/306 的废弃说明是否准确。"
+
+So I need to add 424. And "校对 305/306 的废弃说明是否准确" — since 305 and 306 don't exist in the data, maybe I should add them with accurate notes? But the instruction says "校对 ... 说明是否准确" (proofread whether the deprecation descriptions of 305/306 are accurate). Since they're absent, maybe the expectation is to add them with accurate deprecation notes, or perhaps the intent is that if I add 305/306 I must mark them deprecated accurately. Hmm, but the primary ask is adding 424.
+
+Let me check IANA:
+- 305 Use Proxy: deprecated by RFC 7231 (2014), obsoleted. It's reserved. Actually IANA registry: 305 Use Proxy — "Deprecated (RESERVED)"? Let me recall. RFC 9110 says 305 was deprecated. IANA HTTP Status Code Registry lists 305 as "Use Proxy" with reference RFC 9110? Let me verify.
+- 306 (Unused) — was "Switch Proxy" in older drafts, now unused/reserved.
+
+The audit says "305/306 已废弃/unused 可忽略" in the coverage table. The task asks to proofread. Since they're not in the data at all, I think the right move is to add 424 and also add 305 and 306 entries with accurate deprecation labels so the "废弃说明" is accurate. But adding them could be seen as scope creep... Actually the task explicitly mentions 305/306, so adding accurate entries seems within scope. Let me think about what's minimal and correct.
+
+Actually "校对 305/306 的废弃说明是否准确" strongly suggests that somewhere there IS a mention of 305/306. Let me grep the whole file again — no. Maybe in the design docs? But we can't modify design.pen. Let me search the repo for "305" and "306" in relevant contexts.
+
+Let me check IANA facts first via web search to be accurate. Let me hold on that and first read T38 and offline.vue.
+dsh: reasoning:
+T38: I need to expose the "移除文件" button, consistent with T37/T41. Let me look at how T37 and T41 do removal. Let me read the relevant parts.
+
+Also I need to check `clearFile` - it should also clear `trackUrl` entries maybe, and reset input. Let me look at T37/T41.
+dsh: reasoning:
+Now let me look at T41 clearFile and its template to maintain consistency, and T37's removeItem etc.
+dsh: reasoning:
+T41 uses a `DkButton variant="ghost"` with "移除" in the file info row. For T38, I'll add a "移除" button, likely in the toolbar area or in the original image panel head. "与 T37/T41 的移除交互保持一致" — T41 puts 移除 as a ghost button in the file-info row. T37 puts a DkIconButton title="从列表移除" per row and "清空列表" button. So for T38, a ghost "移除" button is consistent with T41.
+
+Let me put it in the toolbar near the "重新转换" button, or in the original image panel head. Actually T41 places 移除 next to the file info. T38 doesn't have a file-info row but has the original image panel. I'll add a "移除" ghost button to the `t38__toolbar` before/after the "重新转换" primary button, using the existing `clearFile`. Actually the toolbar has `<span class="grow">` then primary button. Let's add `DkButton size="sm" variant="ghost"` with "移除" before "重新转换", disabled when no file? Since template section is `v-if="file"` only for the panels, but the toolbar is always shown. So I need `v-if="file"` on the remove button.
+
+Let me place it right after `<span class="grow"></span>`:
+```
+<DkButton v-if="file" size="sm" variant="ghost" @click="clearFile">移除</DkButton>
+```
+
+Now the `clearFile` also should revoke current result URL. It sets result.value = null but doesn't revoke result.value.url. Well, `trackUrl` keeps them in `lastUrls` and onUnmounted revokes all. Minor leak until unmount. Not required, but consistent with t41 which revokes thumbnail. Actually T38 objectUrl is tracked too. Let me keep clearFile minimal but revoke result URL to avoid leaking blob URL. Actually `trackUrl` caps at 8 and revokes when exceeding, and onUnmounted revokes all. It's fine. But to be safe and consistent, I won't over-change. The task says minimal change. But `clearFile` "死代码接上" is the main change.
+
+Hmm, but `clearFile` doesn't reset `busy`. If a conversion is in flight and user removes, it might re-populate result. But that's edge. Let me check watch on params: it returns if !file.value. And convert() catches `if (!file.value...) return`. Actually `convert()` checks at start; if already running async `toBlob`, removing won't cancel. Minor. Not needed.
+
+Also `clearFile` should reset target? No.
+
+Let's now handle offline.vue. Requirements:
+- retry button real: re-check online status and show real result
+- clean up listeners (onUnmounted)
+- text must not claim cached offline usable. Use visited localStorage to say "visited tools' static assets may still be in browser cache".
+
+Let me redesign offline.vue reasonably. The current page:
+- `online` ref
+- `cached` from localStorage visited
+- retry() only reloads if online, button disabled when online → dead.
+- addEventListener without remove.
+
+Fix:
+1. `onMounted` add listeners, `onUnmounted` remove. Use named handlers.
+2. `retry()` should always run a real check: set `checking`, re-read `navigator.onLine`, re-read localStorage visited, and give visible feedback with a timestamp / result. E.g.:
+```
+const checking = ref(false)
+const lastChecked = ref(0)
+function refreshState() {
+  online.value = navigator.onLine
+  loadVisited()
+}
+async function retry() {
+  checking.value = true
+  await new Promise((r) => setTimeout(r, 300))
+  refreshState()
+  lastChecked.value = Date.now()
+  checking.value = false
+  toast? 
+}
+```
+Better: show a status line "最近检测：HH:MM:SS · 在线/离线 · 可打开的工具 N 个". And maybe `navigator.onLine` may be true while page loaded from cache. The real result: if online, maybe we could attempt a fetch to verify connectivity (navigator.onLine isn't reliable). "重新检测在线状态并给出真实结果" — a real connectivity check is more honest. We can do a HEAD/fetch to the current origin with cache: 'no-store' and a timeout? But offline, fetch to same origin might succeed from SW (none) or fail. Actually there's no SW, so fetch to same origin when offline fails → good real check. But if the page is served from browser cache (back/forward), fetch might still work. Let's do a lightweight real check: `fetch(location.href, {method: 'HEAD', cache: 'no-store'})` with a timeout. Hmm, but if the dev server returns 200 for HEAD (Nuxt SSR does support HEAD?). It might. But a HEAD to the same URL when online is a real network round trip.
+
+However, adding a network request from a page could be problematic? It's honest. Let's implement a check that tries `fetch(location.origin, { method: 'HEAD', cache: 'no-store', mode: 'no-cors' })`. no-cors HEAD... Actually `mode: 'no-cors'` with HEAD is allowed? no-cors only allows simple methods GET/HEAD/POST. HEAD is allowed. But response opaque; we only care about promise resolution vs rejection. If offline, fetch rejects. Good.
+
+But careful: In SSR the component setup runs on server. `location` and `navigator` must be guarded. The retry function is only invoked by click (client), so fine. But `onMounted`.
+
+Let's design:
+```ts
+const online = ref(true)
+const visited = ref<string[]>([])
+const checking = ref(false)
+const lastChecked = ref('')
+
+function loadVisited() {
+  try {
+    const seen = localStorage.getItem('devkit.visited.v1')
+    visited.value = seen ? JSON.parse(seen) : []
+  } catch {
+    visited.value = []
+  }
+}
+
+async function detect() {
+  checking.value = true
+  const navOnline = navigator.onLine
+  let reachable = false
+  try {
+    await fetch(location.origin + '/favicon.ico', { method: 'HEAD', cache: 'no-store', signal: AbortSignal.timeout(4000) })
+    reachable = true
+  } catch {
+    reachable = false
+  }
+  online.value = navOnline && reachable  // hmm
+  ...
+}
+```
+
+Hmm, but if offline the page can still be displayed only if browser served it from cache — no SW, but bfcache/HTTP cache may serve. A HEAD to /favicon.ico should fail offline. If online but dev server serves fine → reachable true.
+
+But wait: `AbortSignal.timeout` support? Modern browsers yes. But to be safe use an AbortController + setTimeout. Let's keep it simple; use `AbortController`.
+
+However, checking `navigator.onLine && reachable` could be false while navigator.onLine true if favicon 404? A 404 response still resolves → reachable true. Good. If server down → rejects → false.
+
+Let's define state: `online` = navigator.onLine (browser's signal), and `reachable` = actual fetch result. Display both. The "real result" is the combination. Let's be careful not to overcomplicate.
+
+Actually the requirement: "让重试真实生效（重新检测在线状态并给出真实结果）". So retry should:
+- re-read `navigator.onLine`
+- re-read localStorage visited
+- actively probe network reachability
+- display the result (timestamp + online/offline + probe result)
+
+And the button should be enabled always (not `:disabled="online"`).
+
+Let me write it cleanly:
+
+```ts
+const online = ref(true)
+const visited = ref<string[]>([])
+const checking = ref(false)
+const probeResult = ref('')
+const lastChecked = ref('')
+
+function loadVisited() {
+  try {
+    const seen = localStorage.getItem('devkit.visited.v1')
+    visited.value = seen ? JSON.parse(seen) : []
+  } catch {
+    visited.value = []
+  }
+}
+
+let abort: AbortController | null = null
+
+async function checkNow() {
+  if (checking.value) return
+  checking.value = true
+  probeResult.value = ''
+  loadVisited()
+  const navOnline = navigator.onLine
+  let reachable = false
+  abort = new AbortController()
+  const timer = setTimeout(() => abort?.abort(), 4000)
+  try {
+    await fetch(`${location.origin}/favicon.ico?_=${Date.now()}`, {
+      method: 'HEAD',
+      cache: 'no-store',
+      signal: abort.signal
+    })
+    reachable = true
+  } catch {
+    reachable = false
+  } finally {
+    clearTimeout(timer)
+    abort = null
+  }
+  online.value = navOnline
+  probeResult.value = reachable
+    ? '网络请求成功（可访问当前站点）'
+    : navOnline
+      ? '浏览器报告在线，但站点请求失败（可能无法联网或被拦截）'
+      : '浏览器报告离线，站点请求失败'
+  lastChecked.value = new Date().toLocaleTimeString()
+  if (reachable && !navOnline) online.value = true
+  checking.value = false
+}
+```
+
+Hmm the interplay: online should reflect reality. If reachable, we are online → online.value = true. If not reachable, we're effectively offline regardless of navigator.onLine. That's most honest: `online.value = reachable`. But navigator.onLine could be true while favicon fetch blocked by network? unlikely. Let's set `online.value = reachable` and include navOnline in message. That is a genuine result.
+
+But we should also keep listening for online/offline events; on 'online' event, maybe trigger a re-probe? We can just update `online` and clear probe text (stale). Let's have handlers:
+```
+function onOnline() { online.value = true; probeResult.value = '浏览器报告网络已恢复（点击「重新检测」实测）'; lastChecked.value = ... }
+function onOffline() { online.value = false; probeResult.value = ''; ... }
+```
+
+Hmm, keep it simple. The requirement mainly: listener cleanup + real retry.
+
+Also SSR: `onMounted` reads navigator. Fine.
+
+Text changes: Must not claim "已缓存工具... 离线时仍可打开" and "已缓存工具（N）". Instead: "访问过的工具（N）" and note that visiting a tool may have put its static assets in the browser cache, but since there's no service worker, pages may not load offline. Also, the design requires content be truthful. Let me rewrite text:
+
+- Title: online ? '资源未就绪' : '当前处于离线状态'
+- desc: online ? '当前网络可用。若某个工具页打不开，通常是静态资源尚未加载完成，重试即可。' : '当前网络不可用。本工具集没有离线缓存层（Service Worker），因此直接打开 /tools/... 可能失败；已在本机浏览器缓存中保留的静态资源有可能让部分页面仍能显示，但不保证。'
+- note: 'DevKit 不提供 Service Worker 预缓存：离线可用性完全取决于浏览器对已访问页面静态资源的缓存情况，不保证任何工具在离线时可用。'
+
+List title: '访问过的工具（{{ visitedTools.length }}）' with explanation: '以下工具你曾在本机访问过；它们的静态资源可能仍保留在浏览器缓存中，但离线打开并不保证成功。'
+
+Also add a "重新检测" button always enabled, showing checking state, and a status line.
+
+Also the current title/desc when online says "已缓存的工具可以继续本地处理" which implies caching. Fix.
+
+Also there is `useSeoMeta({ title: '离线与资源未就绪 · DevKit' })` — fine.
+
+Let me also check: `cached` variable used in template. I'll rename to `visited`. Need to update template references.
+
+Now, the "重试加载" button: keep label "重新检测" and always enabled. Maybe also add a "重新加载页面" button? The original intent was reload. Hmm, "重试真实生效（重新检测在线状态并给出真实结果）". So the button should re-detect. Let me name it "重新检测". Could add a separate "刷新页面" button but not necessary. Let's keep one primary button "重新检测" plus maybe a ghost "重新加载页面" for actual retry of page. Actually simpler: primary "重新检测网络状态" and the result shown. The design has "重试加载". I'll label "重新检测" and show result.
+
+Let's now also double check: does `useToast` exist / imported auto? Not needed.
+
+Now T36: Let me research IANA for 305/306/424 to be accurate. Let me do a quick web search / recall.
+
+IANA HTTP Status Code Registry:
+- 305 Use Proxy: "Deprecated" reference RFC 9110, Section 15.4.6? Actually RFC 9110 removed 305? Let me check. RFC 9110 Sec 15.4: 300, 301, 302, 303, 304, 305, 307, 308. Wait, I recall RFC 9110 deprecates 305. Let me verify. In RFC 9110, "15.4.6. 305 Use Proxy" section says: "The 305 (Use Proxy) status code was defined in a previous version of this specification and is now deprecated (Appendix B of [RFC7231])." Hmm actually I think RFC 9110 still has 305 text but marks deprecated. Let me search.
+
+- 306: "(Unused)" — originally "Switch Proxy" in draft, but never specified; reserved. IANA lists "306 (Unused)" with reference RFC 9110? Actually IANA registry has 306 reserved. RFC 7231 Appendix B says 306 was defined in a previous version but no longer used.
+
+Let me verify with a web search to be safe, since the task explicitly asks to proofread.
+
+Also 424 Failed Dependency: WebDAV (RFC 4918). Defined in RFC 4918 Section 11.4. It's in the WebDAV 4xx range. Related to 423 Locked and 507 Insufficient Storage.
+
+Should I add 305 and 306 to the list? The audit table says "对照 IANA 缺 424 Failed Dependency（305/306 已废弃/unused 可忽略）". The task: "状态码数据缺 424 Failed Dependency，请补全，并校对 305/306 的废弃说明是否准确。"
+
+Hmm phrasing "校对 305/306 的废弃说明" implies there IS a 废弃说明. But maybe the task author assumes the list has entries for 305/306 with notes. Since it doesn't, the honest approach: add 424, and add 305 + 306 entries clearly marked as deprecated/unused so the data is complete and the descriptions accurate. But is that desirable? The tool is a local knowledge index; including deprecated codes with accurate notes is arguably better and matches "校对...废弃说明". Let me add them with accurate deprecation labels. That satisfies "校对 305/306 的废弃说明是否准确" by actually providing accurate ones. Hmm, but maybe the instruction wants me to verify existing text. Since no existing text, I'll note in the report that the file had no 305/306 entries at all, so I added them with accurate status.
+
+Wait — risk: adding 305/306 might create unrelated changes. But the task explicitly mentions them, so it's within scope. I'll add:
+- 305 Use Proxy: deprecated by RFC 9110 (obsoletes RFC 7231 which deprecated it). Note: "已废弃（Deprecated）". reference earlier RFC 2616.
+- 306 (Unused): "保留未使用" — originally "Switch Proxy" in an early draft, never standardized, must not be used.
+- 424 Failed Dependency: WebDAV (RFC 4918): "由于前一个请求失败，当前请求无法执行" e.g., PROPPATCH atomic.
+
+Let me verify 305/306 details via web_search. Also check RFC 9110 for 424? 424 not in RFC 9110 (it's WebDAV extension). Fine.
+
+Let me do a web search.
+dsh: reasoning:
+Let me fetch RFC 9110 section on 305 and check IANA registry directly.
+dsh: reasoning:
+Network access restricted for those hosts. Let me use web_search more specifically. Actually I can rely on knowledge, but let me try a different fetch host.
+dsh: reasoning:
+Let me fetch the datatracker draft semantics latest or the appendix. Actually I'm fairly confident:
+
+RFC 9110 Appendix B (Changes from RFC 7231) — actually 305 was deprecated in RFC 7231 Appendix B: "The 305 (Use Proxy) status code has been deprecated." Let me confirm. RFC 7231 Section 6.4.5: 305 Use Proxy... and Appendix B: "The 305 (Use Proxy) status code has been deprecated due to security concerns regarding in-band configuration of a proxy. The 306 status code ... is unused." Hmm actually.
+
+Let me fetch the github raw of draft-ietf-httpbis-semantics-latest.html to confirm exact wording. That repo is a GitHub host, likely accessible.
+
+Actually, let me just fetch the datatracker doc via web_fetch. Let me try datatracker.ietf.org.
+dsh: reasoning:
+Network is limited to search results. Let me try fetching the pub.dev constant page (public) or the datatracker PDF HTML.
+
+Actually, I know:
+- RFC 9110 §15.4.6: "305 Use Proxy" — In RFC 9110, the status code 305 is listed under 15.4.6? Let me recall the actual RFC 9110 table of contents for section 15.4 (Redirection 3xx):
+  - 15.4.1. 300 Multiple Choices
+  - 15.4.2. 301 Moved Permanently
+  - 15.4.3. 302 Found
+  - 15.4.4. 303 See Other
+  - 15.4.5. 304 Not Modified
+  - 15.4.6. 305 Use Proxy
+  - 15.4.7. 306 (Unused)
+  - 15.4.8. 307 Temporary Redirect
+  - 15.4.9. 308 Permanent Redirect
+
+Yes! RFC 9110 does have 15.4.6 305 Use Proxy and 15.4.7 306 (Unused). Let me recall text:
+- 305: "The 305 (Use Proxy) status code was defined in a previous version of this specification and is now deprecated (Appendix B of [RFC7231])." Hmm, actually I think the RFC 9110 text says: "The 305 (Use Proxy) status code was defined in a previous version of this specification and is now deprecated (Appendix B)." And it might say a server MUST NOT generate 305? Let me get exact.
+
+- 306 (Unused): "The 306 status code was defined in a previous version of this specification, is no longer used, and the code is reserved."
+
+Also RFC 9110 Appendix B says something similar. And the IANA registry lists:
+  - 305 Use Proxy → "Deprecated" (RFC 9110)
+  - 306 (Unused) → "Reserved" (RFC 9110)
+  - 424 Failed Dependency → RFC 4918
+
+Actually, IANA registry "HTTP Status Code Registry" as of recent:
+```
+305 Use Proxy  [RFC9110, Section 15.4.6]
+306 (Unused)   [RFC9110, Section 15.4.7]
+```
+Hmm, but IANA marks them with "(Unused)" in the Description column and Reference. There's no explicit "Deprecated" status column; IANA just lists descriptions. But RFC 7231's Appendix B deprecated 305? Let me not overstate.
+
+Let me try fetching the pub.dev page to see description, and maybe a public mirror like httpwg.org. Let me try httpwg.org/specs/rfc9110.html.
+dsh: reasoning:
+Network only returns search results. Let me do another targeted search for the exact wording.
+dsh: reasoning:
+Let me fetch the ftp.nic.ad.jp mirror of rfc7231, which may be accessible.
+dsh: reasoning:
+Let me try the datatracker draft text.
+dsh: reasoning:
+The sandbox restricts most. I'll rely on knowledge with high confidence:
+
+RFC 9110:
+- §15.4.6 305 Use Proxy: "The 305 (Use Proxy) status code was defined in a previous version of this specification and is now deprecated (Appendix B of [RFC7231])."
+- §15.4.7 306 (Unused): "The 306 status code was defined in a previous version of this specification, is no longer used, and the code is reserved."
+
+RFC 7231 Appendix B (Changes from RFC 2616): 
+- "The 305 (Use Proxy) status code has been deprecated due to security concerns regarding in-band configuration of a proxy. ..."
+- "The 306 (Unused) status code ..."
+
+So the accurate statements:
+- 305 Use Proxy: deprecated (RFC 7231 deprecated it; RFC 9110 also marks deprecated). Reference IANA RFC 9110 §15.4.6.
+- 306: unused/reserved; was never specified in a standard (only in early drafts as "Switch Proxy"); must not be used.
+- 424 Failed Dependency: WebDAV, RFC 4918 §11.4. Meaning: the method could not be performed on the resource because the requested action depended on another action and that action failed. Typically used in WebDAV PROPPATCH when one property update fails, all others fail with 424.
+
+Actually RFC 4918 defines 424 under 11.4? Let me recall: RFC 4918 Section 11.4 is "424 Failed Dependency". Text: "The 424 (Failed Dependency) status code means that the method could not be performed on the resource because the requested action depended on another action and that action failed. For example, if a command in a PROPPATCH method fails, then, at minimum, the rest of the commands will also fail with 424 (Failed Dependency)."
+
+Good.
+
+Now let me check the order: In the list, 4xx includes 423 Locked then 425 Too Early. I'll add 424 between 423 and 425. And add 305 between 304 and 307. 306 also between 305 and 307.
+
+Now the "校对 305/306 的废弃说明是否准确" — I'll add accurate entries and note in the report.
+
+Now let's also check the `DkStatusBar` component's `status` values to make sure my changes are consistent. Since t38 uses `:status="busy ? 'running' : run.status.value"`, and DkStatusBar accepts 'running'. Fine. Not modifying.
+
+Now, does the T35 fix need to also cover params? SAFE_KEY changed → params keys with `-` get quoted. Also `$` allowed. Also keys like `'1abc'` get quoted. Good.
+
+Wait, there's another subtle bug in T35: `prettyJs` uses `JSON.stringify(k)` for object keys, which is correct. The `minifyJson` for body. Fine.
+
+Also, headers with `key` being a valid JS *reserved word* like `default` — object literal `{ default: 'x' }` is valid JS. Fine.
+
+Also header key like `Content-Type` → SAFE_KEY now false → jsQuote → `'Content-Type'`. Good.
+
+What about header keys that are empty string? Not likely.
+
+Now let's make the edits.
+
+First T35 SAFE_KEY.
+dsh: reasoning:
+Now edit T35.
+dsh: reasoning:
+Now T34: in catch, clear base and rows. Also update the `retry`/status meta. Let me edit the catch.
+dsh: reasoning:
+Now T36: add 305, 306, 424. Let me insert. 
+
+After `{ code: 304 ... }` add 305 and 306. And after 423 add 424.
+
+305 entry:
+```
+{ code: 305, name: 'Use Proxy', cn: '使用代理（已废弃）', desc: '已废弃（RFC 7231 起标记为 deprecated，RFC 9110 未改变该结论）：响应曾要求客户端经指定代理重发请求，因在响应中带内配置代理存在安全隐患而不再使用。', related: [{ code: 306, diff: '306 从未启用，仅保留编号' }] },
+{ code: 306, name: '(Unused)', cn: '未使用（保留）', desc: '保留未使用：早期草案中曾叫 Switch Proxy，但从未形成标准，RFC 9110 明确该编号不再使用。', related: [{ code: 305, diff: '305 是已废弃的 Use Proxy；306 从未启用' }] },
+```
+
+Wait, name attribute "Use Proxy" and cn. The `classOf` uses first digit → 3xx class. Good.
+
+Actually the tool's search matches `s.name.toLowerCase()`, cn, desc. Fine.
+
+424 entry:
+```
+{ code: 424, name: 'Failed Dependency', cn: '依赖失败', desc: 'WebDAV 扩展：当前操作依赖的前一个操作失败，因而本次也无法执行。典型场景是 PROPPATCH 中某个属性更新失败时，其余属性的更新一并返回 424。', related: [{ code: 423, diff: '423 是资源被锁定而无法操作；424 是前置操作失败导致连带失败' }, { code: 507, diff: '507 是存储空间不足' }] },
+```
+
+Place between 423 and 425.
+
+Let me make the edits.
+dsh: reasoning:
+Now T38: add 移除 button. `clearFile` defined at 129. Add button to toolbar. Also, one concern: `clearFile` doesn't clear `busy`/`busyMsg`, nor revoke result URL. Let me improve minimally to also revoke result URL? Actually trackUrl array holds it and it's capped at 8; onUnmounted revokes all. Revoking on clear would be cleaner but could double-revoke (harmless). Let me keep clearFile as is to avoid behavior change; just wire it.
+
+Actually, there's a subtle issue: after clearFile, `run.markIdle()` resets status. Good. Also the `<FileDrop>` remains. Good.
+
+Let me add the button. Place after `<span class="grow"></span>`:
+```
+<DkButton v-if="file" size="sm" variant="ghost" @click="clearFile">移除</DkButton>
+```
+before the "重新转换" primary button. This matches T41's ghost 移除.
+dsh: reasoning:
+Now offline.vue. Let me rewrite the script section and template text.
+
+Script:
+```ts
+<script setup lang="ts">
+import { tools } from '~/data/tools'
+
+useSeoMeta({ title: '离线与资源未就绪 · DevKit' })
+
+const online = ref(true)
+const visited = ref<string[]>([])
+const checking = ref(false)
+const lastProbe = ref('')
+const lastChecked = ref('')
+
+function loadVisited() {
+  try {
+    const seen = localStorage.getItem('devkit.visited.v1')
+    visited.value = seen ? JSON.parse(seen) : []
+  } catch {
+    visited.value = []
+  }
+}
+
+function onOnline() {
+  online.value = true
+}
+
+function onOffline() {
+  online.value = false
+  lastProbe.value = ''
+}
+
+onMounted(() => {
+  online.value = navigator.onLine
+  loadVisited()
+  window.addEventListener('online', onOnline)
+  window.addEventListener('offline', onOffline)
+})
+onUnmounted(() => {
+  window.removeEventListener('online', onOnline)
+  window.removeEventListener('offline', onOffline)
+})
+
+const visitedTools = computed(() =>
+  visited.value
+    .map((id) => tools.find((t) => t.id === id))
+    .filter((t): t is NonNullable<typeof t> => !!t)
+)
+
+async function retry() {
+  if (checking.value) return
+  checking.value = true
+  lastProbe.value = ''
+  loadVisited()
+  const navOnline = navigator.onLine
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 4000)
+  let reachable = false
+  let failure = ''
+  try {
+    await fetch(`${location.origin}/favicon.ico?_=${Date.now()}`, {
+      method: 'HEAD',
+      cache: 'no-store',
+      signal: controller.signal
+    })
+    reachable = true
+  } catch (e) {
+    reachable = false
+    failure = errMessage(e)
+  } finally {
+    clearTimeout(timer)
+  }
+  online.value = reachable
+  lastProbe.value = reachable
+    ? `实测可访问本站（navigator.onLine=${navOnline}）`
+    : `实测无法访问本站（navigator.onLine=${navOnline}${failure ? `，${failure}` : ''}）`
+  lastChecked.value = new Date().toLocaleTimeString()
+  checking.value = false
+}
+</script>
+```
+
+Wait: `errMessage` is auto-imported? It's in app/utils presumably. Let me check. t34 uses `errMessage(e)` without import, so it's auto-imported from utils. offline.vue can use it too since utils auto-import. Good.
+
+But careful: fetch to `/favicon.ico` — Does the Nuxt dev server have favicon.ico? Might 404, but 404 still resolves (reachable true). Good. But if favicon doesn't exist, and dev server returns 404 → fetch resolves fine. Good.
+
+However, when offline but page served from cache, fetch to same-origin will reject. Good.
+
+One concern: `online.value = reachable`. If user is online but the dev server is temporarily 500, fetch resolves (500) → reachable true. Good.
+
+If navigator.onLine is false but fetch succeeds (e.g., localhost unreachable? Actually localhost works even "offline")... then online=true, which is fine for a local app.
+
+Hmm, but in the test environment (production? no, dev server at localhost:3000), if I run a playwright test simulating offline via context.setOffline(true), then navigator.onLine=false and fetch to localhost should fail. Good. Then retry sets online=false and message says 实测无法访问. Then setOffline(false), the 'online' event fires and online becomes true. Good.
+
+Template changes:
+- title: online ? '资源未就绪' : '当前处于离线状态' — keep.
+- desc: truthful.
+- note.
+- Button always enabled, label 重新检测, with loading.
+- Probe result + last checked line.
+- List title: 访问过的工具
+- empty text.
+
+Let me write the new template section. Also style additions for `.offline__probe`.
+
+Let me construct the new template lines 38-74.
+
+New:
+```html
+  <div class="offline">
+    <div class="offline__state">
+      <span class="offline__icon" :class="online ? 'offline__icon--ok' : 'offline__icon--off'">
+        <DkIcon :name="online ? 'shield-check' : 'wifi-off'" :size="22" />
+      </span>
+      <h1 class="offline__title">{{ online ? '资源未就绪' : '当前处于离线状态' }}</h1>
+      <p class="offline__desc">
+        {{
+          online
+            ? '当前网络可用。若某个工具页打不开，通常是静态资源没有加载完成，刷新或重新检测即可。'
+            : '当前网络不可用。本工具集没有 Service Worker 预缓存，离线时页面能否打开完全取决于浏览器是否仍缓存了已访问页面的静态资源，并不保证可用。'
+        }}
+      </p>
+      <p class="offline__note">DevKit 不做离线预缓存，也不承诺任何工具在断网时可用；下面列出的只是你访问过的工具，其静态资源可能还在本机浏览器缓存中。</p>
+      <div class="offline__actions">
+        <DkButton variant="primary" :loading="checking" @click="retry"><DkIcon name="refresh" :size="13" />重新检测</DkButton>
+      </div>
+      <p v-if="lastChecked" class="offline__probe">
+        {{ lastChecked }} 检测结果：{{ lastProbe }}
+      </p>
+    </div>
+
+    <section class="offline__list">
+      <h2 class="offline__list-title">访问过的工具（{{ visitedTools.length }}）</h2>
+      <p v-if="!visitedTools.length" class="offline__list-empty">
+        暂无访问记录。访问工具页会在这里留下记录，仅用于说明哪些资源可能仍在浏览器缓存中。
+      </p>
+      <div v-else class="offline__grid">
+        <NuxtLink v-for="t in visitedTools" :key="t.id" :to="`/tools/${t.slug}`" class="offline__item">
+          ...
+        </NuxtLink>
+      </div>
+    </section>
+  </div>
+```
+
+Add `.offline__probe` style.
+
+Let me apply via edit replacing the whole template block and adding the script.
+
+Actually careful with the `{{ lastChecked }} 检测结果：{{ lastProbe }}` — lastProbe may be empty for online event. Fine.
+
+Let me now replace script (lines 1-36).
+dsh: reasoning:
+Now update the template.
+dsh: reasoning:
+Now add style for `.offline__probe`. Insert after `.offline__actions` block.
+dsh: reasoning:
+Now let's verify the file reads correctly.
+dsh: reasoning:
+Now, one concern with offline.vue: `errMessage` must be auto-imported. Let me confirm it's in app/utils. Also confirm that the `DkButton` `:loading` prop exists. t38 uses `:loading="busy"`. Yes.
+
+Now let me self-test. First T35: extract the generation functions and run node --check. The easiest robust approach: use Playwright to drive the actual page and get generated output, then node --check it. Also can test the pure function by extracting via esbuild/tsx. Let me check available tools: is playwright installed? The audit used playwright. Let me check.
+
+Let me check dev server is running and check the environment.
+dsh: reasoning:
+Playwright available. Let me write a playwright script to test T35, T34, T36, T38, offline. Let me check Python playwright or node playwright. The audit used python (`/tmp/r6-*.py`). Let me check if python playwright module is available, and node module. `npx --no-install playwright --version` gave 1.56.1, but that's the CLI; node package might be available. Let me test a small node script.
+
+Actually let me check python3 -c "import playwright". The audit reports reference `/tmp/r6-prefs.py` etc. Let me check.
+dsh: reasoning:
+Both available. Node playwright is in the workspace? `require.resolve` from /Users/hao/WebstormProjects/web_tools found it (maybe node_modules). Let me write a node playwright script.
+
+I'll create /tmp/f3-test.mjs. It will:
+1. T35: goto /tools/curl-convert, click 载入示例, read the output editor text. Then `node --check` it.
+2. T34: load sample, verify results shown, then type invalid, verify results hidden.
+3. T36: search 424, verify found and details; search 305/306.
+4. T38: Need an image file. I can create a tiny PNG in /tmp and set input files. Then verify 移除 button appears and removes.
+5. offline: goto /offline, click 重新检测, verify probe text appears; verify listener cleanup? Hard to test directly. Can test by navigating away multiple times? Actually listener leak test: we can patch addEventListener/removeEventListener counts? or use performance. Perhaps simpler: count that onUnmounted removes. Could instrument via `window.addEventListener` wrappers before app loads? Complex. We can at least verify retry produces a real result, and that offline simulation changes state.
+
+Let me first do T35 with node --check. I need to get output text from DkEditor. Let me inspect DkEditor to know the DOM. The readonly editor probably renders a textarea or CodeMirror? Let me check DkEditor.vue.
+
+Actually easier: get the `output` via DOM. Let me check DkEditor.
+dsh: reasoning:
+DkEditor uses a textarea with class `.editor__area`. For the right pane (readonly), I can select the second `.editor__area` and read its value. Good.
+
+Now let me write the node playwright test script. I'll write to /tmp/f3-e2e.mjs.
+
+Let me plan the test carefully.
+
+```js
+import { chromium } from 'playwright'
+import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
+
+const base = 'http://localhost:3000'
+const browser = await chromium.launch()
+const ctx = await browser.newContext()
+const page = await ctx.newPage()
+const errors = []
+page.on('pageerror', e => errors.push(String(e)))
+page.on('console', m => { if (m.type()==='error') errors.push('console: '+m.text()) })
+```
+
+T35:
+```
+await page.goto(base+'/tools/curl-convert')
+await page.getByRole('button', {name:'载入示例'}).click()
+await page.waitForTimeout(300)
+const areas = page.locator('.editor__area')
+const out = await areas.nth(1).inputValue()
+fs.writeFileSync('/tmp/f3-fetch.js', out)
+```
+Then node --check /tmp/f3-fetch.js. But `fetch(...)` references undefined global in node check — `node --check` only parses, doesn't run, so fine.
+
+Also test axios target: click the Axios segment. DkSegmented rendered as buttons with role tab. Let me use `page.getByRole('tab', {name:'Axios'})` maybe. Let me check DkSegmented markup. It uses role="tablist"/"tab". So getByRole('tab', { name: 'Axios' }). Click it, then read output, check.
+
+Also test params case: need an axios source with params keys containing `-`. The default sample has no params. I can type custom axios source. Let me test generation from axios source with params `{ 'user-id': 1, 'X-Token': 'a' }`. Set the textarea source value and click 转换.
+
+Actually simpler: test all three call sites by:
+- fetch output with Content-Type header (covers fetch headers line 602)
+- axios output with Content-Type header and params key with `-`.
+  - Set source format to axios, paste axios code with headers and params, target axios? Wait generating axios from axios. Actually params generation only happens in genAxios (line 640). To reach genAxios, target must be axios. Source can be curl with `?user-id=1`? curl parsing doesn't produce params. Only axios source produces params. So source=axios, target=axios, then genAxios emits params. Good.
+  
+Let me set source to axios via tab, then fill the source textarea (first .editor__area), then click 转换.
+
+The source textarea is `.editor__area` nth(0). I'll use `page.locator('.editor__area').first().fill(code)`.
+
+Wait: fill triggers input event → v-model updates. Good.
+
+For T35 also test `node --check` for both outputs.
+
+T34:
+```
+await page.goto(base+'/tools/url-params')
+await page.getByRole('button', {name:'载入示例'}).click()
+await page.waitForTimeout(200)
+// verify 结构信息 visible
+const hasBase = await page.locator('.t34__card').count() // should be >= 3
+// type invalid
+await page.locator('.t34 input').first().fill('not a url')
+await page.waitForTimeout(200)
+const cardsAfter = await page.locator('.t34__card').count()
+const idle = await page.locator('.t34__idle').textContent()
+```
+Expect cardsAfter === 0 and error message includes 无效 URL. Also verify the input still contains 'not a url'.
+
+T36:
+```
+await page.goto(base+'/tools/http-status')
+// search 424
+await page.locator('.t36__search input').fill('424')
+```
+Need to check DkInput renders input. Likely. Then check `.t36__name` text = 'Failed Dependency'. And click row to expand detail.
+Also search 'Failed Dependency'. Also confirm 305/306 present: search 305.
+
+Note: the search matches desc too. Searching '424' might match other codes whose desc contains 424? Unlikely. Let's use code search.
+
+Let me check the count text: `.t36__count` shows 命中 N / total. total should now be 63 (60+3). Verify.
+
+T38:
+Need a PNG file. I'll create a small PNG using node (base64 of 1x1 png). Then `page.setInputFiles('.filedrop__input', '/tmp/f3-test.png')`. FileDrop input likely `input[type=file]`. Let me check FileDrop.
+
+Then wait for conversion, check `.t38__panel` appears and 移除 button. Click 移除, verify file state cleared (`.t38__empty` visible, panels gone).
+
+offline:
+```
+await page.goto(base+'/offline')
+// visited list title
+// click 重新检测
+await page.getByRole('button', {name:'重新检测'}).click()
+await page.waitForTimeout(1000)
+const probe = await page.locator('.offline__probe').textContent()
+```
+Expect probe contains 检测结果 and 可访问本站 (since online). Then test offline simulation: `await ctx.setOffline(true)` then click 重新检测, expect 无法访问本站. Then setOffline(false).
+
+But wait, if the whole page goes offline, the fetch is to same origin localhost; Playwright route/offline should block. Good. Also `page.goto` was already done. After setOffline(false), maybe fire online event automatically.
+
+Also verify listener cleanup: We can instrument by counting active listeners before/after navigation. A practical approach: use CDP? Simpler: patch `window.addEventListener`/`removeEventListener` via `page.addInitScript` to track window listeners for 'online'/'offline'. Then navigate to /offline and away, and check net count = 0.
+
+Implement addInitScript:
+```
+await page.addInitScript(() => {
+  window.__evt = { add: 0, remove: 0 }
+  const a = window.addEventListener.bind(window)
+  const r = window.removeEventListener.bind(window)
+  window.addEventListener = (t, fn, o) => { if (t==='online'||t==='offline') window.__evt.add++; return a(t, fn, o) }
+  window.removeEventListener = (t, fn, o) => { if (t==='online'||t==='offline') window.__evt.remove++; return r(t, fn, o) }
+})
+```
+But Nuxt might add its own online/offline listeners. Let's just measure delta: navigate to / then read __evt, navigate to /offline then read __evt (add should increase by 2), navigate to /help then read __evt (remove should increase by 2). That demonstrates cleanup specifically from offline page. But other pages/layout might also add. To be safe, measure the delta.
+
+Actually with SPA client-side navigation (NuxtLink), onUnmounted fires. But we navigate via page.goto (full reload), which also triggers unload but our counter resets. So use in-app navigation: from /offline click a link or use router. Alternatively call `page.evaluate(() => window.history...)`. Hmm. Better: after being on /offline, click a link in the sidebar to navigate, then check counters. Let's use page.getByRole('link', ...) or simply click the brand/home link. Actually simpler: use `page.click('a[href="/"]')` after ensuring sidebar. But page.goto would reset.
+
+Let me do: 
+- addInitScript
+- page.goto('/')
+- read baseline a0/r0
+- click link to /offline (in-app). Is there a link to /offline in UI? From privacy page there's a button. There's no sidebar entry. Use `page.evaluate(() => window.$nuxt?)` no.
+- Alternative: use `page.goto('/offline')` then in-app navigate using the top nav "全部工具"/brand link → `/`. That's in-app navigation via NuxtLink. Then check counters. addInitScript applies on the initial document; SPA navigation doesn't reload so counters persist. 
+
+So:
+```
+await page.goto(base+'/offline')  // full load, counters start
+const addAfterMount = await page.evaluate(()=>window.__evt.add)
+// click brand home link (in-app)
+await page.locator('a[href="/"]').first().click()
+await page.waitForTimeout(500)
+const rem = await page.evaluate(()=>window.__evt.remove)
+```
+Expect rem >= 2. Good enough.
+
+But careful: `addInitScript` added before goto. Yes.
+
+Hmm, but the layout `default.vue` also adds some listeners (resize etc.), not online/offline. Fine.
+
+Let me now write the test script. Also note: the `page.getByRole('button', {name:'载入示例'})` may match multiple? On T35 there's one. Fine.
+
+For T34, `.t34 input` first is the URL DkInput. Good.
+
+Let me check FileDrop for the input selector and accept behavior.
+dsh: reasoning:
+Good. `page.setInputFiles('input.filedrop__input', path)` should work.
+
+Create a test PNG. Use node to write a small PNG buffer. Let me generate a 4x4 PNG with alpha perhaps. Simpler: base64 of a 1x1 red PNG. But detectAlpha on a 1x1 opaque won't matter. For the remove test we just need file load.
+
+Let me write the test script.
+
+Also, for the `重新转换`/载入 use `getByRole('button', {name:'载入示例'})`. DkButton renders a `<button>`.
+
+One risk: multiple `载入示例` buttons across page? Only one in t35. Fine.
+
+Let me write /tmp/f3-e2e.mjs and a small /tmp/gen-png.mjs. Actually generate PNG inline via Buffer in the test.
+
+Let me write the script.
+dsh: reasoning:
+ESM from /tmp doesn't resolve node_modules in workspace. Earlier `node -e "require.resolve('playwright')"` was run from /Users/hao/WebstormProjects/web_tools, so node_modules is there. Let me put the script in the workspace or use absolute import path. I can copy to /Users/hao/WebstormProjects/web_tools/tmp-f3-e2e.mjs but that adds a file to workspace (allowed? I can only modify listed files... strictly "只能修改下面明确列给你的文件". Creating a temp test file in the repo root might violate. Better put it in /tmp but import via absolute path to node_modules:
+
+`import { chromium } from '/Users/hao/WebstormProjects/web_tools/node_modules/playwright/index.mjs'`? Let me check where playwright is.
+
+Actually `require.resolve('playwright')` from workspace gave a path. Let me find it and use absolute specifier. Or set NODE_PATH — ESM ignores NODE_PATH. Could use createRequire in the ESM file:
+
+```js
+import { createRequire } from 'node:module'
+const require = createRequire('/Users/hao/WebstormProjects/web_tools/')
+const { chromium } = require('playwright')
+```
+
+That works. Let me patch the script.
+dsh: reasoning:
+Good — the fetch fix works: `'Content-Type'` quoted, `Authorization` unquoted, node --check OK.
+
+Now fix the test to target the target-format tablist (nth(1)). Let me update. The toolbar has source segmented then target segmented. There are 2 tablists. Use tablists.nth(1) for target.
+
+Also I accidentally added a `.click().catch()` line with `getByRole('tab', {name:'axios', exact:true})` which is wrong; remove.
+
+Let me fix the script section.
+dsh: reasoning:
+Now note: when switching source to Axios while target is already Axios, `sameFmt` is true; that's fine, execute still runs and genAxios emits params. Good.
+
+But wait — after selecting source=Axios, the target is Axios. The sample `src` is still the curl sample, which won't parse as axios and will error. Then I fill the axios source. Good.
+
+Let me rerun.
+dsh: reasoning:
+Two issues:
+1. The target tab click apparently didn't change the target to Axios — the axios output shown is same as fetch. Wait, look: "generated axios (target=axios)" output is the fetch code. That means clicking `tablists.nth(1) ... Axios` didn't work or the output wasn't regenerated. Actually after clicking target=Axios, the `sig` changes but output only regenerates on `execute()` (button). The output stays until 转换 clicked. Right! The tool doesn't auto-convert on target change. So I need to click 转换 after switching target.
+
+2. `转换` button strict violation due to collapse title. Use `getByRole('button', { name: '转换', exact: true })`.
+
+Let me fix: after clicking target Axios, click 转换 exact.
+
+Also for the fetch output: it now shows `body: '{"name":"devkit",...}'` as a string rather than JSON.stringify — hmm, because the first run: `loadSample` sets source=curl sample and target... `loadSample` with sourceFmt 'curl' → target is already 'fetch' (default), so target stays fetch. Then execute. But output shows `body: '{"name":"devkit","role":"admin"}'` — a JSON string, not JSON.stringify. That's because parseCurl sets req.body to the raw data string and `bodyParsed` is set only if relaxedParse returns object. relaxedParse should parse `{"name":"devkit","role":"admin"}` as object. Then genFetch: `if (r.bodyParsed !== null) lines.push('body: JSON.stringify(...)')`. But output shows quoted string. Hmm, that means bodyParsed was null. Wait, maybe the output shown is stale from an earlier version? Let me look again: the first execution output shows `body: '{"name":"devkit","role":"admin"}'`. In t35 code, parseCurl sets `req.body = dataParts.join('&')` = `{"name":"devkit","role":"admin"}`. Then `if (req.body !== null) { const parsed = relaxedParse(req.body); if (parsed !== null && typeof parsed === 'object') req.bodyParsed = parsed }`. relaxedParse: first tries parseJson(t).value. parseJson maybe wraps numbers etc. Should succeed returning object. Then genFetch uses JSON.stringify. But output shows plain string. 
+
+Hmm, wait — maybe the sample wasn't loaded because getByRole('button', {name:'载入示例'}) clicked, but then the source is curl and target fetch. Actually maybe the earlier run got the sample loaded and generated once. Let me not worry; possibly the output I see is from the *first* generation with a different path. Actually the quoted body means `jsQuote(r.body)` path, i.e., bodyParsed===null. Why would relaxedParse fail? Because parseJson returns an object where values may be RawNumber? No numbers here.
+
+Wait, actually maybe `parseJson` in utils/json.ts wraps and returns `{ value }`. Let me check. Perhaps `parseJson(t)` throws because of something. Hmm.
+
+Actually wait — look at the fetch output: it has trailing comma after Authorization and header key `'Content-Type'` quoted — consistent with current code. The body as string is a real behavior. Let me test in isolation. But the audit reported the expected output with `body: JSON.stringify({"name":...})`. The audit's D1 example shows `body: JSON.stringify(...)`. So my change to SAFE_KEY shouldn't affect body. Did the output I got differ because... hmm.
+
+Oh! I see. `loadSample()` sets `src.value = SAMPLES[sourceFmt]`. Then `execute()`. In execute, parseCurl. But wait, maybe when I clicked 载入示例, the click handler `loadSample` ran, and then `execute`. The `parseCurl` body: `dataParts` from `--data-raw '{"name":"devkit","role":"admin"}'`. shellTokens removes quotes → `{"name":"devkit","role":"admin"}`. relaxedParse → parseJson → object. So bodyParsed should be set.
+
+Unless `parseJson` on `{"name":"devkit","role":"admin"}` returns `{value: ...}` but `RawNumber`? no.
+
+Let me just run a node check by extracting... Actually, maybe the issue is that the previous test run left the page state? No, fresh page.
+
+Hold on, maybe the output text I read (`nth(1)`) is actually the *source* editor? No, source is nth(0), output nth(1). The output is fetch code. Fine.
+
+Let me look at the actual current output more carefully. Actually maybe I misread and the audit's output was from an older code version... no, the code at line 606 clearly does JSON.stringify when bodyParsed !== null.
+
+Let me debug: after load, check the structured preview "Body ... JSON 对象" tag. Let me add a small node test of relaxedParse by extracting functions. Actually simpler: run a quick playwright snippet to read `result.req.bodyParsed` isn't exposed. But the UI shows `<span v-if="result.req.bodyParsed !== null" class="t35__tag">JSON 对象</span>`. Let me check whether that tag appears.
+
+Hmm, but this is a pre-existing behavior question, not my scope. Still, I want the generated code to be valid and the test to pass. Body string is still valid JS. Let me not chase this unless it's a regression. Actually wait, could my SAFE_KEY change have caused this? No.
+
+Let me think about `relaxedParse`: first `try { return parseJson(t).value } catch {}`. `parseJson` might return `{ value: undefined }`? Let me check utils/json.ts.
+
+Actually let me quickly check what parseJson returns. But more importantly, this is likely pre-existing and the audit's expected output might have been captured with the `JSON.stringify` because... hmm the audit says "输出：body: JSON.stringify({"name":"devkit","role":"admin"})". So at audit time it produced JSON.stringify. My edit only changed SAFE_KEY. Something else changed? No.
+
+Wait, maybe the difference: The audit loaded the sample and target `fetch` and the sample `curl`. There might be an ordering issue: `loadSample()` sets `src.value = SAMPLES[sourceFmt.value]!` then if sameFmt... then execute(). Fine.
+
+Could `parseJson` be failing because the body has `{` `}` and parseJson wraps numbers? It should still parse.
+
+Let me directly test by evaluating the page's parsed result via the UI tag. Let me run a quick script.
+
+Actually, let me reconsider: maybe the output shown IS correct and the audit report simplified. Let me look: the `t35` code at line 375-387: if multiple dataParts join with &. body = that. Then relaxedParse. Let me check `minifyJson` and `parseJson`.
+
+Let me read utils/json.ts parseJson.
+dsh: reasoning:
+parseJson should work. So why body as string? Let me check `relaxedParse`: it calls `parseJson(t).value`. For `{"name":"devkit","role":"admin"}`, wrapNumbers won't find numbers, returns same. JSON.parse gives object. So parsed is object. So bodyParsed set. genFetch should produce JSON.stringify.
+
+Unless the output I read was from before execute finished? I waited 400ms. Hmm.
+
+Wait — actually, the first output shows fetch code WITH `body: '{"name":"devkit","role":"admin"}'`. Let me re-read the t35 parseCurl: `req.body = dataParts.join('&')`. dataParts come from `--data-raw '...'`. But shellTokens: the whole curl command including `--data-raw '{"name":"devkit","role":"admin"}'`. shellTokens splits. The `-H 'Authorization: Bearer test-token'` etc. For data-raw, token = `{"name":"devkit","role":"admin"}`. Good.
+
+Then `if (dataParts.length) { req.body = dataParts.join('&'); ... }`. Then `if (req.body !== null) { const parsed = relaxedParse(req.body); if (parsed !== null && typeof parsed === 'object') req.bodyParsed = parsed }`.
+
+relaxedParse: `try { return parseJson(t).value } catch {}`. Wait, `parseJson` does `JSON.parse(text)` first then detectDuplicateKeys then wrapNumbers and JSON.parse. Should be fine.
+
+Hmm, but maybe there's a trailing newline/space issue? No.
+
+Let me actually reproduce in the page and read the "JSON 对象" tag presence. Let me quickly run a focused playwright check. But hold on — the audit's D1 example showed JSON.stringify output, and mine shows string. Could it be that the `--data-raw` value is being joined and `checkCommonValue`... no.
+
+Wait, maybe my test read the output of a *stale* run: At page load, t35 might auto-run? No. I clicked 载入示例. Actually, hmm, the output shows exactly the fetch generated from the curl sample, so execute ran.
+
+Let me just directly test relaxedParse logic in node with tsx/esbuild. Or simpler: add a temporary console log? No.
+
+Actually — I bet the issue is that `parseJson` is auto-imported from `~/utils/json`, and `RawNumber` is imported explicitly. Fine.
+
+Let me test by evaluating in browser? The functions are in setup closure, not accessible.
+
+Alternative: check whether `result.req.bodyParsed !== null` tag renders. Let me write a quick focused test.
+
+Actually, wait. Let me reconsider `relaxedParse`:
+```
+function relaxedParse(text: string): unknown {
+  const t = text.trim()
+  try {
+    return parseJson(t).value
+  } catch {}
+  ...
+}
+```
+Then in parseCurl:
+```
+if (req.body !== null) {
+    const parsed = relaxedParse(req.body)
+    if (parsed !== null && typeof parsed === 'object') req.bodyParsed = parsed
+}
+```
+This should set bodyParsed.
+
+genFetch:
+```
+if (r.body !== null) {
+    if (r.bodyParsed !== null) lines.push(`  body: JSON.stringify(${minifyJson(r.bodyParsed)})`)
+    else lines.push(`  body: ${jsQuote(r.body)}`)
+}
+```
+So if bodyParsed were set, output would be JSON.stringify. Output is jsQuote. So bodyParsed is null. Why?
+
+OH. I see it. `minifyJson` — if bodyParsed were set it'd be used. So bodyParsed null means `typeof parsed !== 'object'` OR parsed === null. Could `parseJson` return value being a `RawNumber`? No.
+
+Wait, maybe `parseJson` throws for `{"name":"devkit","role":"admin"}`? Let me test quickly with node --experimental-transform-types. Actually simpler: use node to require the compiled? There's no build. Let me use `npx tsx` if available. Or copy the relevant functions. Let me just run a node script with the json.ts transformed via esbuild available in devkit node_modules.
+
+Actually, easier: check `duplicateKeys` no. Hmm.
+
+Let me just run `node --experimental-strip-types` with an import from the file. Node 24 supports type stripping for .ts. Let me try:
+`node --experimental-strip-types -e "import('./app/utils/json.ts').then(m=>console.log(JSON.stringify(m.parseJson('{\"name\":\"devkit\"}'))))"`. But package type? devkit package.json type might be module. Let me try.
+
+Actually, this is a side quest. The important thing: my change doesn't affect it, and the generated code is valid. But the audit's claim that it outputs JSON.stringify vs mine showing string — if my change caused a regression that'd be bad. But SAFE_KEY is only used in genFetch/genAxios key quoting. So no.
+
+Hmm, unless the sample loading is different: When `sourceFmt` is 'curl', `SAMPLES.curl` body is `--data-raw '{"name":"devkit","role":"admin"}'`. Right.
+
+Actually, wait. Maybe the audit ran with an older version of json.ts that had different behavior? Not relevant.
+
+Let me test relaxedParse via a tiny standalone node script copying the parseJson import. Let me use esbuild bundling or tsx. Check if tsx available.
+dsh: reasoning:
+Some TS syntax not supported (maybe `import type` or parameter properties in class RawNumber `constructor(public raw: string)`). Let me use esbuild if available in devkit node_modules.
+dsh: reasoning:
+Hmm the `ls node_modules/.bin` printed "esbuild" and "vite-node", but the version output says 0.28.2? That might be the workspace root esbuild, not devkit. Actually require path devkit/node_modules/esbuild. 0.28.2. Fine.
+
+Let me write a standalone script that imports parseJson via esbuild bundling. Actually simpler: build a temp bundle of a test entry.
+
+Alternatively, use vite-node: `npx vite-node /tmp/f3-parse.ts` with the devkit tsconfig? Might work. Let me try esbuild directly:
+
+Create /tmp/f3-parse.ts that imports the file with relative path, then bundle with esbuild to /tmp/f3-parse.cjs and run.
+
+Actually devkit's json.ts imports nothing. Let me just esbuild bundle it.
+
+`node_modules/.bin/esbuild --bundle /tmp/f3-ent.ts --platform=node --format=esm --outfile=/tmp/f3-ent.mjs`
+
+where /tmp/f3-ent.ts imports parseJson from the absolute path (no extension). Let me do that.
+dsh: reasoning:
+So parseJson returns object. So relaxedParse should return object and bodyParsed should be set. Yet the page output shows body string. Very strange.
+
+Wait... maybe the output I read is not from the curl sample but from the previously loaded state? No.
+
+Hold on, let me re-read my test output:
+```
+--- generated fetch (target=fetch) ---
+fetch('https://api.example.com/users', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: 'Bearer test-token',
+  },
+  body: '{"name":"devkit","role":"admin"}'
+})
+```
+Hmm. Actually wait — is it possible that `loadSample` sets `src.value = SAMPLES[sourceFmt.value]!`, and `sourceFmt.value` is 'curl'. `SAMPLES.curl` is a template literal with backslash-newlines. In the source it's:
+```
+curl: `curl 'https://api.example.com/users' \\
+  -X POST \\
+...
+  --data-raw '{"name":"devkit","role":"admin"}'`,
+```
+In JS template literal, `\\` produces a single backslash, then actual newline. So src = `curl 'https://api.example.com/users' \` + newline + `  -X POST \` + ... Good.
+
+shellTokens replaces `\\\r?\n` with space. Good.
+
+parseCurl: it iterates tokens. For `--data-raw` the token after is `{"name":"devkit","role":"admin"}`. Wait, will `shellTokens` treat the `{` and `}` and `"` correctly? The data-raw argument is wrapped in single quotes: `'{"name":"devkit","role":"admin"}'`. shellTokens sees `'` starts quote, then everything inside including double quotes is literal, then `'` ends. So token = `{"name":"devkit","role":"admin"}`. Good.
+
+Hmm, then bodyParsed should be set.
+
+Unless... the fetch code shown was generated with `body` being parsed but `minifyJson` failing? No, if bodyParsed set, JSON.stringify path.
+
+Wait, maybe the issue is the `--data-raw` handling: `checkCommonValue(v, ...)` and `dataParts.push(v)`. Fine.
+
+Let me directly add a debug by using the browser to inspect the rendered "JSON 对象" tag after loading the sample. Let me run a small playwright script. Actually, maybe the output got captured BEFORE execute completed and it was showing an old output? But 400ms should be plenty. Yet the sample load + execute is synchronous.
+
+Hmm, alternatively, maybe the click on 载入示例 triggered `loadSample`, but there might be TWO buttons named 载入示例? No.
+
+Wait, maybe the `--data-raw` is not recognized because `DATA_OPTS` includes '--data-raw'. Yes.
+
+Let me carefully re-run and dump the structured preview text. Also compare with the audit report's expected output. Let me write a tiny debug script.
+
+Actually — I wonder if the initial page was loaded, and my earlier test click of 载入示例 happened, but the first output I captured was from the FIRST test run (previous invocation)?? No, fresh browser each run.
+
+Let me just debug directly.
+dsh: reasoning:
+Now it shows JSON.stringify. So in the earlier e2e run, the output was captured too early (400ms) or the first run was affected by the previous state. Actually the difference: earlier I used `getByRole('button', { name: '载入示例' })` (non-exact) which might have matched something else? No. Or 400ms wasn't enough due to HMR compile. Anyway, now it's correct.
+
+Wait, in the earlier run I waited 400ms and it showed the old plain-string body. Possibly the HMR recompilation after my edit caused the first render to be from a stale module and the dev server was still compiling. The debug run (later) shows correct. Fine.
+
+Now let me fix the test script: use exact: true for 转换 button, and click 转换 after switching target to Axios. Also increase waits a bit.
+
+Let me update the script.
+dsh: reasoning:
+Also the T34 statusbar selector `.dk-statusbar, [class*="status"]` might match weird things. Let me check DkStatusBar class. Let me just simplify to read `[class*="statusbar"]`. Actually let me look.
+dsh: reasoning:
+Use `.statusbar` selector. Let me fix the T34 statusMsg line to `.statusbar`. Also, the `.t34__idle` exists only when error now (after fix) or idle. Good.
+
+Let me update the test.
+dsh: reasoning:
+All tests pass:
+- T35: fetch/axios/params all node --check OK, hyphen keys quoted.
+- T34: cards 3 → 0, input preserved, error shown.
+- T36: 63 total, 424/305/306 present.
+- T38: remove button appears and clears.
+- offline: retry returns real results online/offline, listeners removed (add 2, remove 2), no errors.
+
+Now, one issue: the `axios` params output has `params` AND urlWithParams already appended query to URL — that's pre-existing double behavior (url includes `?user-id=7&X-Trace-Id=abc` AND params object). That's pre-existing, not my scope. Actually wait, that's a real bug: axios output includes both query in URL and params. But not in my assigned problem list. The task says fix only listed problems, minimal changes. Don't touch.
+
+Hmm, but let me double check: `genAxios` calls `urlWithParams(r, jsQuote)` which merges params into URL, then also emits `params: {...}`. That's duplicate. But the audit's assigned fix is only SAFE_KEY. Leave it.
+
+Now let me also verify the T35 `Authorization` stays unquoted (valid identifier) — yes, node check passes and output shows `Authorization:` without quotes. Good.
+
+Now let me update the todo list and check T36 search for 305 "已废弃" accuracy. Good.
+
+Now let me double-check offline listeners: add 2 remove 2 after leaving. 
+
+Now I should also verify there are no TypeScript/lint issues introduced. Let me run the vue-tsc? The project has 51 baseline errors. Let me at least check my files compile in the dev server (no errors). The e2e already confirmed no console errors and pages render.
+
+But one concern: In offline.vue, `errMessage` auto-import — confirmed works (probe showed "Failed to fetch").
+
+Another concern: `AbortController` in SSR? `retry` is only called on click. Fine.
+
+Also `DkButton :loading="checking"` — is `loading` a valid prop? Let me confirm DkButton. t38 uses it, so yes.
+
+Now let me verify T38's remove button placement and that `clearFile` also revokes/cleans. It works.
+
+Now, check whether I need to run `nuxt build` or typecheck. The changed files should not add type errors. Let me run vue-tsc targeted? The baseline had t38 (1 error) and others. Let me see if there's a baseline log. Running full vue-tsc might be slow but let's try to compare errors in my files. Let me check if global vue-tsc available and .nuxt/tsconfig exists. Actually the dev server has been running, so .nuxt exists.
+
+Let me run vue-tsc on the four files? vue-tsc needs a project. Running full may take a while but worth it. Let me check baseline: audit said t38 had 1 error, t33 1, t35 0? The table said "其余 t05/t13/t15/t16/t17/t33/t38 各 1". So t38 has 1 pre-existing error, t35 0. Let me run and grep my files, to ensure I didn't add new ones.
+
+Actually, note the report mentions `Uint8Array<ArrayBufferLike>` vs `BlobPart` may cause t38's error. My change adds 移除 button — unlikely to add type errors.
+
+Let me run vue-tsc with the .nuxt/tsconfig.json in background and grep. It might take 1-2 min. Let's do it.
+
+Actually, first, let me make sure the dev server didn't log errors. But more robust: run a build? `nuxt build` doesn't typecheck. Let me just run vue-tsc.
+
+Let me check the devkit .nuxt/tsconfig.json exists.
+dsh: reasoning:
+Interesting: total errors 49 now vs 51 in the audit report. My files: t38 has 1 error at (122,50), which is the pre-existing error in `detectAlpha` (`data[i]` possibly undefined) — the audit table said t38 had 1 error. So no new errors from my changes. And total dropped by 2 (baseline may have varied). Good. Let me verify line 122 is indeed the pre-existing `data[i]`.
+
+Line 122: `for (let i = 3; i < data.length; i += 4) if (data[i] < 255) return true`. Yes, column 50 is `data[i]`. Pre-existing (the audit mentioned t38 1 error). Actually wait, my changes added 1 line at ~line 267, shifting t38 lines by 1, so original line 121 → 122. Confirms pre-existing.
+
+Good. Now let me confirm offline.vue has no errors. The grep returned only t38. Good.
+
+Now, let's also double-check that the dev server HMR is serving updated pages (it is, per tests).
+
+Let me also verify T35's `node --check` outputs are saved and I can cite them. They're in /tmp/f3-*.js. Good.
+
+Now let me re-examine the T36 change for the "校对 305/306 废弃说明是否准确" requirement. I added accurate entries. Let me double-check the exact deprecation claim: "RFC 7231 起标记为 deprecated". RFC 7231 Appendix B (Changes from RFC 2616) indeed says: "The 305 (Use Proxy) status code has been deprecated due to security concerns regarding in-band configuration of a proxy." Yes, I'm confident.
+
+Actually, let me be more careful. RFC 7231 Section 6.4.5 defines 305 Use Proxy, and Appendix B states it has been deprecated. And RFC 9110 Section 15.4.6: I believe it says: "The 305 (Use Proxy) status code was defined in a previous version of this specification and is now deprecated (Appendix B of [RFC7231])." So my text "RFC 7231 起标记为 deprecated …RFC 9110 沿用该结论" is accurate enough.
+
+For 306: RFC 9110 §15.4.7 says "The 306 status code was defined in a previous version of this specification, is no longer used, and the code is reserved." My text matches.
+
+Good.
+
+Now I should write the report. But first, let me also verify the offline.vue "no PWA/SW" claim still holds (I must not claim caching). Let me confirm no public dir / SW as the audit said, to be safe. And ensure the offline page text is accurate.
+
+Also, I should double check whether the design's offline page expected "重试加载" and whether changing the label to "重新检测" is acceptable. The task says "让重试真实生效（重新检测在线状态并给出真实结果）" so a "重新检测" label is appropriate.
+
+Now let me also consider: the requirement said "注意：本机没有 PWA/SW，页面文案不得声称已缓存可离线使用，必须与真实能力一致（可以用 localStorage 的访问记录说明「访问过的工具其静态资源可能仍在本机浏览器缓存中」这类不撒谎的表述）。" My text does exactly this.
+
+Let me verify no PWA config exists.
+dsh: reasoning:
+Confirmed: no public dir, no pwa. Good.
+
+Now let me check the git diff to review all my changes, ensuring minimal and no unintended edits.
+dsh: reasoning:
+Not a git repo. Fine, I already reviewed each edit. Let me proceed.
+
+Now let me write the report. I should include per-issue: problem → change (file:line) → verification command & output (node --check generated code, playwright page real test).
+
+Let me gather the exact line numbers of my edits.
+
+T35: SAFE_KEY line 229.
+T34: catch block ~line 70-76 (added base/rows clearing at lines 71-72).
+T36: added 305 (line ~44), 306 (~45), 424 (~71). Let me get exact numbers.
+T38: added 移除 button — line number ~267-268.
+offline.vue: full rewrite.
+
+Let me get exact line numbers.
+dsh: reasoning:
+Now, one more consideration: T34 `parse()` clears base/rows in catch. But there's also the scenario where `urlInput` is whitespace-only → base=null/rows=[] and markIdle. Good.
+
+Also the T34 `retry` prop on DkStatusBar is `parse` (not retry). Fine.
+
+Now let me think about whether the T35 fix fully covers "覆盖 fetch/axios/params 三处调用点". Since all three use SAFE_KEY, changing the regex covers all. Verified with outputs: fetch header Content-Type quoted; axios header quoted; axios params 'user-id' and 'X-Trace-Id' quoted. Good.
+
+Now, write the report. The report should be comprehensive with commands and outputs.
+
+Let me also include the raw evidence files. I'll copy the generated code / logs? The report can reference /tmp paths but those are ephemeral. I'll inline the key outputs.
+
+Let me also note the T36 proofreading finding: the audited file had NO 305/306 entries at all, so I added them with accurate notes.
+
+Let me now write the report file. First, check if audit/reports exists (yes). Write to /Users/hao/WebstormProjects/web_tools/audit/reports/fix-f3-web-file.md.
+
+I'll structure it:
+# DevKit 修复报告 F3 ...
+## 范围与总览
+## 1. T35 ...
+- 问题
+- 改动
+- 验证 (commands + outputs)
+## 2. T34
+...
+## 3. T36
+## 4. T38
+## 5. offline.vue
+## 回归/其他
+## 未修改/无法修复项
+
+Last line: DONE: /Users/hao/WebstormProjects/web_tools/audit/reports/fix-f3-web-file.md
+
+Let me include the test script path /tmp/f3-e2e.mjs. Maybe I should also save a copy of the test script and logs under audit? The instructions say write report to specified path. It doesn't forbid creating supporting evidence files, but I can only modify listed files... Creating new evidence files under audit/ is probably fine (report itself is new). But to be safe, I'll only create the report; inline outputs suffice.
+
+Actually, having durable evidence is good. The task says "把命令与输出作为证据". Inline is fine.
+
+Let me get the /tmp/f3-vuetsc.log count and the baseline. I'll mention 49 errors total (baseline audit 51), t38 1 pre-existing error at line 122.
+
+Let me now write the report.
+dsh: reasoning:
+Let me verify the report's last line and update the todo list. Also verify the t38 line number 122 claim in the report matches actual current file (yes, 122). Good.
+
+Let me do a final check on the report tail.
+dsh: reasoning:
+Everything checks out. Line 122 is `data[i]`, confirming the pre-existing TS2532.
+
+Let me update the todo list to complete.
+全部 5 项修复完成并已自测通过。
+
+## 摘要
+
+| # | 问题 | 改动 | 验证 |
+|---|---|---|---|
+| 1 | T35 生成代码语法错误（连字符键未加引号） | `t35-curl-convert.vue:229` `SAFE_KEY` 改为 `/^[A-Za-z_$][A-Za-z0-9_$]*$/`，覆盖 fetch/axios/params 三处 | 三份生成代码 `node --check` 全部 OK，`'Content-Type'`/`'user-id'` 已加引号，`Authorization` 仍不加 |
+| 2 | T34 无效 URL 残留旧结果 | `t34-url-params.vue:71-72` catch 内清空 `base`/`rows` | 卡片数 3 → 0，输入保留，错误含修正方向 |
+| 3 | T36 缺 424；305/306 无条目 | `t36-http-status.vue:44,45,72` 补 305（已废弃）/306（unused）/424（RFC 4918） | 页面 63/63，搜索与详情命中 |
+| 4 | T38 `clearFile` 死代码、无移除入口 | `t38-image-compress.vue:267` 接上 ghost「移除」按钮 | 上传后面板 2、点移除后 0 + 空态 |
+| 5 | offline 死按钮、监听泄漏、文案不实 | `offline.vue` 真实探测（HEAD + AbortController）、`onUnmounted` 清理、文案改为「无 SW 预缓存 / 访问记录仅说明可能仍在浏览器缓存」 | 联网/断网实测给出不同真实结论；监听 add 2 / remove 2；无 console error |
+
+回归：Playwright 全流程无 `console.error`/`pageerror`；vue-tsc 仅 `t38:122` 既有错误（行号顺移），未引入新错误。仅修改了指定 5 个文件。
+
+DONE: /Users/hao/WebstormProjects/web_tools/audit/reports/fix-f3-web-file.md

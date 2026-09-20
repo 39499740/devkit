@@ -1,0 +1,180 @@
+===== q9n6x :: S08 / 帮助与快捷键 / 帮助页 / 1440 (w=1440 h=1300)
+q9n6x frame 'S08 / 帮助与快捷键 / 帮助页 / 1440' w=1440 h=1300 layout=vertical gap=None pad=None fill=$bg radius=None
+  <ref A2IZc -> PQJ6y>
+  A2IZc frame '顶部导航' w=1440 h=60 layout=None gap=28 pad=[0, 24] fill=$surface radius=None
+    hpE5W frame '品牌' w=None h=None layout=None gap=9 pad=None fill=None radius=None
+      m7peZ frame 'Logo' w=28 h=28 layout=None gap=None pad=None fill=$accent radius=8
+      SLPhf [品牌名] fs=16.5 w=None fill=$text-primary :: 'DevKit'
+    QgPUM frame '全局搜索' w=400 h=34 layout=None gap=8 pad=[0, 10] fill=$surface-subtle radius=8
+      C5gYO [搜索提示] fs=13 w=None fill=$text-tertiary :: '搜索工具，例如 JSON、国密、时间戳'
+      H21rW frame '占位' w=fill_container h=1 layout=None gap=None pad=None fill=None radius=None
+      kVANF frame '快捷键' w=None h=None layout=None gap=None pad=[2, 6] fill=$surface radius=5
+        gU2PM [快捷键文案] fs=10 w=None fill=$text-tertiary :: '⌘K'
+    llwVF frame '弹性占位' w=fill_container h=1 layout=None gap=None pad=None fill=None radius=None
+    qkUfD frame '右侧操作' w=None h=None layout=None gap=10 pad=None fill=None radius=None
+      DE6Op frame '源码入口' w=None h=32 layout=None gap=6 pad=[0, 11] fill=$surface radius=8
+        V4jeXB [源码文案] fs=13 w=None fill=$text-primary :: '源码'
+      vIaU2 frame '主题切换' w=None h=None layout=None gap=2 pad=3 fill=$surface-subtle radius=9
+  QZT3E frame '主体' w=fill_container h=1240 layout=None gap=None pad=None fill=$bg radius=None
+    <ref Bno4d -> vxMha>
+    Bno4d frame '左侧导航' w=236 h=900 layout=vertical gap=3 pad=[14, 12] fill=$surface radius=None
+      i6Tjy1 frame '全部工具' w=fill_container h=36 layout=None gap=10 pad=[0, 10] fill=$surface radius=8
+        WjSu0 [全部工具文案] fs=13.5 w=None fill=$text-secondary :: '全部工具'
+        LdmyO [全部工具计数] fs=12 w=None fill=$text-tertiary :: '41'
+      xq9aQ frame '我的收藏' w=fill_container h=36 layout=None gap=10 pad=[0, 10] fill=None radius=8
+        tUgzJ [我的收藏文案] fs=13.5 w=None fill=$text-secondary :: '我的收藏'
+        OQYEF [我的收藏计数] fs=12 w=None fill=$text-tertiary :: '6'
+      B8sjn6 frame '最近使用' w=fill_container h=36 layout=None gap=10 pad=[0, 10] fill=None radius=8
+        rdcrz [最近使用文案] fs=13.5 w=None fill=$text-secondary :: '最近使用'
+        buDaR [最近使用计数] fs=12 w=None fill=$text-tertiary :: '8'
+      OuLip frame '分隔线' w=fill_container h=None layout=vertical gap=None pad=[7, 0] fill=None radius=None
+      sW1Ck frame '分类标题' w=fill_container h=None layout=None gap=None pad=[3, 10] fill=None radius=None
+        Ano1M [分类标题文案] fs=11 w=None fill=$text-tertiary :: '工具分类'
+      Mv3c9 frame '分类 · 数据格式' w=fill_container h=32 layout=None gap=10 pad=[0, 10] fill=None radius=8
+        e1XqjQ [数据格式 文案] fs=13.5 w=None fill=$text-secondary :: '数据格式'
+        mAbhm [数据格式 计数] fs=12 w=None fill=$text-tertiary :: '4'
+      eHtTt frame '子列表 · 数据格式' w=fill_container h=0 layout=vertical gap=1 pad=[3, 0, 4, 8] fill=None radius=None
+          PYLwn [文案] fs=12.5 w=None fill=$text-secondary :: 'JSON 格式化'
+          DthJv [文案] fs=12.5 w=None fill=$text-secondary :: 'JSON 差异比较'
+          jbOyo [文案] fs=12.5 w=None fill=$text-secondary :: 'JSON / YAML 转换'
+          Frbvq [文案] fs=12.5 w=None fill=$text-secondary :: 'CSV / JSON 转换'
+      dQfRu frame '分类 · 编码与文本' w=fill_container h=32 layout=None gap=10 pad=[0, 10] fill=None radius=8
+        uq4eR [编码与文本 文案] fs=13.5 w=None fill=$text-secondary :: '编码与文本'
+        YVO5z [编码与文本 计数] fs=12 w=None fill=$text-tertiary :: '7'
+      HYbU9 frame '子列表 · 编码与文本' w=fill_container h=0 layout=vertical gap=1 pad=[3, 0, 4, 8] fill=None radius=None
+          vIsj3 [文案] fs=12.5 w=None fill=$text-secondary :: 'Base64 编解码'
+          BVGGg [文案] fs=12.5 w=None fill=$text-secondary :: 'URL 编解码'
+          k6ATL [文案] fs=12.5 w=None fill=$text-secondary :: 'Unicode / 字节编码转换'
+          OmPb4 [文案] fs=12.5 w=None fill=$text-secondary :: '文本去重与整理'
+          PczUF [文案] fs=12.5 w=None fill=$text-secondary :: '命名风格转换'
+          Ox1cj [文案] fs=12.5 w=None fill=$text-secondary :: '文本差异比较'
+          n8iQq [文案] fs=12.5 w=None fill=$text-secondary :: '正则表达式测试'
+      KaFSu frame '分类 · 摘要与加密' w=fill_container h=32 layout=None gap=10 pad=[0, 10] fill=None radius=8
+        zeeRv [摘要与加密 文案] fs=13.5 w=None fill=$text-secondary :: '摘要与加密'
+        i15z5 [摘要与加密 计数] fs=12 w=None fill=$text-tertiary :: '6'
+      D8irTQ frame '子列表 · 摘要与加密' w=fill_container h=0 layout=vertical gap=1 pad=[3, 0, 4, 8] fill=None radius=None
+          oHpjd [文案] fs=12.5 w=None fill=$text-secondary :: 'MD5 / SHA 摘要'
+          c1uLQN [文案] fs=12.5 w=None fill=$text-secondary :: 'HMAC 计算与校验'
+          CDqes [文案] fs=12.5 w=None fill=$text-secondary :: 'AES 加解密'
+          mddAO [文案] fs=12.5 w=None fill=$text-secondary :: 'SM2 加解密与签名'
+          Gh4cf [文案] fs=12.5 w=None fill=$text-secondary :: 'SM3 摘要'
+          DEPkz [文案] fs=12.5 w=None fill=$text-secondary :: 'SM4 加解密'
+      T97Qj frame '分类 · 时间与标识' w=fill_container h=32 layout=None gap=10 pad=[0, 10] fill=None radius=8
+        ccenV [时间与标识 文案] fs=13.5 w=None fill=$text-secondary :: '时间与标识'
+        dqgje [时间与标识 计数] fs=12 w=None fill=$text-tertiary :: '4'
+      V9EnS frame '子列表 · 时间与标识' w=fill_container h=0 layout=vertical gap=1 pad=[3, 0, 4, 8] fill=None radius=None
+          A7d0DV [文案] fs=12.5 w=None fill=$text-secondary :: '时间戳转换'
+          uxXoq [文案] fs=12.5 w=None fill=$text-secondary :: 'UUID 生成与解析'
+          QQLCh [文案] fs=12.5 w=None fill=$text-secondary :: 'Cron 解析与执行预览'
+          q7r8Xg [文案] fs=12.5 w=None fill=$text-secondary :: '日期时间差计算'
+      LC4Gv frame '分类 · Java 开发' w=fill_container h=32 layout=None gap=10 pad=[0, 10] fill=None radius=8
+        ZEAKX [Java 开发 文案] fs=13.5 w=None fill=$text-secondary :: 'Java 开发'
+        zHkxu [Java 开发 计数] fs=12 w=None fill=$text-tertiary :: '5'
+      kBzpS frame '子列表 · Java 开发' w=fill_container h=0 layout=vertical gap=1 pad=[3, 0, 4, 8] fill=None radius=None
+          GEQeq [文案] fs=12.5 w=None fill=$text-secondary :: 'JSON 转 Java 类'
+          n3BYF [文案] fs=12.5 w=None fill=$text-secondary :: 'Java 字符串转义'
+          p1EMbU [文案] fs=12.5 w=None fill=$text-secondary :: 'Properties / YAML 转换'
+          NDOUz [文案] fs=12.5 w=None fill=$text-secondary :: 'Java 异常堆栈整理'
+          OIyux [文案] fs=12.5 w=None fill=$text-secondary :: 'Maven / Gradle 依赖转换'
+      lwRW8 frame '分类 · Web / Vue' w=fill_container h=32 layout=None gap=10 pad=[0, 10] fill=None radius=8
+        TcCXI [Web / Vue 文案] fs=13.5 w=None fill=$text-secondary :: 'Web / Vue'
+        FI6Rz [Web / Vue 计数] fs=12 w=None fill=$text-tertiary :: '6'
+      km6tp frame '子列表 · Web / Vue' w=fill_container h=0 layout=vertical gap=1 pad=[3, 0, 4, 8] fill=None radius=None
+          n0APgl [文案] fs=12.5 w=None fill=$text-secondary :: 'JSON 转 TypeScript 类型'
+          gORfX [文案] fs=12.5 w=None fill=$text-secondary :: 'Vue 单文件组件模板'
+          W17Rz [文案] fs=12.5 w=None fill=$text-secondary :: 'CSS 单位换算'
+          zOJta [文案] fs=12.5 w=None fill=$text-secondary :: '颜色转换与对比度'
+          GRUgB [文案] fs=12.5 w=None fill=$text-secondary :: 'SVG 预览与优化'
+          AOuPA [文案] fs=12.5 w=None fill=$text-secondary :: 'HTML / CSS / JS 格式化'
+      zflHN frame '分类 · 接口辅助' w=fill_container h=32 layout=None gap=10 pad=[0, 10] fill=None radius=8
+        qCLkz [接口辅助 文案] fs=13.5 w=None fill=$text-secondary :: '接口辅助'
+        W1ST7 [接口辅助 计数] fs=12 w=None fill=$text-tertiary :: '4'
+      M29tE frame '子列表 · 接口辅助' w=fill_container h=0 layout=vertical gap=1 pad=[3, 0, 4, 8] fill=None radius=None
+          Q5zFv [文案] fs=12.5 w=None fill=$text-secondary :: 'JWT 解析与验签'
+          cp8EJ [文案] fs=12.5 w=None fill=$text-secondary :: 'URL 参数编辑'
+          qw1cx [文案] fs=12.5 w=None fill=$text-secondary :: 'curl / fetch / Axios 转换'
+          xtjQl [文案] fs=12.5 w=None fill=$text-secondary :: 'HTTP 状态码速查'
+      wSbOr frame '分类 · 文件与图片' w=fill_container h=32 layout=None gap=10 pad=[0, 10] fill=None radius=8
+        e3eg58 [文件与图片 文案] fs=13.5 w=None fill=$text-secondary :: '文件与图片'
+        eQVgG [文件与图片 计数] fs=12 w=None fill=$text-tertiary :: '5'
+      Sz2AD frame '子列表 · 文件与图片' w=fill_container h=0 layout=vertical gap=1 pad=[3, 0, 4, 8] fill=None radius=None
+          yJ6zR [文案] fs=12.5 w=None fill=$text-secondary :: '文件摘要与批量校验'
+          ltWhN [文案] fs=12.5 w=None fill=$text-secondary :: '图片压缩与格式转换'
+          VShta [文案] fs=12.5 w=None fill=$text-secondary :: '二维码生成与识别'
+          XuIEi [文案] fs=12.5 w=None fill=$text-secondary :: '文本文件编码转换'
+          HPNRU [文案] fs=12.5 w=None fill=$text-secondary :: '文件 / Base64 转换'
+      w92wRz frame '底部弹性占位' w=fill_container h=fill_container layout=None gap=None pad=None fill=None radius=None
+      c29ML frame '隐私说明' w=fill_container h=None layout=vertical gap=7 pad=[11, 12] fill=$surface-subtle radius=10
+          l6g1YP [隐私标题文案] fs=12 w=None fill=$text-primary :: '纯本地运行'
+        kzRQZ [隐私说明文案] fs=11.5 w=fill_container fill=$text-secondary :: '所有计算在浏览器内完成，输入内容不会上传到服务器。'
+    a19PHt frame '主内容区' w=fill_container h=fill_container layout=vertical gap=20 pad=[26, 32] fill=$bg radius=None
+      cKj2C frame '页头' w=fill_container h=None layout=None gap=None pad=None fill=None radius=None
+            fa4rr [页面标题] fs=21 w=None fill=$text-primary :: '帮助与快捷键'
+            y7c8LM [页面说明] fs=12.5 w=None fill=$text-secondary :: '工具检索、文件导入、复制下载、字符与字节口径，以及结果状态说明。'
+            Fj2SJ [文案] fs=11.5 w=None fill=$text-secondary :: '本地处理'
+      gQX5M frame '工作区' w=fill_container h=fill_container layout=vertical gap=26 pad=[28, 30] fill=$surface radius=12
+                cjEsk [标题] fs=13 w=None fill=$text-primary :: '检索工具'
+              twiyX [正文] fs=11.5 w=fill_container fill=$text-secondary :: '支持中文名、英文名、缩写与别名（如“国密”“b64”“时间戳”）。结果按分类分组，↑↓ 选择、Enter 打开。'
+                UvqUZ [标题] fs=13 w=None fill=$text-primary :: '导入文件'
+              Ip1WH [正文] fs=11.5 w=fill_container fill=$text-secondary :: '从本机选择或拖入文件，读取与处理都在浏览器内完成；过程中可取消，失败时保留原文件供重试。'
+                pQn1F [标题] fs=13 w=None fill=$text-primary :: '复制与下载'
+              NGcCu [正文] fs=11.5 w=fill_container fill=$text-secondary :: '复制内容不包含行号、地址偏移与语法提示；需要真实换行的文本保留原文换行。'
+                tpGnq [标题] fs=13 w=None fill=$text-primary :: '参数与编码'
+              rkWDw [正文] fs=11.5 w=fill_container fill=$text-secondary :: '改编码或模式会改变字节结果，因此参数变化后旧输出会标记为“待更新”，需重新执行。'
+              hUWwY [标题] fs=13 w=None fill=$text-primary :: '快捷键对照'
+              M6wEO [说明] fs=11 w=None fill=$text-tertiary :: '同时给出 Windows / Linux 与 macOS 写法；macOS 快捷键不是唯一操作方式'
+                Wy4FS [列 · 操作] fs=11 w=fill_container fill=$text-tertiary :: '操作'
+                uR4oq [列 · Windows] fs=11 w=300 fill=$text-tertiary :: 'Windows / Linux'
+                s30Jg [列 · macOS] fs=11 w=200 fill=$text-tertiary :: 'macOS'
+                TDJaJ [操作] fs=12.5 w=fill_container fill=$text-primary :: '打开全局搜索'
+                BHySX [组合] fs=12 w=300 fill=$text-secondary :: 'Ctrl + K'
+                L4PqD [组合] fs=12 w=200 fill=$text-secondary :: '⌘ + K'
+                UY6KJ [操作] fs=12.5 w=fill_container fill=$text-primary :: '执行当前工具主操作'
+                flPe1 [组合] fs=12 w=300 fill=$text-secondary :: 'Ctrl + Enter'
+                RCoKN [组合] fs=12 w=200 fill=$text-secondary :: '⌘ + Enter'
+                ytqW3 [操作] fs=12.5 w=fill_container fill=$text-primary :: '复制结果'
+                g5XVU [组合] fs=12 w=300 fill=$text-secondary :: 'Ctrl + Shift + C'
+                O9nKRG [组合] fs=12 w=200 fill=$text-secondary :: '⌘ + ⇧ + C'
+                yT1bJ [操作] fs=12.5 w=fill_container fill=$text-primary :: '下载结果'
+                R4udde [组合] fs=12 w=300 fill=$text-secondary :: 'Ctrl + S'
+                D0Wal [组合] fs=12 w=200 fill=$text-secondary :: '⌘ + S'
+                TLVdx [操作] fs=12.5 w=fill_container fill=$text-primary :: '清空当前输入'
+                feVpy [组合] fs=12 w=300 fill=$text-secondary :: 'Ctrl + Shift + Backspace'
+                x6Krwe [组合] fs=12 w=200 fill=$text-secondary :: '⌘ + ⇧ + Delete'
+                VF5TU [操作] fs=12.5 w=fill_container fill=$text-primary :: '显示 / 隐藏密钥'
+                mXtYn [组合] fs=12 w=300 fill=$text-secondary :: 'Alt + V'
+                kHfY6 [组合] fs=12 w=200 fill=$text-secondary :: '⌥ + V'
+                PLpoF [操作] fs=12.5 w=fill_container fill=$text-primary :: '只看输入 / 只看结果'
+                D0L0TY [组合] fs=12 w=300 fill=$text-secondary :: 'Ctrl + I  /  Ctrl + O'
+                B06LY4 [组合] fs=12 w=200 fill=$text-secondary :: '⌘ + I  /  ⌘ + O'
+                rOowF [操作] fs=12.5 w=fill_container fill=$text-primary :: '关闭弹层与对话框'
+                qfJ2F [组合] fs=12 w=300 fill=$text-secondary :: 'Esc'
+                Gbixe [组合] fs=12 w=200 fill=$text-secondary :: 'Esc'
+                PjafA [列标题] fs=13 w=None fill=$text-primary :: '字符与字节的区别'
+                q8K74F [名称] fs=12 w=None fill=$text-primary :: '字符数'
+                yu6eO [说明] fs=11 w=None fill=$text-secondary :: '按 Unicode 码点计数'
+                nAthM [名称] fs=12 w=None fill=$text-primary :: '字节数'
+                y4XDzS [说明] fs=11 w=None fill=$text-secondary :: '按 UTF-8 编码后的长度'
+                UTVay [名称] fs=12 w=None fill=$text-primary :: '中文与 emoji'
+                yO8F5 [说明] fs=11 w=None fill=$text-secondary :: '汉字 1 字符 = 3 字节；emoji 多为 4 字节'
+                a7V0Jl [名称] fs=12 w=None fill=$text-primary :: '大整数'
+                KgI6g [说明] fs=11 w=None fill=$text-secondary :: '保留原始数字文本，不转成浮点'
+                jYzwz [列标题] fs=13 w=None fill=$text-primary :: '结果为什么会“待更新”'
+                UmvHx [名称] fs=12 w=None fill=$text-primary :: '触发条件'
+                bN0YL [说明] fs=11 w=None fill=$text-secondary :: '修改输入或影响计算的参数后'
+                Dc3xk [名称] fs=12 w=None fill=$text-primary :: '旧结果'
+                TXHy3 [说明] fs=11 w=None fill=$text-secondary :: '保留可查看，并明确标为旧结果'
+                mWrc3 [名称] fs=12 w=None fill=$text-primary :: '复制与下载'
+                L0ar9 [说明] fs=11 w=None fill=$text-secondary :: '待更新期间默认禁用'
+                yzcyx [名称] fs=12 w=None fill=$text-primary :: '恢复'
+                d1GRD [说明] fs=11 w=None fill=$text-secondary :: '重新执行成功后恢复可用'
+                F20Qw [标题] fs=13 w=None fill=$text-primary :: '反馈入口的位置'
+              jnrI7 [正文] fs=11.5 w=fill_container fill=$text-secondary :: '反馈按钮位于顶部导航右侧，以及每个工具页说明区的末尾。当前只把建议保存在本地草稿，提交渠道尚未接入：不会产生真实工单，也不会显示提交成功。'
+                Pk5Z0 [标题] fs=13 w=None fill=$text-primary :: '离线与缓存'
+              KJKK4 [正文] fs=11.5 w=fill_container fill=$text-secondary :: '页面资源本身仍需联网加载。是否可离线使用取决于该工具是否已被缓存，详见离线状态页。'
+      cenQn frame '说明区' w=fill_container h=None layout=vertical gap=14 pad=[20, 0, 0, 0] fill=None radius=None
+            shkyu [标题] fs=13.5 w=None fill=$text-primary :: '返回工具继续操作'
+            JQ69l [说明] fs=11.5 w=None fill=$text-secondary :: '每个工具页的说明区都包含与自身相关的最小帮助；更完整的解释始终在本页。'
+              W6gBN7 [文案] fs=12.5 w=None fill=#FFFFFF :: '返回全部工具'
+              oOBxo [文案] fs=12.5 w=None fill=$text-primary :: '偏好设置'
+              iz6ah [文案] fs=12.5 w=None fill=$text-primary :: '隐私说明'
