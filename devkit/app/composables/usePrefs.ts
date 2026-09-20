@@ -5,6 +5,8 @@ export interface Prefs {
   defaultIndent: '2' | '4' | 'tab'
   reduceMotion: boolean
   recordRecent: boolean
+  /** 匿名访问统计：只让统计脚本知道页面路径与来源，不涉及任何输入内容 */
+  analytics: boolean
 }
 
 export const defaultPrefs: Prefs = {
@@ -13,7 +15,8 @@ export const defaultPrefs: Prefs = {
   editorWrap: true,
   defaultIndent: '2',
   reduceMotion: false,
-  recordRecent: true
+  recordRecent: true,
+  analytics: true
 }
 
 const STORAGE_KEY = 'devkit.prefs.v1'

@@ -229,7 +229,19 @@ SKIP_BUILD=1 COS_BUCKET=devkit-1250000000 scripts/deploy-cos.sh   # 只同步已
 
 脚本会重新 `npm run generate` 并同步（含 `-r --delete --force`）。因为 `sw.js` 是 300 秒短缓存、`_nuxt/` 文件名带 hash 长缓存，发版后用户最多 5 分钟就会拿到新版本。
 
-如果中间挂了 CDN，还需要**刷新 CDN 缓存**（CDN 控制台 → 缓存刷新 → 提交 `/` 与 `/index.html`，或全量刷新）。
+如果中间挂了 CDN，还需要**刷新 CDN 缓存**：CDN 控制台 → 缓存刷新 → 提交 `/`（目录刷新）与 `/_nuxt/`，或全量刷新。
+
+> **实测告警（2026-09-20）**：本站在 CDN 后面的 HTML 并不跟随源站的 `max-age=300`——发版后实测根路径仍返回 `x-cache-lookup: Cache Hit`、`age=6518` 的旧 `index.html`，而 `_nuxt/` 已被 `--delete` 同步删掉旧分片，旧 HTML 会引用到不存在的资源。**每次发版后必须刷新缓存**，或把 CDN 规则里的 HTML 缓存改成「遵循源站」。
+>
+> 用项目自带的密钥就能调 CDN 刷新接口（该密钥也具备 CDN 权限，实测可用）：
+>
+> ```bash
+> node scripts/cdn-purge.mjs                                  # 默认刷新 / 与 /_nuxt/（delete 模式）
+> FLUSH_TYPE=flush node scripts/cdn-purge.mjs https://www.t502.fun/   # 只改了内容时
+> ```
+>
+> 脚本走 `cdn.tencentcloudapi.com` 的 `PurgePathCache`（TC3-HMAC-SHA256 签名），密钥读 `.tools/cos.yaml`；
+> `delete` 适合旧文件已被删除（`--delete` 同步后），只改内容用 `flush`；目录路径必须以 `/` 结尾。
 
 ---
 

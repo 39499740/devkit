@@ -29,7 +29,7 @@ const principles: Principle[] = [
     icon: 'history',
     tone: 'text',
     title: '不提供云端历史',
-    body: '没有账号、没有云端同步，也没有服务端记录。刷新或关闭页面后，输入内容即消失。'
+    body: '没有账号、没有云端同步；工具输入只会留在当前页面，刷新即消失。除匿名页面访问量外，服务端不记录任何工具输入。'
   }
 ]
 
@@ -97,6 +97,12 @@ const toneVars: Record<string, [string, string]> = {
 function tone(t: string) {
   return toneVars[t] ?? toneVars.tertiary!
 }
+
+const runtime = useRuntimeConfig()
+const statsOn = computed(
+  () => Boolean(runtime.public.analytics.provider) && Boolean(runtime.public.analytics.siteId)
+)
+const statsName = computed(() => (runtime.public.analytics.provider === 'cnzz' ? 'CNZZ 站长统计' : '百度统计'))
 </script>
 
 <template>
@@ -195,6 +201,27 @@ function tone(t: string) {
           <p class="card__body">{{ b.body }}</p>
         </article>
       </div>
+
+      <section class="card--soft">
+        <div class="card__head">
+          <DkIcon name="activity" :size="14" style="color: var(--accent)" />
+          <h2 class="card__title">访问统计</h2>
+          <span class="grow"></span>
+          <span class="badge badge--ok">{{ statsOn ? '已启用 · 可关闭' : '未启用' }}</span>
+        </div>
+        <p v-if="statsOn" class="card__body">
+          本站使用第三方统计服务（{{ statsName }}）了解有多少人访问、哪些工具最常被打开。它会记录页面路径、来源、访问时间、浏览器与设备信息，以及由服务商处理的 IP，并写入它自己的 Cookie 或本地标识用于区分访客（UV）；上报的路径不含 query 与 hash，输入框内容、密钥、Token 与文件从不上报。
+        </p>
+        <p v-else class="card__body">
+          当前构建未接入任何第三方统计脚本，也没有其它形式的用户行为采集；服务端只保留静态资源访问日志。
+        </p>
+        <p v-if="statsOn" class="card__body">
+          你可以在 <NuxtLink to="/settings">偏好设置</NuxtLink> →「匿名访问统计」随时关闭：关闭后不再加载统计脚本，已加载的也不再补报页面切换。浏览器开启 DNT / GPC 时同样不会被统计。
+        </p>
+        <p v-else class="card__body">
+          若后续接入统计，会先在本页说明采集范围，并在 <NuxtLink to="/settings">偏好设置</NuxtLink> 提供关闭开关。
+        </p>
+      </section>
     </section>
 
     <section class="outro">

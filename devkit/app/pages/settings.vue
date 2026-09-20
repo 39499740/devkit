@@ -6,6 +6,11 @@ const fav = useFavorites()
 const recent = useRecent()
 const toast = useToast()
 
+const runtime = useRuntimeConfig()
+const analyticsOn = computed(
+  () => Boolean(runtime.public.analytics.provider) && Boolean(runtime.public.analytics.siteId)
+)
+
 const clearOpen = ref(false)
 const scope = reactive({ prefs: true, favorites: true, recent: true })
 
@@ -170,6 +175,19 @@ function doReset() {
                 @toggle="update({ recordRecent: !prefs.recordRecent })"
               />
             </div>
+            <div v-if="analyticsOn" class="row">
+              <div class="row__info">
+                <span class="row__title">匿名访问统计</span>
+                <span class="row__desc">
+                  只让统计脚本知道访问了哪个页面与来源，用于统计 PV 与各页面使用情况；不含输入、密钥、Token 与文件内容。关闭后不再加载统计脚本。
+                </span>
+              </div>
+              <DkSwitch
+                :on="prefs.analytics"
+                label="匿名访问统计"
+                @toggle="update({ analytics: !prefs.analytics })"
+              />
+            </div>
           </section>
 
           <section class="group">
@@ -177,7 +195,7 @@ function doReset() {
             <div class="row">
               <div class="row__info">
                 <span class="row__title">重置偏好</span>
-                <span class="row__desc">恢复默认主题、字号、缩进、自动换行与动效设置；不影响收藏与访问记录。</span>
+                <span class="row__desc">恢复默认主题、字号、缩进、自动换行、动效与统计开关设置；不影响收藏与访问记录。</span>
               </div>
               <DkButton size="sm" title="重置偏好" @click="doReset">
                 <DkIcon name="refresh" :size="13" />重置

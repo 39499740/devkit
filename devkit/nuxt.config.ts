@@ -5,6 +5,13 @@ const SITE_DESC =
 
 const prefsBootScript = `(function(){var e=document.documentElement;var m=false;try{m=!!(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)}catch(_){}var p=null;try{var r=localStorage.getItem('devkit.prefs.v1');if(r)p=JSON.parse(r)}catch(_){}try{if(!p||typeof p!=='object')p=null;var t=p&&p.theme;e.classList.toggle('dark',t==='dark'||(t!=='light'&&m));var s=p&&p.codeFontSize;if(typeof s==='number'&&isFinite(s)&&s>0)e.style.setProperty('--code-font-size',s+'px');var rm=!!(p&&p.reduceMotion);e.classList.toggle('reduce-motion',rm);if(rm){if(document.body)document.body.classList.add('reduce-motion');else document.addEventListener('DOMContentLoaded',function(){if(document.body)document.body.classList.add('reduce-motion')})}}catch(_){}})();`
 
+// 访问统计（站长统计）：默认关闭，只有同时给出 provider 与标识时才会在浏览器端加载脚本。
+// 构建/部署时用环境变量打开，例如：
+//   DEVKIT_ANALYTICS=baidu DEVKIT_ANALYTICS_ID=12345678 npm run generate
+// 说明见 docs/ANALYTICS.md；访客开关入口在「偏好设置 → 匿名访问统计」。
+const ANALYTICS_PROVIDER = (process.env.DEVKIT_ANALYTICS || '').trim()
+const ANALYTICS_ID = (process.env.DEVKIT_ANALYTICS_ID || '').trim()
+
 // 监听地址：默认绑定所有网卡（0.0.0.0），局域网内其它设备可直接访问。
 // 只想本机访问时用 DEVKIT_HOST=localhost（或 NUXT_HOST / NITRO_HOST / HOST）覆盖。
 const devHost =
@@ -32,7 +39,10 @@ export default defineNuxtConfig({
   ],
   ssr: true,
   runtimeConfig: {
-    public: { siteUrl: SITE_URL }
+    public: {
+      siteUrl: SITE_URL,
+      analytics: { provider: ANALYTICS_PROVIDER, siteId: ANALYTICS_ID }
+    }
   },
   nitro: {
     prerender: {
