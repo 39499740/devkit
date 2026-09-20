@@ -32,7 +32,9 @@ onUnmounted(() => {
         <SideNav />
       </aside>
       <main class="shell__content">
-        <slot />
+        <div class="shell__content-inner">
+          <slot />
+        </div>
         <footer class="shell__foot">
           <span>© {{ new Date().getFullYear() }} {{ SITE_NAME }}</span>
           <span class="shell__foot-sep">·</span>
@@ -90,7 +92,13 @@ onUnmounted(() => {
 .shell__content {
   flex: 1;
   min-width: 0;
-  padding: 24px 32px 48px;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 32px 24px;
+}
+.shell__content-inner {
+  flex: 1;
+  min-width: 0;
 }
 .shell__foot {
   display: flex;
@@ -172,7 +180,7 @@ onUnmounted(() => {
     display: none;
   }
   .shell__content {
-    padding: 16px 14px 40px;
+    padding: 16px 14px 24px;
   }
 }
 </style>
