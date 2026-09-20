@@ -38,3 +38,5 @@ coverage/
 
 # Nuxt generate 产生的 dist 软链接
 devkit/dist
+__pycache__/
+*.pyc
