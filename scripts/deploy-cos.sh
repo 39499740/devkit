@@ -6,7 +6,7 @@
 #   SKIP_BUILD=1 COS_BUCKET=devkit-1250000000 scripts/deploy-cos.sh   # 跳过构建，只同步现有产物
 #
 # coscli 查找顺序：$COSCLI → 仓库内 .tools/coscli → PATH 里的 coscli
-# 配置查找顺序：$COS_CONFIG → ~/.cos.yaml
+# 配置查找顺序：$COS_CONFIG → 仓库内 .tools/cos.yaml → ~/.cos.yaml
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -27,7 +27,13 @@ if [ -z "$COSCLI" ] || [ ! -x "$COSCLI" ]; then
 fi
 
 # --- 配置 ---
-CONF="${COS_CONFIG:-$HOME/.cos.yaml}"
+if [ -n "${COS_CONFIG:-}" ]; then
+  CONF="$COS_CONFIG"
+elif [ -f "$ROOT/.tools/cos.yaml" ]; then
+  CONF="$ROOT/.tools/cos.yaml"
+else
+  CONF="$HOME/.cos.yaml"
+fi
 if [ ! -f "$CONF" ]; then
   echo "缺少 coscli 配置文件：$CONF"
   echo "先生成一份（交互式填 secretId / secretKey / bucket=${BUCKET}）："
@@ -45,10 +51,21 @@ fi
 
 echo "==> 2/3 同步到 cos://$BUCKET"
 # 带 hash 的构建产物长缓存；入口文件（html / sw.js / manifest / robots / sitemap）短缓存，保证发版即生效
-"$COSCLI" -c "$CONF" sync "$OUT/_nuxt/" "cos://$BUCKET/_nuxt/" \
-  -r --delete --force --meta "Cache-Control:public, max-age=31536000, immutable"
-"$COSCLI" -c "$CONF" sync "$OUT/" "cos://$BUCKET/" \
-  -r --delete --force --exclude "^_nuxt/" --meta "Cache-Control:public, max-age=300"
+sync_dir() {
+  local src="$1" dst="$2" cc="$3"
+  shift 3
+  if ! "$COSCLI" -c "$CONF" sync "$src" "$dst" -r --delete --force \
+      --meta "Cache-Control:$cc" "$@"; then
+    echo
+    echo "同步失败，逐项检查："
+    echo "  1) $CONF 里的 secretid / secretkey 是否已换成真实密钥"
+    echo "  2) 桶名 $BUCKET 是否存在、地域是否与建桶时一致"
+    echo "  3) 该密钥是否有此桶的读写权限"
+    exit 1
+  fi
+}
+sync_dir "$OUT/_nuxt/" "cos://$BUCKET/_nuxt/" "public, max-age=31536000, immutable"
+sync_dir "$OUT/" "cos://$BUCKET/" "public, max-age=300" --exclude "^_nuxt/"
 
 echo "==> 3/3 完成"
 echo "    别忘了在 COS 控制台核对静态网站：索引文档=index.html，错误文档=index.html，错误文档响应码=200"

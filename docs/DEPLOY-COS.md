@@ -102,11 +102,22 @@ chmod +x coscli && ./coscli --version        # coscli version v1.0.9
 .tools/coscli config init
 ```
 
-想放到仓库内（沙箱/多环境场景）就用 `COS_CONFIG` 指定路径，例如 `.tools/cos.yaml`（同样已被 gitignore）：
+仓库内已经放好一份模板 `.tools/cos.yaml`（被 gitignore，不会进版本库），打开把两处占位符换掉即可：
 
-```bash
-.tools/coscli -c .tools/cos.yaml config init
+```yaml
+cos:
+  base:
+    secretid: REPLACE_WITH_YOUR_SECRET_ID     # ← 换成你的 SecretId
+    secretkey: REPLACE_WITH_YOUR_SECRET_KEY   # ← 换成你的 SecretKey
+    sessiontoken: ""
+    protocol: https
+  buckets:
+    - name: devkit-0000000000                 # ← 换成真实桶名（含 APPID 后缀）
+      alias: devkit
+      region: ap-shanghai                     # ← 与建桶地域一致
 ```
+
+脚本与 coscli 的配置查找顺序：`$COS_CONFIG` → 仓库内 `.tools/cos.yaml` → `~/.cos.yaml`；所以放好模板后不用额外设环境变量也行。密钥建议用只授权该桶读写的**子账号**密钥，并确保 `.tools/` 不进版本库。
 
 **发布**（脚本会先 build 再同步，并设置缓存头）：
 
@@ -117,7 +128,8 @@ COS_BUCKET=devkit-1250000000 scripts/deploy-cos.sh
 
 脚本行为：
 
-- 自动查找 coscli：`$COSCLI` → 仓库内 `.tools/coscli` → PATH；配置：`$COS_CONFIG` → `~/.cos.yaml`；缺失时打印可照抄的下一步命令并以退出码 1 结束。
+- 自动查找 coscli：`$COSCLI` → 仓库内 `.tools/coscli` → PATH；配置：`$COS_CONFIG` → 仓库内 `.tools/cos.yaml` → `~/.cos.yaml`；都缺失时打印可照抄的下一步命令并以退出码 1 结束。
+- 同步失败会打印三行排查提示（密钥是否替换、桶名/地域是否正确、密钥是否有读写权限），不会甩一句原始报错。
 - `_nuxt/`（文件名带 hash）→ `Cache-Control: public, max-age=31536000, immutable`；其余入口文件（html、sw.js、manifest、robots、sitemap）→ `max-age=300`。
 - 两次 `sync` 都带 `-r --delete --force`：递归、删除远端多余文件（避免旧版本残留）、不交互确认。
 - 注意 coscli 用 `--meta "Cache-Control:…"` 设置缓存头，**没有** `--cache-control` 这个参数（早先脚本里的写法是错的，已修正）。
