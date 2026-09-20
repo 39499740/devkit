@@ -3,7 +3,8 @@ import { tools, categories } from '../../app/data/tools'
 const SITE = 'https://www.t502.fun'
 
 export default defineEventHandler((event) => {
-  const paths = ['/', '/favorites', '/recent', '/settings', '/privacy', '/help', '/offline']
+  // 收藏 / 最近使用 / 设置是私有且内容为空的页面，加 noindex 后不再进 sitemap
+  const paths = ['/', '/privacy', '/help', '/offline']
   for (const c of categories) paths.push(`/category/${c.key}`)
   for (const t of tools) paths.push(`/tools/${t.slug}`)
 
@@ -11,7 +12,7 @@ export default defineEventHandler((event) => {
   const urls = paths
     .map(
       (p) =>
-        `  <url><loc>${SITE}${p}</loc><lastmod>${lastmod}</lastmod><changefreq>weekly</changefreq><priority>${
+        `  <url><loc>${SITE}${p === '/' ? '/' : `${p}/`}</loc><lastmod>${lastmod}</lastmod><changefreq>weekly</changefreq><priority>${
           p === '/' ? '1.0' : '0.7'
         }</priority></url>`
     )

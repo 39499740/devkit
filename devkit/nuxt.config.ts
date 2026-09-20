@@ -71,20 +71,15 @@ export default defineNuxtConfig({
       meta: [
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-        { name: 'description', content: SITE_DESC },
         { name: 'theme-color', content: '#F4F5F7' },
         { property: 'og:type', content: 'website' },
         { property: 'og:site_name', content: SITE_NAME },
-        { property: 'og:title', content: 'DevKit · 开发者本地工具箱' },
-        { property: 'og:description', content: SITE_DESC },
-        { property: 'og:url', content: SITE_URL },
         { property: 'og:image', content: `${SITE_URL}/pwa-512.png` },
         { name: 'twitter:card', content: 'summary' }
       ],
       link: [
         { rel: 'icon', type: 'image/png', href: '/pwa-192.png' },
         { rel: 'apple-touch-icon', href: '/pwa-192.png' },
-        { rel: 'canonical', href: SITE_URL }
       ],
       script: [
         {

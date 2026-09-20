@@ -1,5 +1,9 @@
 <script setup lang="ts">
-useSeoMeta({ title: '偏好设置 · DevKit' })
+useSeo({
+  title: '偏好设置 · DevKit',
+  description: 'DevKit 偏好设置：主题、代码字号、缩进、自动换行、动效与匿名访问统计开关，偏好只保存在当前浏览器。',
+  noindex: true
+})
 
 const { prefs, update, reset } = usePrefs()
 const fav = useFavorites()

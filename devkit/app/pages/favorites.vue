@@ -2,7 +2,11 @@
 import { getToolById, getCategory, categories } from '~/data/tools'
 import type { ToolMeta } from '~/data/tools'
 
-useSeoMeta({ title: '我的收藏 · DevKit' })
+useSeo({
+  title: '我的收藏 · DevKit',
+  description: 'DevKit 里收藏的常用工具入口，收藏数据只保存在当前浏览器本地。',
+  noindex: true
+})
 
 const fav = useFavorites()
 const sortMode = ref<'recent' | 'name' | 'category'>('recent')

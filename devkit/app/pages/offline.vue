@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { tools } from '~/data/tools'
 
-useSeoMeta({ title: '离线与缓存状态 · DevKit' })
+useSeo({
+  title: '离线与缓存状态 · DevKit',
+  description: '查看 DevKit 的 Service Worker 与浏览器缓存状态，了解哪些工具已经可以离线使用。'
+})
 
 const PAGE_CACHE = 'devkit-pages'
 const PRECACHE_PREFIX = 'workbox-precache'

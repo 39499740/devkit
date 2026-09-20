@@ -18,7 +18,10 @@ if (!valid.value) {
 
 const cat = computed(() => getCategory(key.value))
 
-useSeoMeta({ title: computed(() => `${cat.value.name} · DevKit`) })
+useSeo({
+  title: computed(() => `${cat.value.name} · DevKit`),
+  description: computed(() => `${cat.value.desc} 共 ${toolsOfCategory(cat.value.key).length} 个工具，全部在浏览器本地运行，输入不上传。`)
+})
 
 const catIcons: Record<string, string> = {
   format: 'braces',

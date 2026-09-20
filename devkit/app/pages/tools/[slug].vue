@@ -9,8 +9,9 @@ if (!tool.value) {
   throw createError({ statusCode: 404, statusMessage: '工具不存在', fatal: true })
 }
 
-useSeoMeta({
-  title: computed(() => `${tool.value!.name} · DevKit`)
+useSeo({
+  title: computed(() => `${tool.value!.name} · DevKit`),
+  description: computed(() => `${tool.value!.desc} 全部在浏览器本地处理，不上传服务器；支持离线使用，免费无广告。`)
 })
 
 const views = import.meta.glob<{ default: Component }>('../../components/tools/*.vue')

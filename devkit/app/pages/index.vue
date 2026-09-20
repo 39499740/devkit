@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { categories, toolsOfCategory, getToolById, toolCount, searchTools } from '~/data/tools'
+import { SITE_DESC } from '~/utils/site'
 
-useSeoMeta({ title: 'DevKit · 开发者本地工具箱' })
+useSeo({
+  title: 'DevKit · 开发者本地工具箱',
+  description: SITE_DESC
+})
 
 const router = useRouter()
 const toast = useToast()

@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { toolCount } from '~/data/tools'
 
-useSeoMeta({ title: '本地处理与隐私 · DevKit' })
+useSeo({
+  title: '本地处理与隐私 · DevKit',
+  description: 'DevKit 如何处理你的输入、偏好与文件：计算全部在浏览器本地完成，并说明访问统计的采集范围与关闭方式。'
+})
 
 interface Principle {
   icon: string

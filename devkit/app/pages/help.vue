@@ -1,5 +1,8 @@
 <script setup lang="ts">
-useSeoMeta({ title: '帮助与快捷键 · DevKit' })
+useSeo({
+  title: '帮助与快捷键 · DevKit',
+  description: 'DevKit 的使用方式、快捷键与常见问题：全部工具在浏览器本地运行，输入不会上传。'
+})
 
 const palette = usePalette()
 

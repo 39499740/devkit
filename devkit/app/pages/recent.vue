@@ -2,7 +2,11 @@
 import { getToolById, getCategory, categories } from '~/data/tools'
 import type { ToolMeta } from '~/data/tools'
 
-useSeoMeta({ title: '最近使用 · DevKit' })
+useSeo({
+  title: '最近使用 · DevKit',
+  description: 'DevKit 最近打开过的工具记录，只含工具名称与访问时间，保存在当前浏览器本地。',
+  noindex: true
+})
 
 const recent = useRecent()
 const groupMode = ref<'time' | 'category'>('time')
