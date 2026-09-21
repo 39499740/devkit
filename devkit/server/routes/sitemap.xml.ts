@@ -4,7 +4,7 @@ const SITE = 'https://www.t502.fun'
 
 export default defineEventHandler((event) => {
   // 收藏 / 最近使用 / 设置是私有且内容为空的页面，加 noindex 后不再进 sitemap
-  const paths = ['/', '/privacy', '/help', '/offline']
+  const paths = ['/', '/privacy', '/help', '/offline', '/workflows']
   for (const c of categories) paths.push(`/category/${c.key}`)
   for (const t of tools) paths.push(`/tools/${t.slug}`)
 

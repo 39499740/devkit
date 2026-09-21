@@ -4,6 +4,7 @@ import { parseJson, jsonErrorPosition, RawNumber } from '~/utils/json'
 
 const props = defineProps<{ tool: ToolMeta }>()
 const clipboard = useClipboard()
+const transfer = useTransfer()
 
 const input = ref('')
 const className = ref('Order')
@@ -477,6 +478,15 @@ const sig = () =>
     Object.keys(overrides.value).sort().map((k) => `${k}=${overrides.value[k]}`),
   ])
 const run = useToolRun(sig)
+
+// G01/G09：接收来自其他工具的内存传递
+onMounted(() => {
+  const p = transfer.peek()
+  if (p && p.from !== 'json2java') {
+    input.value = p.text
+    execute()
+  }
+})
 
 function execute() {
   classErr.value = ''

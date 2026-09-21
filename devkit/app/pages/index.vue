@@ -106,6 +106,7 @@ function fmtTime(iso: string) {
           <DkIcon class="home__badge-icon" name="shield-check" :size="13" />
           本地处理 · 输入不上传
         </span>
+        <PwaInstallButton />
         <NuxtLink v-if="!firstVisit" to="/settings" class="home__head-link">
           <DkIcon name="settings" :size="13" />
           偏好设置

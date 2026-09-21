@@ -46,7 +46,13 @@ export default defineNuxtConfig({
   },
   nitro: {
     prerender: {
-      routes: ['/sitemap.xml']
+      // 处理流程的默认三条是固定 id，直接预渲染，刷新后依然能打开编排页
+      routes: [
+        '/sitemap.xml',
+        '/workflows/wf-order-snapshot',
+        '/workflows/wf-config-convert',
+        '/workflows/wf-response-check'
+      ]
     }
   },
   modules: ['@vite-pwa/nuxt'],
@@ -80,6 +86,8 @@ export default defineNuxtConfig({
       link: [
         { rel: 'icon', type: 'image/png', href: '/pwa-192.png' },
         { rel: 'apple-touch-icon', href: '/pwa-192.png' },
+        // S13：显式声明 manifest，浏览器才会给出安装入口（@vite-pwa/nuxt 的注入组件未被渲染）
+        { rel: 'manifest', href: '/manifest.webmanifest' }
       ],
       script: [
         {
@@ -91,7 +99,8 @@ export default defineNuxtConfig({
     }
   },
   pwa: {
-    registerType: 'autoUpdate',
+    // G10：新版本由用户决定何时生效（「稍后」/「立即更新」），因此用 prompt 而不是自动刷新
+    registerType: 'prompt',
     devOptions: { enabled: false },
     manifest: {
       name: 'DevKit',

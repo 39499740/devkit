@@ -19,7 +19,9 @@ def cats():
 
 
 ROUTES = (["/", "/favorites", "/recent", "/settings", "/privacy", "/help", "/offline",
-           "/tools/does-not-exist", "/category/nope", "/nope"]
+           "/workflows", "/workflows/wf-order-snapshot", "/workflows/wf-config-convert",
+           "/workflows/wf-response-check",
+           "/tools/does-not-exist", "/category/nope", "/nope", "/workflows/nope"]
           + ["/tools/" + s for s in slugs()]
           + ["/category/" + c for c in cats()])
 

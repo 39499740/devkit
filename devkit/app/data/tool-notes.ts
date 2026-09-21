@@ -7,6 +7,38 @@ export interface ToolNote {
 
 /** 工具页正文补充说明：让每个工具页有独立的、可被搜索引擎读取的文字内容，减少“薄页” */
 export const toolNotes: Record<string, ToolNote> = {
+  'sql-format': {
+    when: '从日志或 ORM 打印里捞出一整行 SQL 看不清结构时，粘进来先按方言格式化；要发到工单或群里时再压缩成一行。',
+    tips: [
+      '方言只影响注释语法（# 仅 MySQL 有效）、引用符建议与语法提示，不会改写你的 SQL 内容。',
+      '与保留字同名的标识符只会被提示（例如 MySQL 建议用反引号），格式化过程不替改标识符。',
+      '字符串、注释与数字原文按 token 保留，压缩模式会移除注释，注意别把带注释的调试 SQL 压丢了。'
+    ]
+  },
+  'xml-toolbox': {
+    when: '接口返回被压成一行的 XML 报文，或需要用 XPath 从 .xml 配置、图书目录这类文档里挑节点时。',
+    tips: [
+      '格式化、压缩、XML ↔ JSON 与 XPath 查询四种模式共用一份输入，切换模式不会丢内容。',
+      'XPath 走浏览器原生 XPath 1.0 引擎，支持命名空间前缀映射；前缀没声明会明确提示。',
+      'XML 转 JSON 时属性写成 @name、纯文本写成 #text，同名子节点自动合并为数组，便于继续用 JSON 工具处理。'
+    ]
+  },
+  'jsonpath-query': {
+    when: '接口返回一大坨 JSON，只需要其中几个字段，或者想确认某个过滤条件到底命中了哪些元素。',
+    tips: [
+      'JSONPath 支持子属性、下标、通配、递归下降、切片、联合与 [?(@.price < 100)] 过滤表达式。',
+      'JMESPath 支持字段、下标、切片、通配、扁平化、过滤、管道、多选与 sort_by / length / max 等常用函数。',
+      '结果会同时给出匹配路径列表，可以按路径复制，或用「发送到」把结果交给 JSON 转 Java、JSON Schema 继续处理。'
+    ]
+  },
+  'json-schema': {
+    when: '要为一类报文定义校验规则，或者拿到一份 JSON 却发现某几个字段类型不对、必填项缺失时。',
+    tips: [
+      '「从 JSON 生成 Schema」按样本推断类型，严格模式会补上 additionalProperties: false，不猜测取值范围。',
+      '校验一次收集全部错误，每条都给出 JSONPath 位置与 Schema 位置，方便直接定位到字段。',
+      '严格模式下 format（如 email）断言计入错误，关闭后只作为提示；两种模式都不会上传你的文档。'
+    ]
+  },
   'json-format': {
     when: '接口返回的 JSON 挤在一行看不清结构时，粘进来先格式化；要提交或入库前，再用压缩模式去掉多余空白。',
     tips: [

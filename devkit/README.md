@@ -16,9 +16,9 @@ npm run preview    # 预览构建产物
 
 ## 功能范围
 
-- **41 个工具**（T01–T41）：数据格式（JSON/YAML/CSV）、编码与文本（Base64/URL/Unicode/去重/命名/差异/正则）、摘要与加密（MD5/SHA/HMAC/AES/SM2/SM3/SM4 国密）、时间与标识（时间戳/UUID/Cron/日期差）、Java 开发（JSON 转 Java/转义/Properties/YAML/堆栈/Maven）、Web / Vue（TS 类型/SFC 模板/CSS 单位/颜色/SVG/格式化）、接口辅助（JWT/URL 参数/curl 转换/状态码）、文件与图片（摘要/图片压缩/二维码/编码转换/Base64）
-- **系统页**：首页、分类列表、全局搜索（⌘K 命令面板）、收藏、最近使用、偏好设置、隐私说明、帮助、404、离线状态
-- **共享交互**：结果待更新（stale）模式、文件处理反馈、剪贴板降级、跨工具内存传递、明暗主题、响应式（桌面/移动）
+- **45 个工具**（T01–T45）：数据格式（JSON/YAML/CSV/SQL 格式化/XML 工具箱与 XPath/JSONPath 与 JMESPath 查询/JSON Schema 生成与校验）、编码与文本（Base64/URL/Unicode/去重/命名/差异/正则）、摘要与加密（MD5/SHA/HMAC/AES/SM2/SM3/SM4 国密）、时间与标识（时间戳/UUID/Cron/日期差）、Java 开发（JSON 转 Java/转义/Properties/YAML/堆栈/Maven）、Web / Vue（TS 类型/SFC 模板/CSS 单位/颜色/SVG/格式化）、接口辅助（JWT/URL 参数/curl 转换/状态码）、文件与图片（摘要/图片压缩/二维码/编码转换/Base64）
+- **系统页**：首页、分类列表、全局搜索（⌘K 命令面板）、收藏、最近使用、处理流程（`/workflows` 列表 + `/workflows/[id]` 三栏编排与逐步运行）、偏好设置、隐私说明、帮助、404、离线状态
+- **共享交互**：结果待更新（stale）模式、文件处理反馈、剪贴板降级、跨工具内存传递（「发送到…」路由弹层，含加入处理流程）、PWA 安装引导与离线 / 新版本提示、明暗主题、响应式（桌面/移动）
 
 ## 设计原则
 
@@ -35,9 +35,9 @@ npm run preview    # 预览构建产物
 app/
   components/        # 共享 UI 组件（Dk* 前缀）与 tools/ 工具页组件
   composables/       # 偏好/收藏/最近/Toast/剪贴板/待更新模式等
-  utils/             # 字节转换、大整数安全 JSON 等
-  data/tools.ts      # 41 个工具注册表（路由/搜索/分类）
-  pages/             # 系统页 + tools/[slug] 动态工具页
+  utils/             # 字节转换、大整数安全 JSON、SQL / XML / JSONPath / JMESPath / JSON Schema / 流程引擎
+  data/tools.ts      # 45 个工具注册表（路由/搜索/分类）
+  pages/             # 系统页 + tools/[slug] 动态工具页 + workflows/ 处理流程页
 docs/                # 设计任务书与设计审查文档（父目录）
 ```
 

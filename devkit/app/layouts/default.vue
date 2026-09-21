@@ -68,6 +68,7 @@ onUnmounted(() => {
 
     <CommandPalette />
     <DkToastHost />
+    <PwaStatus />
   </div>
 </template>
 

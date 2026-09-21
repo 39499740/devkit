@@ -4,6 +4,7 @@ import { categories, tools, toolsOfCategory, toolCount } from '~/data/tools'
 const route = useRoute()
 const fav = useFavorites()
 const recent = useRecent()
+const workflows = useWorkflows()
 
 const collapsed = ref<Record<string, boolean>>({})
 
@@ -41,6 +42,16 @@ function isActiveCat(key: string) {
         <span class="grow"></span>
         <span class="sidenav__count">{{ recent.entries.value.length }}</span>
       </NuxtLink>
+      <NuxtLink
+        to="/workflows"
+        class="sidenav__item"
+        :class="{ 'sidenav__item--on': route.path.startsWith('/workflows') }"
+      >
+        <DkIcon name="workflow" :size="15" />
+        <span class="sidenav__label">处理流程</span>
+        <span class="grow"></span>
+        <span class="sidenav__count">{{ workflows.workflows.value.length }}</span>
+      </NuxtLink>
 
       <div class="sidenav__sep" role="separator"></div>
       <p class="sidenav__group-title">工具分类</p>
@@ -72,7 +83,7 @@ function isActiveCat(key: string) {
             :class="{ 'sidenav__subitem--on': currentSlug === t.slug }"
           >
             <span class="sidenav__marker"></span>
-            <span class="ellipsis">{{ t.name }}</span>
+            <span class="ellipsis">{{ t.short ?? t.name }}</span>
           </NuxtLink>
         </div>
       </div>

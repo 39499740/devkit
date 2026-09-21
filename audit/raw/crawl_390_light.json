@@ -7,9 +7,9 @@
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 4245,
-  "text": "全部工具\n\n41 个开发工具 · 8 个分类 · 解析、转换与加解密都在你的浏览器里完成\n\n本地处理 · 输入不上传\n首次访问\n⌘K / Ctrl K\n只检索工具目录，不检索已处理的输入内容\n收藏快捷\n0 / 41\n\n还没有收藏的工具。点击任意工具卡片右上角的星标，即可加入收藏。\n\n推荐工具\n首次访问暂无使用记录\nJSON 格式化\n最常用\nJSON 转 Java 类\nJava 工程\nBase64 编解码\n编码入门\n时间戳转换\n零参数\n数据格式\n4 个工具 · JSON、YAML、CSV 等结构化数据的格式化、校验与转换。\n查看全部 →\nJSON 格式化\n格式化、压缩并校验 JSON，支持缩进选择与树形视图。\nJSON 差异比较\n结构化比较两个 JSON，标注新增、删除与修改。\nJSON / YAML 转换\nJSON 与 YAML 双向转换，保留中文、布尔与数组。\nCSV / JSON 转换",
-  "empty": 2451,
+  "sh": 4650,
+  "text": "全部工具\n\n45 个开发工具 · 8 个分类 · 解析、转换与加解密都在你的浏览器里完成\n\n本地处理 · 输入不上传\n可安装为桌面应用\n安装 DevKit\n首次访问\n⌘K / Ctrl K\n只检索工具目录，不检索已处理的输入内容\n收藏快捷\n0 / 45\n\n还没有收藏的工具。点击任意工具卡片右上角的星标，即可加入收藏。\n\n推荐工具\n首次访问暂无使用记录\nJSON 格式化\n最常用\nJSON 转 Java 类\nJava 工程\nBase64 编解码\n编码入门\n时间戳转换\n零参数\n数据格式\n8 个工具 · JSON、YAML、CSV 等结构化数据的格式化、校验与转换。\n查看全部 →\nJSON 格式化\n格式化、压缩并校验 JSON，支持缩进选择与树形视图。\nJSON 差异比较\n结构化比较两个 JSON，标注新增、删除与修改。\nJSON / YAML 转换\nJSON 与 YAML 双向转换，保留中文、布",
+  "empty": 2789,
   "err_text": "",
   "overflowX": false
  },
@@ -17,13 +17,15 @@
   "route": "/favorites",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=983%2C983&et=3&ja=0&ln=en-us&lo=0&rnd=1921685573&si=46ab2beec5b808b1fc"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1019,
-  "text": "我的收藏\n\n收藏的工具入口与快捷打开方式；收藏只保存工具标识与收藏时间，不保存任何输入内容。\n\n本地处理\n已收藏 0\n排序\n最近收藏\n工具名称\n分类\n仅显示当前可用工具\n共 0 个收藏\n全部取消收藏\n\n还没有收藏任何工具\n\n在工具页点击右上角星标按钮即可收藏，收藏只保存工具标识与收藏时间。\n\n浏览全部工具\n\n也可以用顶部搜索直接进入工具，例如“国密”“时间戳”。\n\n收藏记录 · 本地存储\n共 0 个收藏\n使用说明\n1\n\n先浏览工具\n\n点击下方或顶部的搜索进入任意工具，首页也会列出全部分类。\n\n2\n\n收藏后回到这里\n\n收藏只在点击星标时发生，本页不会自动产生记录。\n\n常见问题\n\n为什么这里是空的？\n\n因为你还没有收藏任何工具；这是正常的首次访问状态，不是加载失败。\n\n收藏需要登录吗？\n\n不需要。收藏只保存在当前浏览器本地。",
-  "empty": 365,
+  "sh": 1067,
+  "text": "我的收藏\n\n收藏的工具入口与快捷打开方式；收藏只保存工具标识与收藏时间，不保存任何输入内容。\n\n本地处理\n已收藏 0\n排序\n最近收藏\n工具名称\n分类\n仅显示当前可用工具\n共 0 个收藏\n全部取消收藏\n\n还没有收藏任何工具\n\n在工具页点击右上角星标按钮即可收藏，收藏只保存工具标识与收藏时间。\n\n浏览全部工具\n\n也可以用顶部搜索直接进入工具，例如“国密”“时间戳”。\n\n收藏记录 · 本地存储\n共 0 个收藏\n使用说明\n1\n\n先浏览工具\n\n点击下方或顶部的搜索进入任意工具，首页也会列出全部分类。\n\n2\n\n收藏后回到这里\n\n收藏只在点击星标时发生，本页不会自动产生记录。\n\n常见问题\n\n为什么这里是空的？\n\n因为你还没有收藏任何工具；这是正常的首次访问状态，不是加载失败。\n\n收藏需要登录吗？\n\n不需要。收藏只保存在当前浏览器本地。\n\n© 2026 DevKit\n·\n鲁ICP备19015025号-2\n",
+  "empty": 413,
   "err_text": "",
   "overflowX": false
  },
@@ -31,13 +33,15 @@
   "route": "/recent",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=1006%2C1006&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1746479879&si=46"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 987,
-  "text": "最近使用\n\n只记录工具名称与访问时间；不保存输入正文、密钥、Token 或文件名。\n\n本地处理\n收藏\n只记录工具名与访问时间\n分组\n按时间\n按分类\n共 0 条记录\n清空全部记录\n\n暂无访问记录\n\n打开任意工具后，这里会记录工具名称与访问时间。\n\n浏览全部工具\n\n也可以在“偏好设置”里关闭“记录最近使用”。\n\n最近使用 · 本地存储\n0 条记录\n使用说明\n1\n\n打开一个工具\n\n从首页、搜索或收藏进入任意工具，就会产生一条记录。\n\n2\n\n想关掉记录？\n\n在“偏好设置 → 记录最近使用”关闭后，本页会一直保持为空。\n\n常见问题\n\n这里为空是加载失败吗？\n\n不是。这是还没有访问记录的正常状态，页面不显示错误提示。\n\n关闭记录后已存在的记录会怎样？\n\n关闭只停止新增；已有记录仍然保留，需要手动清空。",
-  "empty": 349,
+  "sh": 1034,
+  "text": "最近使用\n\n只记录工具名称与访问时间；不保存输入正文、密钥、Token 或文件名。\n\n本地处理\n收藏\n只记录工具名与访问时间\n分组\n按时间\n按分类\n共 0 条记录\n清空全部记录\n\n暂无访问记录\n\n打开任意工具后，这里会记录工具名称与访问时间。\n\n浏览全部工具\n\n也可以在“偏好设置”里关闭“记录最近使用”。\n\n最近使用 · 本地存储\n0 条记录\n使用说明\n1\n\n打开一个工具\n\n从首页、搜索或收藏进入任意工具，就会产生一条记录。\n\n2\n\n想关掉记录？\n\n在“偏好设置 → 记录最近使用”关闭后，本页会一直保持为空。\n\n常见问题\n\n这里为空是加载失败吗？\n\n不是。这是还没有访问记录的正常状态，页面不显示错误提示。\n\n关闭记录后已存在的记录会怎样？\n\n关闭只停止新增；已有记录仍然保留，需要手动清空。\n\n© 2026 DevKit\n·\n鲁ICP备19015025号-2\n·\n开源仓库\n·\n隐私说明",
+  "empty": 397,
   "err_text": "",
   "overflowX": false
  },
@@ -45,13 +49,15 @@
   "route": "/settings",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=988%2C988&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=957582299&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1766,
-  "text": "偏好设置\n\n偏好只保存在当前浏览器本地；输入内容、密钥与 Token 不会被保存。\n\n本地处理\n偏好设置\n偏好保存在此浏览器 · 修改即写入本地\n外观\n主题\n浅色、深色或跟随系统；切换后立即生效并写入本地偏好。\n浅色\n深色\n跟随系统\n编辑器\n代码字号\n只影响输入与结果区的代码文字，界面与正文文字不变。\n12 px\n13 px\n14 px\n默认缩进\nJSON、HTML、CSS 等格式化工具的默认缩进方式。\n2 空格\n4 空格\nTab\n编辑器自动换行\n关闭时长行横向滚动，不裁剪内容；开启后按面板宽度折行。\n动效与记录\n减少动画\n关闭过渡与进度动画，保留状态文字与颜色提示。\n记录最近使用\n只记录工具名称与访问时间，不记录输入内容。\n本地数据\n重置偏好\n恢复默认主题、字号、缩进、自动换行与动效设置；不影响收藏与访问记录。\n重置\n清除本地数据\n可选择清除偏好、收藏与访问记录；输入内容与密钥从不保存，",
-  "empty": 626,
+  "sh": 1951,
+  "text": "偏好设置\n\n偏好只保存在当前浏览器本地；输入内容、密钥与 Token 不会被保存。\n\n本地处理\n偏好设置\n偏好保存在此浏览器 · 修改即写入本地\n外观\n主题\n浅色、深色或跟随系统；切换后立即生效并写入本地偏好。\n浅色\n深色\n跟随系统\n编辑器\n代码字号\n只影响输入与结果区的代码文字，界面与正文文字不变。\n12 px\n13 px\n14 px\n默认缩进\nJSON、HTML、CSS 等格式化工具的默认缩进方式。\n2 空格\n4 空格\nTab\n编辑器自动换行\n关闭时长行横向滚动，不裁剪内容；开启后按面板宽度折行。\n动效与记录\n减少动画\n关闭过渡与进度动画，保留状态文字与颜色提示。\n记录最近使用\n只记录工具名称与访问时间，不记录输入内容。\n匿名访问统计\n只让统计脚本知道访问了哪个页面与来源，用于统计 PV 与各页面使用情况；不含输入、密钥、Token 与文件内容。关闭后不再加载统计脚本。\n本地数据\n重置",
+  "empty": 755,
   "err_text": "",
   "overflowX": false
  },
@@ -59,13 +65,15 @@
   "route": "/privacy",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=1038%2C1038&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1606044777&si=46"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 2125,
-  "text": "本地处理与隐私\n\n了解 DevKit 在浏览器内如何处理你的输入、偏好与文件。\n\n本地处理\n浏览器本地计算\n默认\n\n输入、转换、摘要、加解密全部在你的浏览器中执行，页面不会把内容发送到服务器。\n\n静态资源仍需加载\n\n首次打开仍需从网络加载页面、字体与脚本；加载完成后，已缓存工具即可离线使用。\n\n不提供云端历史\n\n没有账号、没有云端同步，也没有服务端记录。刷新或关闭页面后，输入内容即消失。\n\n数据流向\n全程不离开你的设备\n\n你的输入\n\n键盘粘贴或本机文件\n\n浏览器内处理\n\nWeb Crypto / 本地解析\n\n结果与导出\n\n复制或保存到本机\n\n会保存在本地的内容\n界面偏好\n主题、代码字号、缩进、自动换行\n最近使用记录\n仅工具名称与访问时间\n收藏\n工具标识与收藏时间，不含输入\n可关闭项\n以上均可在偏好设置中清空\n不会保存的内容\n输入正文\n不含编辑器内容\n密钥与 IV\n不写入本地存储\nToken",
-  "empty": 734,
+  "sh": 2467,
+  "text": "本地处理与隐私\n\n了解 DevKit 在浏览器内如何处理你的输入、偏好与文件。\n\n本地处理\n浏览器本地计算\n默认\n\n输入、转换、摘要、加解密全部在你的浏览器中执行，页面不会把内容发送到服务器。\n\n静态资源仍需加载\n\n首次打开仍需从网络加载页面、字体与脚本；加载完成后，已缓存工具即可离线使用。\n\n不提供云端历史\n\n没有账号、没有云端同步；工具输入只会留在当前页面，刷新即消失。除匿名页面访问量外，服务端不记录任何工具输入。\n\n数据流向\n全程不离开你的设备\n\n你的输入\n\n键盘粘贴或本机文件\n\n浏览器内处理\n\nWeb Crypto / 本地解析\n\n结果与导出\n\n复制或保存到本机\n\n会保存在本地的内容\n界面偏好\n主题、代码字号、缩进、自动换行\n最近使用记录\n仅工具名称与访问时间\n收藏\n工具标识与收藏时间，不含输入\n可关闭项\n以上均可在偏好设置中清空\n不会保存的内容\n输入正文\n不含编辑器内容\n密钥与 ",
+  "empty": 1042,
   "err_text": "",
   "overflowX": false
  },
@@ -73,13 +81,15 @@
   "route": "/help",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=965%2C965&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1143987329&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 3021,
+  "sh": 2290,
   "text": "帮助与快捷键\n\n工具检索、文件导入、复制下载、字符与字节口径，以及结果状态说明。\n\n本地处理\n检索工具\n\n支持中文名、英文名、缩写与别名（如“国密”“b64”“时间戳”）。结果按分类分组，↑↓ 选择、Enter 打开。\n\n打开搜索（Ctrl / ⌘ K）\n导入文件\n\n从本机选择或拖入文件，读取与处理都在浏览器内完成；过程中可取消，失败时保留原文件供重试。\n\n打开文件摘要\n复制与下载\n\n复制内容不包含行号、地址偏移与语法提示；需要真实换行的文本保留原文换行。\n\n打开 Base64 工具\n参数与编码\n\n改编码或模式会改变字节结果，因此参数变化后旧输出会标记为“待更新”，需重新执行。\n\n打开 HMAC 工具\n快捷键对照\n同时给出 Windows / Linux 与 macOS 写法；macOS 快捷键不是唯一操作方式\n操作\tWindows / Linux\tmacOS\n打开全局搜索\tCtrl + ",
-  "empty": 989,
+  "empty": 1050,
   "err_text": "",
   "overflowX": false
  },
@@ -87,13 +97,79 @@
   "route": "/offline",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=971%2C971&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=78895375&si=46ab2b"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 844,
-  "text": "离线缓存尚未注册\n\n当前页面没有检测到已注册的 Service Worker。开发服务器默认不注册；生产构建首次加载后会自动注册，刷新一次即可接管。\n\nService Worker 未注册\n未检测到注册记录，离线时页面能否打开取决于浏览器自身的缓存，不保证可用。\nService Worker：未注册\n当前页面接管：否\n预缓存条目：0\nCache Storage：0 个缓存\n重新检测\n返回首页\n当前可离线使用范围\n\nService Worker 尚未接管当前页面，因此没有任何页面被确认预缓存。恢复网络并刷新一次后，DevKit 会注册并接管，届时这里会列出真实的可离线工具。",
-  "empty": 289,
+  "sh": 2960,
+  "text": "离线缓存已接管\n\nService Worker 已接管本页面，已缓存的资源与页面可在断网时继续打开。\n\n离线缓存已就绪\n已预缓存 308 项脚本、样式与图标；字体与其它资源在首次显示时按需缓存，已访问过的页面导航也保存在本机。未缓存的页面仍需联网一次。\nService Worker：已注册（activated）\n当前页面接管：是\n预缓存条目：308\nCache Storage：3 个缓存\n重新检测\n返回首页\n已缓存 · 可离线打开（0）\n\n缓存中没有已访问的工具页面。在线打开一次工具后，页面导航会被保存到本机，随后可离线打开。\n\n未缓存 · 需要联网（45）\n\n这些工具尚未访问或未进入本机缓存，离线时无法加载。在线打开一次后即可加入上方缓存。\n\nJSON 格式化\n需联网\nJSON 差异比较\n需联网\nJSON / YAML 转换\n需联网\nCSV / JSON 转换\n需联网\nSQL 格式化\n需",
+  "empty": 1142,
+  "err_text": "",
+  "overflowX": false
+ },
+ {
+  "route": "/workflows",
+  "console": [],
+  "pageerrors": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=1029%2C1029&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1115212031&si=46"
+  ],
+  "status": 200,
+  "sw": 390,
+  "vw": 390,
+  "sh": 1655,
+  "text": "处理流程\n\n把多个本地工具串成一条流水线，数据只在本次页面内存中传递\n\n本地处理 · 输入不上传\n3 个流程 · 全部在浏览器内执行\n不保存输入\n导入流程\n新建处理流程\n订单快照解析\n4 步\n\n把 Base64 订单快照解码后转成 Java 实体类\n\n1\nBase64 解码\n2\nJSON 格式化\n3\nJSONPath 提取\n4\nJSON 转 Java\n尚未运行\n运行\n编排\n配置格式互转\n3 步\n\n把 JSON 配置格式化后转成 YAML\n\n1\nJSON 格式化\n2\nJSON / YAML 转换\n3\n下载结果\n尚未运行\n运行\n编排\n接口响应校验\n3 步\n\nURL 解码响应体，格式化后按 Schema 校验\n\n1\nURL 解码\n2\nJSON 格式化\n3\nJSON Schema 校验\n尚未运行\n运行\n编排\n最近运行\n记录仅存于本机内存\n清空记录\n\n还没有运行记录。点击任意流程的「运行」，或在编排",
+  "empty": 608,
+  "err_text": "",
+  "overflowX": false
+ },
+ {
+  "route": "/workflows/wf-order-snapshot",
+  "console": [],
+  "pageerrors": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=954%2C954&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1600288514&si=46ab"
+  ],
+  "status": 200,
+  "sw": 390,
+  "vw": 390,
+  "sh": 2320,
+  "text": "编排与运行\n\n订单快照解析 · 4 个节点 · 可单步运行并查看每一步的输出\n\n流程列表\n本地处理 · 输入不上传\n数据仅在本次页面内存中传递，离开即清除\n不写入磁盘 · 不发送到服务器\n导出流程 JSON\n已完成 0 / 4 节点\n本次页面还没有运行记录\n运行全部\n单步运行\n清空输入\n流程输入\n尚未提供输入\n可以手动粘贴，也可以从其他工具「发送到 → 加入处理流程」传入\n1\n字符 0\n字节 0\n行 0\n步骤库\n8\nBase64 解码\n编码与文本\n已添加\nJSON 格式化\n数据格式\n已添加\nJSONPath 提取\n数据格式\n已添加\nJSON 转 Java\nJava 开发\n已添加\nJSON Schema 校验\n数据格式\nURL 解码\n编码与文本\nJSON / YAML 转换\n数据格式\n下载结果\n文件与图片\n流程设置\n失败时中断流程\n运行后自动清空输入\n添加自定义步骤\n步骤链\n4 个待运行\n流",
+  "empty": 778,
+  "err_text": "",
+  "overflowX": false
+ },
+ {
+  "route": "/workflows/wf-config-convert",
+  "console": [],
+  "pageerrors": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=954%2C953&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=2081465263&si=46ab"
+  ],
+  "status": 200,
+  "sw": 390,
+  "vw": 390,
+  "sh": 2237,
+  "text": "编排与运行\n\n配置格式互转 · 3 个节点 · 可单步运行并查看每一步的输出\n\n流程列表\n本地处理 · 输入不上传\n数据仅在本次页面内存中传递，离开即清除\n不写入磁盘 · 不发送到服务器\n导出流程 JSON\n已完成 0 / 3 节点\n本次页面还没有运行记录\n运行全部\n单步运行\n清空输入\n流程输入\n尚未提供输入\n可以手动粘贴，也可以从其他工具「发送到 → 加入处理流程」传入\n1\n字符 0\n字节 0\n行 0\n步骤库\n8\nBase64 解码\n编码与文本\nJSON 格式化\n数据格式\n已添加\nJSONPath 提取\n数据格式\nJSON 转 Java\nJava 开发\nJSON Schema 校验\n数据格式\nURL 解码\n编码与文本\nJSON / YAML 转换\n数据格式\n已添加\n下载结果\n文件与图片\n已添加\n流程设置\n失败时中断流程\n运行后自动清空输入\n添加自定义步骤\n步骤链\n3 个待运行\n流程输入\n",
+  "empty": 741,
+  "err_text": "",
+  "overflowX": false
+ },
+ {
+  "route": "/workflows/wf-response-check",
+  "console": [],
+  "pageerrors": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=1275%2C1275&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=943490189&si=46a"
+  ],
+  "status": 200,
+  "sw": 390,
+  "vw": 390,
+  "sh": 2257,
+  "text": "编排与运行\n\n接口响应校验 · 3 个节点 · 可单步运行并查看每一步的输出\n\n流程列表\n本地处理 · 输入不上传\n数据仅在本次页面内存中传递，离开即清除\n不写入磁盘 · 不发送到服务器\n导出流程 JSON\n已完成 0 / 3 节点\n本次页面还没有运行记录\n运行全部\n单步运行\n清空输入\n流程输入\n尚未提供输入\n可以手动粘贴，也可以从其他工具「发送到 → 加入处理流程」传入\n1\n字符 0\n字节 0\n行 0\n步骤库\n8\nBase64 解码\n编码与文本\nJSON 格式化\n数据格式\n已添加\nJSONPath 提取\n数据格式\nJSON 转 Java\nJava 开发\nJSON Schema 校验\n数据格式\n已添加\nURL 解码\n编码与文本\n已添加\nJSON / YAML 转换\n数据格式\n下载结果\n文件与图片\n流程设置\n失败时中断流程\n运行后自动清空输入\n添加自定义步骤\n步骤链\n3 个待运行\n流程输入\n",
+  "empty": 812,
   "err_text": "",
   "overflowX": false
  },
@@ -101,16 +177,18 @@
   "route": "/tools/does-not-exist",
   "console": [
    "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
-   "warning: An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing."
+   "warning: [h3] Please prefer using `message` for longer error messages instead of `statusMessage`. In the future, `statusMessage` will be sanitized by default."
   ],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=996%2C996&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1536366319&si=46ab"
+  ],
   "status": 404,
   "sw": 390,
   "vw": 390,
-  "sh": 844,
-  "text": "工具不存在或链接已失效\n\n链接可能已失效，或该工具尚未发布。\n\n本地处理\n\nHTTP 404\n\n找不到这个工具\n\n这个地址没有匹配到 DevKit 的 41 个工具。请检查链接是否完整，也可以改用搜索或左侧分类浏览。\n\n搜索工具名称、缩写或别名…\nCtrl/⌘ K\n返回首页\n浏览全部工具\n常用：\nJSON 格式化\nBase64 编解码\nSM4 加解密\n时间戳转换\n仍然找不到？\n\n在首页搜索框输入工具名、英文名或缩写；也可以从左侧分类逐级浏览，或在“最近使用”里找回上次打开的工具。\n\n返回首页\n打开全局搜索\n隐私说明",
-  "empty": 260,
+  "sh": 861,
+  "text": "工具不存在或链接已失效\n\n链接可能已失效，或该工具尚未发布。\n\n本地处理\n\nHTTP 404\n\n找不到这个工具\n\n这个地址没有匹配到 DevKit 的 45 个工具。请检查链接是否完整，也可以改用搜索或左侧分类浏览。\n\n搜索工具名称、缩写或别名…\nCtrl/⌘ K\n返回首页\n浏览全部工具\n常用：\nJSON 格式化\nBase64 编解码\nSM4 加解密\n时间戳转换\n仍然找不到？\n\n在首页搜索框输入工具名、英文名或缩写；也可以从左侧分类逐级浏览，或在“最近使用”里找回上次打开的工具。\n\n返回首页\n打开全局搜索\n隐私说明\n© 2026 DevKit\n·\n鲁ICP备19015025号-2\n·\n开源仓库\n·\n隐私说明",
+  "empty": 307,
   "err_text": "",
   "overflowX": false
  },
@@ -118,37 +196,56 @@
   "route": "/category/nope",
   "console": [
    "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
-   "warning: An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing."
+   "warning: [h3] Please prefer using `message` for longer error messages instead of `statusMessage`. In the future, `statusMessage` will be sanitized by default."
   ],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=963%2C963&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=2043453333&si=46ab"
+  ],
   "status": 404,
   "sw": 390,
   "vw": 390,
-  "sh": 844,
-  "text": "工具不存在或链接已失效\n\n链接可能已失效，或该工具尚未发布。\n\n本地处理\n\nHTTP 404\n\n找不到这个工具\n\n这个地址没有匹配到 DevKit 的 41 个工具。请检查链接是否完整，也可以改用搜索或左侧分类浏览。\n\n搜索工具名称、缩写或别名…\nCtrl/⌘ K\n返回首页\n浏览全部工具\n常用：\nJSON 格式化\nBase64 编解码\nSM4 加解密\n时间戳转换\n仍然找不到？\n\n在首页搜索框输入工具名、英文名或缩写；也可以从左侧分类逐级浏览，或在“最近使用”里找回上次打开的工具。\n\n返回首页\n打开全局搜索\n隐私说明",
-  "empty": 260,
+  "sh": 861,
+  "text": "工具不存在或链接已失效\n\n链接可能已失效，或该工具尚未发布。\n\n本地处理\n\nHTTP 404\n\n找不到这个工具\n\n这个地址没有匹配到 DevKit 的 45 个工具。请检查链接是否完整，也可以改用搜索或左侧分类浏览。\n\n搜索工具名称、缩写或别名…\nCtrl/⌘ K\n返回首页\n浏览全部工具\n常用：\nJSON 格式化\nBase64 编解码\nSM4 加解密\n时间戳转换\n仍然找不到？\n\n在首页搜索框输入工具名、英文名或缩写；也可以从左侧分类逐级浏览，或在“最近使用”里找回上次打开的工具。\n\n返回首页\n打开全局搜索\n隐私说明\n© 2026 DevKit\n·\n鲁ICP备19015025号-2\n·\n开源仓库\n·\n隐私说明",
+  "empty": 307,
   "err_text": "",
   "overflowX": false
  },
  {
   "route": "/nope",
   "console": [
-   "error: Failed to load resource: the server responded with a status of 404 (Page not found: /nope)",
-   "warning: [Vue Router warn]: No match found for location with path \"/nope\"",
-   "warning: %cssr:warn%c [Vue Router warn]: No match found for location with path \"/nope\" \n      background: #f39c12;\n      border-radius: 0.5em;\n      color: white;\n      font-weight: bold;\n      padding: 2px 0.5em;\n      \n  at warn$1 (node_modules/vue-router/dist/devtools-EWN81iOl.mjs)\n  at resolve (node_modu",
-   "warning: %cssr:warn%c [Vue Router warn]: No match found for location with path \"/nope\" \n      background: #f39c12;\n      border-radius: 0.5em;\n      color: white;\n      font-weight: bold;\n      padding: 2px 0.5em;\n      \n  at warn$1 (node_modules/vue-router/dist/devtools-EWN81iOl.mjs)\n  at resolve (node_modu",
-   "warning: [Vue Router warn]: No match found for location with path \"/nope\"",
-   "warning: An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing."
+   "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "error: [NUXT_E1005]"
   ],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=979%2C979&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=2145311685&si=46ab"
+  ],
   "status": 404,
   "sw": 390,
   "vw": 390,
-  "sh": 844,
-  "text": "工具不存在或链接已失效\n\n链接可能已失效，或该工具尚未发布。\n\n本地处理\n\nHTTP 404\n\n找不到这个工具\n\n这个地址没有匹配到 DevKit 的 41 个工具。请检查链接是否完整，也可以改用搜索或左侧分类浏览。\n\n搜索工具名称、缩写或别名…\nCtrl/⌘ K\n返回首页\n浏览全部工具\n常用：\nJSON 格式化\nBase64 编解码\nSM4 加解密\n时间戳转换\n仍然找不到？\n\n在首页搜索框输入工具名、英文名或缩写；也可以从左侧分类逐级浏览，或在“最近使用”里找回上次打开的工具。\n\n返回首页\n打开全局搜索\n隐私说明",
-  "empty": 260,
+  "sh": 861,
+  "text": "工具不存在或链接已失效\n\n链接可能已失效，或该工具尚未发布。\n\n本地处理\n\nHTTP 404\n\n找不到这个工具\n\n这个地址没有匹配到 DevKit 的 45 个工具。请检查链接是否完整，也可以改用搜索或左侧分类浏览。\n\n搜索工具名称、缩写或别名…\nCtrl/⌘ K\n返回首页\n浏览全部工具\n常用：\nJSON 格式化\nBase64 编解码\nSM4 加解密\n时间戳转换\n仍然找不到？\n\n在首页搜索框输入工具名、英文名或缩写；也可以从左侧分类逐级浏览，或在“最近使用”里找回上次打开的工具。\n\n返回首页\n打开全局搜索\n隐私说明\n© 2026 DevKit\n·\n鲁ICP备19015025号-2\n·\n开源仓库\n·\n隐私说明",
+  "empty": 307,
+  "err_text": "",
+  "overflowX": false
+ },
+ {
+  "route": "/workflows/nope",
+  "console": [
+   "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "warning: [h3] Please prefer using `message` for longer error messages instead of `statusMessage`. In the future, `statusMessage` will be sanitized by default."
+  ],
+  "pageerrors": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=975%2C975&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=593038965&si=46ab2"
+  ],
+  "status": 404,
+  "sw": 390,
+  "vw": 390,
+  "sh": 861,
+  "text": "工具不存在或链接已失效\n\n链接可能已失效，或该工具尚未发布。\n\n本地处理\n\nHTTP 404\n\n找不到这个工具\n\n这个地址没有匹配到 DevKit 的 45 个工具。请检查链接是否完整，也可以改用搜索或左侧分类浏览。\n\n搜索工具名称、缩写或别名…\nCtrl/⌘ K\n返回首页\n浏览全部工具\n常用：\nJSON 格式化\nBase64 编解码\nSM4 加解密\n时间戳转换\n仍然找不到？\n\n在首页搜索框输入工具名、英文名或缩写；也可以从左侧分类逐级浏览，或在“最近使用”里找回上次打开的工具。\n\n返回首页\n打开全局搜索\n隐私说明\n© 2026 DevKit\n·\n鲁ICP备19015025号-2\n·\n开源仓库\n·\n隐私说明",
+  "empty": 307,
   "err_text": "",
   "overflowX": false
  },
@@ -156,13 +253,15 @@
   "route": "/tools/json-format",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=954%2C954&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=2017323934&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1273,
-  "text": "JSON 格式化\n\n格式化、压缩并校验 JSON，支持缩进选择与树形视图。\n\n本地处理 · 输入不出浏览器\n收藏\n格式化\n压缩\n缩进\n2 空格\n4 空格\nTab\n视图\n代码\n树形\n载入示例\n格式化\n⌘/Ctrl + Enter 执行\n未执行\nJSON 输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n结果\n复制\n下载\n1\n字符 0\n字节 0\n行 0",
-  "empty": 178,
+  "sh": 1843,
+  "text": "JSON 格式化\n\n格式化、压缩并校验 JSON，支持缩进选择与树形视图。\n\n在线可用 · 输入不出浏览器\n收藏\n格式化\n压缩\n缩进\n2 空格\n4 空格\nTab\n视图\n代码\n树形\n载入示例\n格式化\n⌘/Ctrl + Enter 执行\n未执行\nJSON 输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n结果\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n什么时候用「JSON 格式化」\n\n接口返回的 JSON 挤在一行看不清结构时，粘进来先格式化；要提交或入库前，再用压缩模式去掉多余空白。\n\n使用要点\n粘贴即格式化，缩进可选 2 / 4 空格或 Tab，大对象可折叠成树形逐层查看。\n超出 IEEE 754 安全范围的整数不会被改写精度，适合含雪花 ID 的报文。\n校验失败会指出出错位置，不会自动“修正”你的数据。\n相关工具\nJSON 差异比较\nJSON / YAML 转换\nCSV / JS",
+  "empty": 546,
   "err_text": "",
   "overflowX": false
  },
@@ -170,13 +269,15 @@
   "route": "/tools/json-diff",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=950%2C950&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=693235509&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1089,
-  "text": "JSON 差异比较\n\n结构化比较两个 JSON，标注新增、删除与修改。\n\n本地处理 · 输入不出浏览器\n收藏\n忽略对象键顺序\n忽略数组顺序\n载入示例\n复制报告\n下一处差异\n比较差异\n⌘/Ctrl + Enter 执行\n未执行\nJSON A（左侧）\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nJSON B（右侧）\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n比较后将在此列出差异（路径、类型与值的变化），点击「下一处差异」可循环定位。",
-  "empty": 223,
+  "sh": 1658,
+  "text": "JSON 差异比较\n\n结构化比较两个 JSON，标注新增、删除与修改。\n\n在线可用 · 输入不出浏览器\n收藏\n忽略对象键顺序\n忽略数组顺序\n载入示例\n复制报告\n下一处差异\n比较差异\n⌘/Ctrl + Enter 执行\n未执行\nJSON A（左侧）\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nJSON B（右侧）\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n比较后将在此列出差异（路径、类型与值的变化），点击「下一处差异」可循环定位。\n什么时候用「JSON 差异比较」\n\n对比两版接口返回值、两份配置或前后快照，需要知道具体哪几个字段变了。\n\n使用要点\n按结构比较而非按文本行比较，字段顺序变化不会被误报成差异。\n新增、删除与修改分别标注，可直接定位到具体键。\n两个 JSON 都只在本地解析，适合比较含内部信息的报文。\n相关工具\nJSON 格式化\nJSON / YAML 转换\nCSV ",
+  "empty": 551,
   "err_text": "",
   "overflowX": false
  },
@@ -184,13 +285,15 @@
   "route": "/tools/json-yaml",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=958%2C958&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1384857322&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1620,
-  "text": "JSON / YAML 转换\n\nJSON 与 YAML 双向转换，保留中文、布尔与数组。\n\n本地处理 · 输入不出浏览器\n收藏\nJSON → YAML\nYAML → JSON\n缩进\n2 空格\n4 空格\n载入示例\n不兼容示例\n输出转输入\n转换\n⌘/Ctrl + Enter 执行\n未执行\njs-yaml · 不折行\nJSON 输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nYAML 结果\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n转换规则与限制\nYAML 解析使用 JSON_SCHEMA：只识别 null / 布尔 / 数字 / 字符串，2024-01-01 等日期保持字符串；007 等不是 JSON 数字字面量的标量按原文保留为字符串，超出 JS 安全范围的整数 / 小数按原文输出，均不再静默改写（加引号可确保任意标量保持字符串）。\n无法无损映射的情况会直接报错而非静默转换：非字符",
-  "empty": 550,
+  "sh": 2114,
+  "text": "JSON / YAML 转换\n\nJSON 与 YAML 双向转换，保留中文、布尔与数组。\n\n在线可用 · 输入不出浏览器\n收藏\nJSON → YAML\nYAML → JSON\n缩进\n2 空格\n4 空格\n载入示例\n不兼容示例\n输出转输入\n转换\n⌘/Ctrl + Enter 执行\n未执行\njs-yaml · 不折行\nJSON 输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nYAML 结果\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n转换规则与限制\nYAML 解析使用 JSON_SCHEMA：只识别 null / 布尔 / 数字 / 字符串，2024-01-01 等日期保持字符串；007 等不是 JSON 数字字面量的标量按原文保留为字符串，超出 JS 安全范围的整数 / 小数按原文输出，均不再静默改写（加引号可确保任意标量保持字符串）。\n无法无损映射的情况会直接报错而非静默转换：非字符",
+  "empty": 886,
   "err_text": "",
   "overflowX": false
  },
@@ -198,13 +301,79 @@
   "route": "/tools/csv-json",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=961%2C961&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1899307532&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1385,
-  "text": "CSV / JSON 转换\n\nCSV 与 JSON 互转，支持分隔符、表头与引号规则。\n\n本地处理 · 输入不出浏览器\n收藏\nCSV → JSON\nJSON → CSV\n分隔符\n逗号 ,\n分号 ;\n制表符 Tab\n表头首行\n类型推断\n载入示例\n转换\n⌘/Ctrl + Enter 执行\n未执行\nRFC 4180 · 全字符串\nCSV 输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nJSON 结果\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n转换规则与限制\nCSV 解析遵循 RFC 4180：支持引号内的分隔符与换行、\"\" 转义为单个引号；空行跳过；未闭合引号会给出警告并按字面保留。\nCSV → JSON 默认所有单元格为字符串（保留 007 等前导零）；开启「类型推断」后推断 true/false/null 与数字，前导零仍保持字符串。列数与表头不一致的行保留并在警告中列出。\nJSO",
-  "empty": 524,
+  "sh": 1933,
+  "text": "CSV / JSON 转换\n\nCSV 与 JSON 互转，支持分隔符、表头与引号规则。\n\n在线可用 · 输入不出浏览器\n收藏\nCSV → JSON\nJSON → CSV\n分隔符\n逗号 ,\n分号 ;\n制表符 Tab\n表头首行\n类型推断\n载入示例\n转换\n⌘/Ctrl + Enter 执行\n未执行\nRFC 4180 · 全字符串\nCSV 输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nJSON 结果\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n转换规则与限制\nCSV 解析遵循 RFC 4180：支持引号内的分隔符与换行、\"\" 转义为单个引号；空行跳过；未闭合引号会给出警告并按字面保留。\nCSV → JSON 默认所有单元格为字符串（保留 007 等前导零）；开启「类型推断」后推断 true/false/null 与数字，前导零仍保持字符串。列数与表头不一致的行保留并在警告中列出。\nJSO",
+  "empty": 867,
+  "err_text": "",
+  "overflowX": false
+ },
+ {
+  "route": "/tools/sql-format",
+  "console": [],
+  "pageerrors": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=972%2C972&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=21926768&si=46ab2b"
+  ],
+  "status": 200,
+  "sw": 390,
+  "vw": 390,
+  "sh": 1881,
+  "text": "SQL 格式化\n\n格式化、压缩与美化 SQL · 支持 MySQL / PostgreSQL / SQLite 方言\n\n在线可用 · 输入不出浏览器\n收藏\n方言\nMySQL\nPostgreSQL\nSQLite\n缩进\n2\n4\n关键字大写\n`反引号`\n粘贴\n载入示例\n格式化\n压缩\n复制\n下载\n未执行\n0 行\n0 字符\nSQL 输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n格式化结果 · SQL\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n什么时候用「SQL 格式化」\n\n从日志或 ORM 打印里捞出一整行 SQL 看不清结构时，粘进来先按方言格式化；要发到工单或群里时再压缩成一行。\n\n使用要点\n方言只影响注释语法（# 仅 MySQL 有效）、引用符建议与语法提示，不会改写你的 SQL 内容。\n与保留字同名的标识符只会被提示（例如 MySQL 建议用反引号），格式化过程不替改标识符。\n字",
+  "empty": 635,
+  "err_text": "",
+  "overflowX": false
+ },
+ {
+  "route": "/tools/xml-toolbox",
+  "console": [],
+  "pageerrors": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=965%2C965&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=709861728&si=46ab2"
+  ],
+  "status": 200,
+  "sw": 390,
+  "vw": 390,
+  "sh": 1890,
+  "text": "XML 工具箱\n\n格式化、压缩、XML ↔ JSON 转换与 XPath 查询\n\n在线可用 · 输入不出浏览器\n收藏\n格式化\n压缩\nXML ↔ JSON\nXPath\n启用命名空间\n查询\n复制\n粘贴\n载入示例\n未执行\nXML 输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nXPath 查询\n导出结果\n复制路径\nXPath 表达式\nXPath 1.0\n查询\n示例\n//catalog/book/title\n//book[@category='tech']\n//book/price\n匹配节点\n节点路径\n\n还没有匹配结果，输入表达式后点击「查询」。\n\n匹配定位\n高亮 0 处匹配\n什么时候用「XML 工具箱」\n\n接口返回被压成一行的 XML 报文，或需要用 XPath 从 .xml 配置、图书目录这类文档里挑节点时。\n\n使用要点\n格式化、压缩、XML ↔ JSON 与 XPath 查询四种模式",
+  "empty": 716,
+  "err_text": "",
+  "overflowX": false
+ },
+ {
+  "route": "/tools/jsonpath-query",
+  "console": [],
+  "pageerrors": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=955%2C955&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=312670492&si=46ab2"
+  ],
+  "status": 200,
+  "sw": 390,
+  "vw": 390,
+  "sh": 1996,
+  "text": "JSONPath / JMESPath 查询\n\n用 JSONPath 或 JMESPath 从 JSON 中提取数据，并导出匹配路径\n\n在线可用 · 输入不出浏览器\n收藏\nJSONPath\nJMESPath\n运行\n复制结果\nJSON 转 Java\nJSON Schema\n示例\n$.store.book[?(@.price < 100)].title\n$.store.book[*].title\n$..price\n$.store.book[-1].title\n粘贴\n载入示例\n未执行\nJSON 输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n查询结果\n复制结果\n导出\n结果 JSON\n尚未运行\n1\n字符 0\n字节 0\n行 0\n匹配路径\n按文档顺序 · 共 0 项\n\n还没有匹配结果。\n\nJSONPath · UTF-8\n本地执行\n什么时候用「JSONPath / JMESPath 查询」\n\n",
+  "empty": 841,
+  "err_text": "",
+  "overflowX": false
+ },
+ {
+  "route": "/tools/json-schema",
+  "console": [],
+  "pageerrors": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=968%2C968&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=540302112&si=46ab2"
+  ],
+  "status": 200,
+  "sw": 390,
+  "vw": 390,
+  "sh": 1891,
+  "text": "JSON Schema\n\n从 JSON 生成 Schema，或用 Schema 校验 JSON 并定位错误路径\n\n在线可用 · 输入不出浏览器\n收藏\n从 JSON 生成 Schema\n使用 Schema 校验\n规范\nDraft 2020-12\nDraft-07\n严格模式\n校验\n复制\n载入示例\n未执行\nJSON 文档\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nJSON Schema\nDraft 2020-12\n复制\n格式化\n1\n字符 0\n字节 0\n行 0\nJSON Schema · Draft 2020-12\n尚未校验\n复制错误清单\n\n点击「校验」后，错误会按出现位置列在这里。\n\n尚未执行校验\n严格模式已开启\n什么时候用「JSON Schema」\n\n要为一类报文定义校验规则，或者拿到一份 JSON 却发现某几个字段类型不对、必填项缺失时。\n\n使用要点\n「从 JSON 生成 Schem",
+  "empty": 746,
   "err_text": "",
   "overflowX": false
  },
@@ -212,13 +381,15 @@
   "route": "/tools/base64",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=967%2C967&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=2136901372&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1706,
-  "text": "Base64 编解码\n\n文本与文件的 Base64 / Base64URL 编码和解码。\n\n本地处理 · 输入不出浏览器\n收藏\n编码\n解码\n字母表\n标准 Base64\nBase64URL\n输入\n文本\n文件\n交换\n载入示例\n编码\n⌘/Ctrl + Enter 执行\n未执行\n输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n结果\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n使用说明\n编码\n文本输入按 UTF-8 编码为字节后再转 Base64，中文等多字节字符会得到较长的结果。\nBase64URL 是 URL 安全变体：+ 与 / 替换为 - 与 _，并去掉尾部 = 填充。\n文件输入读取原始字节，适合图片等二进制文件。\n解码\n解码输入只认 Base64 字符（两种字母表都接受，可含空白与可选填充）。\n若解码结果不是有效 UTF-8，不会强行按文本显示，而是切换为 Hex 展示，并提供「下",
-  "empty": 448,
+  "sh": 2275,
+  "text": "Base64 编解码\n\n文本与文件的 Base64 / Base64URL 编码和解码。\n\n在线可用 · 输入不出浏览器\n收藏\n编码\n解码\n字母表\n标准 Base64\nBase64URL\n输入\n文本\n文件\n交换\n载入示例\n编码\n⌘/Ctrl + Enter 执行\n未执行\n输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n结果\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n使用说明\n编码\n文本输入按 UTF-8 编码为字节后再转 Base64，中文等多字节字符会得到较长的结果。\nBase64URL 是 URL 安全变体：+ 与 / 替换为 - 与 _，并去掉尾部 = 填充。\n文件输入读取原始字节，适合图片等二进制文件。\n解码\n解码输入只认 Base64 字符（两种字母表都接受，可含空白与可选填充）。\n若解码结果不是有效 UTF-8，不会强行按文本显示，而是切换为 Hex 展示，并提供「下",
+  "empty": 792,
   "err_text": "",
   "overflowX": false
  },
@@ -226,13 +397,15 @@
   "route": "/tools/url-encode",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=951%2C950&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=2077249788&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1688,
-  "text": "URL 编解码\n\n完整 URI 与组件模式的 URL 编码和解码。\n\n本地处理 · 输入不出浏览器\n收藏\n编码\n解码\n模式\n完整 URI\n组件\n交换\n载入示例\n编码\n⌘/Ctrl + Enter 执行\n未执行\n输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n结果\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n使用说明\n两种模式的区别\n完整 URI（encodeURI / decodeURI）：保留 : / ? # [ ] @ & = 等结构字符，适合整条地址。\n组件（encodeURIComponent / decodeURIComponent）：连 ; / ? : @ & = + $ , # 也会被编码，适合单个查询参数值。\n同一段输入在两种模式下的结果不同，可用模式切换对比。\n解码规则\n每次执行只解码一层，不会自动重复解码；结果仍含 %XX 时会在状态栏提示。\n「+」解码为空格默",
-  "empty": 490,
+  "sh": 2236,
+  "text": "URL 编解码\n\n完整 URI 与组件模式的 URL 编码和解码。\n\n在线可用 · 输入不出浏览器\n收藏\n编码\n解码\n模式\n完整 URI\n组件\n交换\n载入示例\n编码\n⌘/Ctrl + Enter 执行\n未执行\n输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n结果\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n使用说明\n两种模式的区别\n完整 URI（encodeURI / decodeURI）：保留 : / ? # [ ] @ & = 等结构字符，适合整条地址。\n组件（encodeURIComponent / decodeURIComponent）：连 ; / ? : @ & = + $ , # 也会被编码，适合单个查询参数值。\n同一段输入在两种模式下的结果不同，可用模式切换对比。\n解码规则\n每次执行只解码一层，不会自动重复解码；结果仍含 %XX 时会在状态栏提示。\n「+」解码为空格默",
+  "empty": 829,
   "err_text": "",
   "overflowX": false
  },
@@ -240,13 +413,15 @@
   "route": "/tools/unicode-bytes",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=964%2C964&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=415675175&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1894,
-  "text": "Unicode / 字节编码转换\n\nUnicode 转义、UTF-8 文本与 Hex 字节互转，区分字符与字节。\n\n本地处理 · 输入不出浏览器\n收藏\n文本 → \\u 转义\n\\u 转义 → 文本\n文本 ↔ Hex 字节\n全部字符转义（含 ASCII 与换行）\n交换\n载入示例\n转换\n⌘/Ctrl + Enter 执行\n未执行\n文本输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n结果\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n字符数 ≠ 字节数（本工具的核心概念）\n三把「尺子」\n字符（码点）：用户眼中的一个字符。🎉 是 1 个字符。\nUTF-16 码元：JS 字符串的存储单位。🎉 占 2 个码元（代理对），中 占 1 个。\nUTF-8 字节：网络传输 / 文件落盘的实际字节。🎉 占 4 字节，中 占 3 字节，ASCII 字符占 1 字节。\n转义规则\n格式为 \\uXXXX（4 ",
-  "empty": 671,
+  "sh": 2421,
+  "text": "Unicode / 字节编码转换\n\nUnicode 转义、UTF-8 文本与 Hex 字节互转，区分字符与字节。\n\n在线可用 · 输入不出浏览器\n收藏\n文本 → \\u 转义\n\\u 转义 → 文本\n文本 ↔ Hex 字节\n全部字符转义（含 ASCII 与换行）\n交换\n载入示例\n转换\n⌘/Ctrl + Enter 执行\n未执行\n文本输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n结果\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n字符数 ≠ 字节数（本工具的核心概念）\n三把「尺子」\n字符（码点）：用户眼中的一个字符。🎉 是 1 个字符。\nUTF-16 码元：JS 字符串的存储单位。🎉 占 2 个码元（代理对），中 占 1 个。\nUTF-8 字节：网络传输 / 文件落盘的实际字节。🎉 占 4 字节，中 占 3 字节，ASCII 字符占 1 字节。\n转义规则\n格式为 \\uXXXX（4 ",
+  "empty": 1018,
   "err_text": "",
   "overflowX": false
  },
@@ -254,13 +429,15 @@
   "route": "/tools/text-dedup",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=948%2C948&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=19811356&si=46ab2b"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1610,
-  "text": "文本去重与整理\n\n逐行去重、去除空行与整理排序，可选是否处理空格。\n\n本地处理 · 输入不出浏览器\n收藏\n大小写敏感\n去除空行\n整理时 trim 行首尾空格\n排序\n保持原序\n字典序\n实时预览：修改输入或选项立即生效\n载入示例\n未执行\n输入 0 行\n输出 0 行\n原始文本\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n整理结果\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n去重与整理规则\n逐行去重，保留每行首次出现时的原文与位置；大小写不敏感时同样保留首次出现的写法（不统一大小写）。\n默认不改任何空格：行首尾空格、空行都原样保留；trim 与「去除空行」是两个显式选项。\n空行指只含空格 / 制表符等空白字符的行；末尾换行符按真实行数计入统计。\n字典序按 Unicode 码点升序（英文在前、中文在后），如需保持原顺序请选择「保持原序」。\n预览实时计算：状态栏显示输入 / 输出行数与删除的重复",
-  "empty": 407,
+  "sh": 2137,
+  "text": "文本去重与整理\n\n逐行去重、去除空行与整理排序，可选是否处理空格。\n\n在线可用 · 输入不出浏览器\n收藏\n大小写敏感\n去除空行\n整理时 trim 行首尾空格\n排序\n保持原序\n字典序\n实时预览：修改输入或选项立即生效\n载入示例\n未执行\n输入 0 行\n输出 0 行\n原始文本\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n整理结果\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n去重与整理规则\n逐行去重，保留每行首次出现时的原文与位置；大小写不敏感时同样保留首次出现的写法（不统一大小写）。\n默认不改任何空格：行首尾空格、空行都原样保留；trim 与「去除空行」是两个显式选项。\n空行指只含空格 / 制表符等空白字符的行；末尾换行符按真实行数计入统计。\n字典序按 Unicode 码点升序（英文在前、中文在后），如需保持原顺序请选择「保持原序」。\n预览实时计算：状态栏显示输入 / 输出行数与删除的重复",
+  "empty": 716,
   "err_text": "",
   "overflowX": false
  },
@@ -268,13 +445,15 @@
   "route": "/tools/case-convert",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=949%2C949&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=18939525&si=46ab2b"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1048,
-  "text": "命名风格转换\n\ncamelCase、snake_case、kebab-case 等命名风格批量互转。\n\n本地处理 · 输入不出浏览器\n收藏\n每行一个标识符，输入后实时转换\n载入示例\n未执行\n共 0 行\n标识符（每行一个）\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n\n在上方输入标识符（每行一个），下方实时显示 camelCase、PascalCase、snake_case、kebab-case、CONSTANT_CASE 结果。\n\n分词策略\n空格、下划线 _、连字符 - 作为分隔符。\n驼峰边界：小写（或数字）→ 大写处切分，如 versionName → version Name。\n连续大写缩略词作为一个词：HTTPServer → HTTP Server，得到 http_server 而非 h_t_t_p_server。\n数字边界：version2Name → version 2 ",
-  "empty": 522,
+  "sh": 1596,
+  "text": "命名风格转换\n\ncamelCase、snake_case、kebab-case 等命名风格批量互转。\n\n在线可用 · 输入不出浏览器\n收藏\n每行一个标识符，输入后实时转换\n载入示例\n未执行\n共 0 行\n标识符（每行一个）\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n\n在上方输入标识符（每行一个），下方实时显示 camelCase、PascalCase、snake_case、kebab-case、CONSTANT_CASE 结果。\n\n分词策略\n空格、下划线 _、连字符 - 作为分隔符。\n驼峰边界：小写（或数字）→ 大写处切分，如 versionName → version Name。\n连续大写缩略词作为一个词：HTTPServer → HTTP Server，得到 http_server 而非 h_t_t_p_server。\n数字边界：version2Name → version 2 ",
+  "empty": 880,
   "err_text": "",
   "overflowX": false
  },
@@ -282,13 +461,15 @@
   "route": "/tools/text-diff",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=947%2C947&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1485542697&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1744,
-  "text": "文本差异比较\n\n逐行与行内差异比较，支持同步滚动与忽略空白。\n\n本地处理 · 输入不出浏览器\n收藏\n比较\n载入示例\n忽略空白\n同步滚动\n-0\n+0\n上一处\n下一处\n未执行\n原文\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n改文\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n原文（差异结果）\n-0\n\n输入两侧文本并点击「比较」，差异结果将显示在这里。\n\n改文（差异结果）\n+0\n\n输入两侧文本并点击「比较」，差异结果将显示在这里。\n\n使用说明\n逐行比较新增/删除行（绿底为新增、红底为删除），成对的修改行内会用深色块高亮变化的词。\n「忽略空白」默认关闭：行尾空白、缩进与空行差异都会如实标出；开启后比较前会对每行 trim 并归并连续空行。\n「上一处 / 下一处」在两侧结果面板中滚动定位差异行；「同步滚动」可联动两个结果面板。\n行号列独立于内容列，折行时行号始终对齐该行首行，不会与内容混",
-  "empty": 402,
+  "sh": 2292,
+  "text": "文本差异比较\n\n逐行与行内差异比较，支持同步滚动与忽略空白。\n\n在线可用 · 输入不出浏览器\n收藏\n比较\n载入示例\n忽略空白\n同步滚动\n-0\n+0\n上一处\n下一处\n未执行\n原文\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n改文\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n原文（差异结果）\n-0\n\n输入两侧文本并点击「比较」，差异结果将显示在这里。\n\n改文（差异结果）\n+0\n\n输入两侧文本并点击「比较」，差异结果将显示在这里。\n\n使用说明\n逐行比较新增/删除行（绿底为新增、红底为删除），成对的修改行内会用深色块高亮变化的词。\n「忽略空白」默认关闭：行尾空白、缩进与空行差异都会如实标出；开启后比较前会对每行 trim 并归并连续空行。\n「上一处 / 下一处」在两侧结果面板中滚动定位差异行；「同步滚动」可联动两个结果面板。\n行号列独立于内容列，折行时行号始终对齐该行首行，不会与内容混",
+  "empty": 711,
   "err_text": "",
   "overflowX": false
  },
@@ -296,13 +477,15 @@
   "route": "/tools/regex-test",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=986%2C986&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1885416151&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1755,
-  "text": "正则表达式测试\n\nJavaScript 正则匹配测试、捕获组与替换预览。\n\n本地处理 · 输入不出浏览器\n收藏\n引擎：JavaScript（RegExp）\n示例：邮箱提取\n示例：日期命名组\n示例：回溯超时\n执行测试\n未执行\n正则表达式\n\n不含两侧斜杠；语法错误会在下方行内提示\n\nflags\n\nd g i m s u v y\n\n替换模板（可选）\n\n支持 $1、$2 与 $<name> 命名组引用；留空不做替换预览\n\n测试文本\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n匹配高亮\n\n执行后，测试文本会在此按匹配结果分段渲染（匹配部分蓝底）。\n\n匹配列表\n\n执行后显示每处匹配的位置与捕获组。\n\n使用说明\n引擎为浏览器内置 JavaScript RegExp（构造方式 new RegExp(source, flags)），与 Java 正则不同。\n匹配在 Web Worker 中执行，主线程",
-  "empty": 561,
+  "sh": 2324,
+  "text": "正则表达式测试\n\nJavaScript 正则匹配测试、捕获组与替换预览。\n\n在线可用 · 输入不出浏览器\n收藏\n引擎：JavaScript（RegExp）\n示例：邮箱提取\n示例：日期命名组\n示例：回溯超时\n执行测试\n未执行\n正则表达式\n\n不含两侧斜杠；语法错误会在下方行内提示\n\nflags\n\nd g i m s u v y\n\n替换模板（可选）\n\n支持 $1、$2 与 $<name> 命名组引用；留空不做替换预览\n\n测试文本\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n匹配高亮\n\n执行后，测试文本会在此按匹配结果分段渲染（匹配部分蓝底）。\n\n匹配列表\n\n执行后显示每处匹配的位置与捕获组。\n\n使用说明\n引擎为浏览器内置 JavaScript RegExp（构造方式 new RegExp(source, flags)），与 Java 正则不同。\n匹配在 Web Worker 中执行，主线程",
+  "empty": 889,
   "err_text": "",
   "overflowX": false
  },
@@ -310,13 +493,15 @@
   "route": "/tools/md5-sha",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=953%2C953&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1979385256&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1102,
-  "text": "MD5 / SHA 摘要\n\n计算文本或文件的 MD5、SHA-256、SHA-512 摘要并对照期望值。\n\n本地处理 · 输入不出浏览器\n收藏\n文本\n文件\nMD5\nSHA-256\nSHA-512\nUTF-8 文本\nHex\nHex\nBase64\n载入示例\n计算摘要\n未执行\nUTF-8 输入\nMD5\nSHA-256\n输入文本（UTF-8）\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n期望摘要（可选，用于对照）\n\n按 Hex 对照，忽略大小写与空白；填写后每个算法行会独立显示「一致 / 不一致」\n\n摘要结果（单向散列，不可逆推原文——本工具没有也不可能有「解密」功能）\n\n输入内容并点击「计算摘要」，每种算法一行结果。\n\n公认测试向量（已用 node crypto 复核）\nMD5(\"abc\") = 900150983cd24fb0d6963f7d28e17f72\nSHA-256(\"abc\")",
-  "empty": 672,
+  "sh": 1672,
+  "text": "MD5 / SHA 摘要\n\n计算文本或文件的 MD5、SHA-256、SHA-512 摘要并对照期望值。\n\n在线可用 · 输入不出浏览器\n收藏\n文本\n文件\nMD5\nSHA-256\nSHA-512\nUTF-8 文本\nHex\nHex\nBase64\n载入示例\n计算摘要\n未执行\nUTF-8 输入\nMD5\nSHA-256\n输入文本（UTF-8）\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n期望摘要（可选，用于对照）\n\n按 Hex 对照，忽略大小写与空白；填写后每个算法行会独立显示「一致 / 不一致」\n\n摘要结果（单向散列，不可逆推原文——本工具没有也不可能有「解密」功能）\n\n输入内容并点击「计算摘要」，每种算法一行结果。\n\n公认测试向量（已用 node crypto 复核）\nMD5(\"abc\") = 900150983cd24fb0d6963f7d28e17f72\nSHA-256(\"abc\")",
+  "empty": 1001,
   "err_text": "",
   "overflowX": false
  },
@@ -324,13 +509,15 @@
   "route": "/tools/hmac",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=961%2C961&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=508880490&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1343,
-  "text": "HMAC 计算与校验\n\nHMAC-SHA256/SHA512 计算与期望值对照，密钥编码可选。\n\n本地处理 · 输入不出浏览器\n收藏\n算法\nHMAC-SHA-256\nHMAC-SHA-512\n密钥编码\nUTF-8 文本\nHex\n输出编码\nHex\nBase64\n载入示例\n计算 HMAC\n未执行\nSHA-256\n密钥 UTF-8\n消息 0 字节\n消息（UTF-8 文本）\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n密钥\n\n解码后密钥长度：0 字节\n\n期望 MAC（可选，用于对照）\n\n按 Hex 对照，忽略大小写与空白；填写后显示「一致 / 不一致」\n\nHMAC-SHA-256 结果\n\n填写密钥与消息后点击「计算 HMAC」，结果由浏览器 WebCrypto 现场计算。\n\n测试向量与说明（已用 node crypto 复核）\nRFC 4231 Test Case 1\n密钥：0b0b0b0b",
-  "empty": 827,
+  "sh": 1878,
+  "text": "HMAC 计算与校验\n\nHMAC-SHA256/SHA512 计算与期望值对照，密钥编码可选。\n\n在线可用 · 输入不出浏览器\n收藏\n算法\nHMAC-SHA-256\nHMAC-SHA-512\n密钥编码\nUTF-8 文本\nHex\n输出编码\nHex\nBase64\n载入示例\n计算 HMAC\n未执行\nSHA-256\n密钥 UTF-8\n消息 0 字节\n消息（UTF-8 文本）\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n密钥\n\n解码后密钥长度：0 字节\n\n期望 MAC（可选，用于对照）\n\n按 Hex 对照，忽略大小写与空白；填写后显示「一致 / 不一致」\n\nHMAC-SHA-256 结果\n\n填写密钥与消息后点击「计算 HMAC」，结果由浏览器 WebCrypto 现场计算。\n\n测试向量与说明（已用 node crypto 复核）\nRFC 4231 Test Case 1\n密钥：0b0b0b0b",
+  "empty": 1174,
   "err_text": "",
   "overflowX": false
  },
@@ -338,13 +525,15 @@
   "route": "/tools/aes",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=947%2C947&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=147890918&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1926,
-  "text": "AES 加解密\n\nAES-GCM 本地加解密，密钥与 IV 编码、AAD 与认证标签可配。\n\n本地处理 · 输入不出浏览器\n收藏\n加密\n解密\n密钥位数\n128\n192\n256\n密钥编码\nHex\nBase64\nUTF-8\n认证标签\n96 位\n112 位\n128 位\n输出编码\nHex\nBase64\n随机密钥\n随机 IV\n加密示例\n解密示例\n加密\n未执行\nAES-GCM / AES-256\nIV 0 字节\n标签 128 位\n密钥（原始字节，不是口令）\n\n密钥是原始字节（不是口令，本工具不做任何密码派生）：当前 AES-256 需要 32 字节\n\nIV / nonce（Hex）\n随机\n\nIV（nonce）为空：加密前请填写或点击「随机 IV」生成\n\nAAD 附加认证数据（可选，UTF-8）\n\n参与认证但不加密；解密时必须与加密时完全一致，否则认证失败\n\n明文（UTF-8 文本）\n复制\n下载\n清空\n",
-  "empty": 1130,
+  "sh": 2453,
+  "text": "AES 加解密\n\nAES-GCM 本地加解密，密钥与 IV 编码、AAD 与认证标签可配。\n\n在线可用 · 输入不出浏览器\n收藏\n加密\n解密\n密钥位数\n128\n192\n256\n密钥编码\nHex\nBase64\nUTF-8\n认证标签\n96 位\n112 位\n128 位\n输出编码\nHex\nBase64\n随机密钥\n随机 IV\n加密示例\n解密示例\n加密\n未执行\nAES-GCM / AES-256\nIV 0 字节\n标签 128 位\n密钥（原始字节，不是口令）\n\n密钥是原始字节（不是口令，本工具不做任何密码派生）：当前 AES-256 需要 32 字节\n\nIV / nonce（Hex）\n随机\n\nIV（nonce）为空：加密前请填写或点击「随机 IV」生成\n\nAAD 附加认证数据（可选，UTF-8）\n\n参与认证但不加密；解密时必须与加密时完全一致，否则认证失败\n\n明文（UTF-8 文本）\n复制\n下载\n清空\n",
+  "empty": 1443,
   "err_text": "",
   "overflowX": false
  },
@@ -352,13 +541,15 @@
   "route": "/tools/sm2",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=956%2C956&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=152721307&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1734,
-  "text": "SM2 加解密与签名\n\n国密 SM2 加解密与签名验签，公私钥与密文格式可选。\n\n本地处理 · 输入不出浏览器\n收藏\n加解密\n签名验签\n加密（公钥）\n解密（私钥）\n密文顺序\nC1C3C2\nC1C2C3\n密文编码\nHex\nBase64\n生成密钥对\n加密示例\n解密示例\n加密\n未执行\nSM2 加密\nC1C3C2\n公钥（Hex）\n\n04 开头非压缩 130 位，或 02/03 开头压缩 66 位（Hex），且必须位于 SM2 曲线上\n\n明文（UTF-8 文本）\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n加密结果\n\n填写公钥后点击「加密」。密文 = C1（64 字节，不含 04 前缀）|| C3（32 字节 SM3 摘要）|| C2（与明文等长）， 顺序由「密文顺序」决定。\n\n示例数据与格式说明（node + sm-crypto 真实生成并验证）\n示例密钥对（本地生成，仅用于测试）\n公钥（0",
-  "empty": 1348,
+  "sh": 2249,
+  "text": "SM2 加解密与签名\n\n国密 SM2 加解密与签名验签，公私钥与密文格式可选。\n\n在线可用 · 输入不出浏览器\n收藏\n加解密\n签名验签\n加密（公钥）\n解密（私钥）\n密文顺序\nC1C3C2\nC1C2C3\n密文编码\nHex\nBase64\n生成密钥对\n加密示例\n解密示例\n加密\n未执行\nSM2 加密\nC1C3C2\n公钥（Hex）\n\n04 开头非压缩 130 位，或 02/03 开头压缩 66 位（Hex），且必须位于 SM2 曲线上\n\n明文（UTF-8 文本）\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n加密结果\n\n填写公钥后点击「加密」。密文 = C1（64 字节，不含 04 前缀）|| C3（32 字节 SM3 摘要）|| C2（与明文等长）， 顺序由「密文顺序」决定。\n\n示例数据与格式说明（node + sm-crypto 真实生成并验证）\n示例密钥对（本地生成，仅用于测试）\n公钥（0",
+  "empty": 1671,
   "err_text": "500",
   "overflowX": false
  },
@@ -366,13 +557,15 @@
   "route": "/tools/sm3",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=959%2C959&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1294097403&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1164,
-  "text": "SM3 摘要\n\n国密 SM3 摘要计算，支持文本与文件、Hex 与 Base64 输出。\n\n本地处理 · 输入不出浏览器\n收藏\n文本\n文件\nUTF-8 文本\nHex\n输出编码\nHex\nBase64\n载入示例\n计算 SM3\n未执行\nUTF-8 输入\nSM3 · 256 位摘要\n输入文本（UTF-8）\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n期望摘要（可选，用于对照）\n\n按 Hex 对照，忽略大小写与空白；填写后显示「一致 / 不一致」\n\nSM3 摘要（本工具是 SM3 摘要，不是 HMAC-SM3——无密钥参与运算）\n\n输入内容并点击「计算 SM3」。 SM3 输出固定 32 字节（256 位），与输入长度无关。\n\n国标测试向量与说明（node + sm-crypto 复核）\nGB/T 32905-2016 标准向量\nSM3(\"abc\") = 66c7f0f462eeedd9d1f",
-  "empty": 699,
+  "sh": 1712,
+  "text": "SM3 摘要\n\n国密 SM3 摘要计算，支持文本与文件、Hex 与 Base64 输出。\n\n在线可用 · 输入不出浏览器\n收藏\n文本\n文件\nUTF-8 文本\nHex\n输出编码\nHex\nBase64\n载入示例\n计算 SM3\n未执行\nUTF-8 输入\nSM3 · 256 位摘要\n输入文本（UTF-8）\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n期望摘要（可选，用于对照）\n\n按 Hex 对照，忽略大小写与空白；填写后显示「一致 / 不一致」\n\nSM3 摘要（本工具是 SM3 摘要，不是 HMAC-SM3——无密钥参与运算）\n\n输入内容并点击「计算 SM3」。 SM3 输出固定 32 字节（256 位），与输入长度无关。\n\n国标测试向量与说明（node + sm-crypto 复核）\nGB/T 32905-2016 标准向量\nSM3(\"abc\") = 66c7f0f462eeedd9d1f",
+  "empty": 1012,
   "err_text": "",
   "overflowX": false
  },
@@ -380,13 +573,15 @@
   "route": "/tools/sm4",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=953%2C953&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=695158511&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1883,
-  "text": "SM4 加解密\n\n国密 SM4 CBC/ECB 加解密，PKCS#7 与 NoPadding 可选。\n\n本地处理 · 输入不出浏览器\n收藏\n加密\n解密\n模式\nCBC\nECB\n填充\nPKCS#7\nNoPadding\n密钥编码\nUTF-8\nHex\n明文编码\nUTF-8\nHex\nBase64\n输出编码\nHex\nBase64\n随机密钥\n随机 IV\n加密示例\n解密示例\n加密\n未执行\nCBC\nPKCS#7\nIV 0 字节\n密钥（16 字节 / 128 位）\n\nSM4 密钥固定 16 字节（128 位）：Hex 32 字符，或恰好 16 个 ASCII 字符\n\nIV（Hex，16 字节）\n随机\n\nIV 为空：CBC 模式需要 16 字节 IV（32 个 Hex 字符），可点击「随机 IV」生成\n\n明文（UTF-8 文本）\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nSM4-CBC 密文\n\n填写密钥",
-  "empty": 1053,
+  "sh": 2410,
+  "text": "SM4 加解密\n\n国密 SM4 CBC/ECB 加解密，PKCS#7 与 NoPadding 可选。\n\n在线可用 · 输入不出浏览器\n收藏\n加密\n解密\n模式\nCBC\nECB\n填充\nPKCS#7\nNoPadding\n密钥编码\nUTF-8\nHex\n明文编码\nUTF-8\nHex\nBase64\n输出编码\nHex\nBase64\n随机密钥\n随机 IV\n加密示例\n解密示例\n加密\n未执行\nCBC\nPKCS#7\nIV 0 字节\n密钥（16 字节 / 128 位）\n\nSM4 密钥固定 16 字节（128 位）：Hex 32 字符，或恰好 16 个 ASCII 字符\n\nIV（Hex，16 字节）\n随机\n\nIV 为空：CBC 模式需要 16 字节 IV（32 个 Hex 字符），可点击「随机 IV」生成\n\n明文（UTF-8 文本）\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nSM4-CBC 密文\n\n填写密钥",
+  "empty": 1383,
   "err_text": "",
   "overflowX": false
  },
@@ -394,13 +589,15 @@
   "route": "/tools/timestamp",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=966%2C966&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1718008104&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 942,
-  "text": "时间戳转换\n\n秒/毫秒时间戳与可读时间双向转换，支持时区与 ISO8601。\n\n本地处理 · 输入不出浏览器\n收藏\n时间戳 → 时间\n时间 → 时间戳\n输入单位（不按位数猜测）\n秒\n毫秒\n时区\nUTC\nAsia/Shanghai\nAmerica/New_York\nEurope/London\nAsia/Tokyo\nAustralia/Sydney\n批量（每行一个）\n填入当前时间\n载入示例\n未执行\n单位：毫秒\n时间戳\n\n按所选单位（毫秒）解释，结果同时给出秒/毫秒对照\n\n示例与说明（示例值已用 node Intl 验证）\n同一时刻：1727208000（秒）= 1727208000000（毫秒）= 2024-09-24T20:00:00.000Z（ISO 8601），对应北京时间 2024-09-25 04:00:00。\n单位由「秒 / 毫秒」开关显式决定，本工具不按位数猜测单位。\n「时间 →",
-  "empty": 661,
+  "sh": 1435,
+  "text": "时间戳转换\n\n秒/毫秒时间戳与可读时间双向转换，支持时区与 ISO8601。\n\n在线可用 · 输入不出浏览器\n收藏\n时间戳 → 时间\n时间 → 时间戳\n输入单位（不按位数猜测）\n秒\n毫秒\n时区\nUTC\nAsia/Shanghai\nAmerica/New_York\nEurope/London\nAsia/Tokyo\nAustralia/Sydney\n批量（每行一个）\n填入当前时间\n载入示例\n未执行\n单位：毫秒\n时间戳\n\n按所选单位（毫秒）解释，结果同时给出秒/毫秒对照\n\n示例与说明（示例值已用 node Intl 验证）\n同一时刻：1727208000（秒）= 1727208000000（毫秒）= 2024-09-24T20:00:00.000Z（ISO 8601），对应北京时间 2024-09-25 04:00:00。\n单位由「秒 / 毫秒」开关显式决定，本工具不按位数猜测单位。\n「时间 →",
+  "empty": 959,
   "err_text": "",
   "overflowX": false
  },
@@ -408,13 +605,15 @@
   "route": "/tools/uuid",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=990%2C990&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=731161024&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1053,
-  "text": "UUID 生成与解析\n\n批量生成 UUID v4 / v7，解析版本与格式信息。\n\n本地处理 · 输入不出浏览器\n收藏\n生成\n解析\nv4 随机\nv7 有序时间\n数量\n大写\n连字符\n生成\n未执行\nV7\n点击「生成」即用浏览器 crypto.getRandomValues 真实生成；v7 会内嵌生成时刻的 48 位 Unix 毫秒时间戳。 大写 / 连字符为显示选项，实时作用于列表、复制与下载，不改变已生成的值。\n\n尚未生成。选择版本与数量后点击「生成」。\n\n版本含义表与示例（示例值已用 node 验证）\nv1 时间：60 位 100ns 计数（1582 纪元）+ 节点标识，可还原生成时间\nv3 MD5 命名：命名空间 UUID + 名字的 MD5，确定性\nv4 随机：122 位随机数，不含时间信息，无法得知生成时间\nv5 SHA-1 命名：命名空间 UUID + 名字的 SHA-1，确定性\n",
-  "empty": 749,
+  "sh": 1588,
+  "text": "UUID 生成与解析\n\n批量生成 UUID v4 / v7，解析版本与格式信息。\n\n在线可用 · 输入不出浏览器\n收藏\n生成\n解析\nv4 随机\nv7 有序时间\n数量\n大写\n连字符\n生成\n未执行\nV7\n点击「生成」即用浏览器 crypto.getRandomValues 真实生成；v7 会内嵌生成时刻的 48 位 Unix 毫秒时间戳。 大写 / 连字符为显示选项，实时作用于列表、复制与下载，不改变已生成的值。\n\n尚未生成。选择版本与数量后点击「生成」。\n\n版本含义表与示例（示例值已用 node 验证）\nv1 时间：60 位 100ns 计数（1582 纪元）+ 节点标识，可还原生成时间\nv3 MD5 命名：命名空间 UUID + 名字的 MD5，确定性\nv4 随机：122 位随机数，不含时间信息，无法得知生成时间\nv5 SHA-1 命名：命名空间 UUID + 名字的 SHA-1，确定性\n",
+  "empty": 1042,
   "err_text": "",
   "overflowX": false
  },
@@ -422,13 +621,15 @@
   "route": "/tools/cron",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=954%2C954&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=675300192&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 2375,
-  "text": "Cron 解析与执行预览\n\nUnix 五字段与 Quartz 方言解析、字段解释与未来执行预览。\n\n本地处理 · 输入不出浏览器\n收藏\nUnix 五字段\nQuartz 六字段\n时区\nUTC\nAsia/Shanghai\nAmerica/New_York\nEurope/London\nAsia/Tokyo\nAustralia/Sydney\n预览起始（Asia/Shanghai 墙钟）\n填入当前时间\n载入示例\n成功\n表达式有效 · 未来 10 次执行已按 Asia/Shanghai 计算\nUnix\nAsia/Shanghai\n表达式（分 时 日 月 周）\n\n如 */15 * * * *（每 15 分钟）；0/7=周日；不支持 ?、L、W、#\n\n分字段解释（Unix）\n字段\t取值\t范围\t含义\n分\t*/15\t0-59\t每 15 分钟（从 0 开始：0、15、30、45）\n时\t*\t0-23\t任意值（每一",
-  "empty": 1691,
+  "sh": 2868,
+  "text": "Cron 解析与执行预览\n\nUnix 五字段与 Quartz 方言解析、字段解释与未来执行预览。\n\n在线可用 · 输入不出浏览器\n收藏\nUnix 五字段\nQuartz 六字段\n时区\nUTC\nAsia/Shanghai\nAmerica/New_York\nEurope/London\nAsia/Tokyo\nAustralia/Sydney\n预览起始（Asia/Shanghai 墙钟）\n填入当前时间\n载入示例\n成功\n表达式有效 · 未来 10 次执行已按 Asia/Shanghai 计算\nUnix\nAsia/Shanghai\n表达式（分 时 日 月 周）\n\n如 */15 * * * *（每 15 分钟）；0/7=周日；不支持 ?、L、W、#\n\n分字段解释（Unix）\n字段\t取值\t范围\t含义\n分\t*/15\t0-59\t每 15 分钟（从 0 开始：0、15、30、45）\n时\t*\t0-23\t任意值（每一",
+  "empty": 1989,
   "err_text": "500",
   "overflowX": false
  },
@@ -436,13 +637,15 @@
   "route": "/tools/date-diff",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=951%2C951&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=271687868&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1106,
-  "text": "日期时间差计算\n\n计算两个时刻的实际经过时长与日历年月日差，支持跨时区。\n\n本地处理 · 输入不出浏览器\n收藏\n示例：普通跨日\n示例：跨夏令时（纽约 3 月拨快）\n未执行\nAsia/Shanghai\nAsia/Shanghai\n开始时间\n\n按下方所选时区的墙钟解释\n\n时区\nUTC\nAsia/Shanghai\nAmerica/New_York\nEurope/London\nAsia/Tokyo\nAustralia/Sydney\n结束时间\n\n按下方所选时区的墙钟解释\n\n时区\nUTC\nAsia/Shanghai\nAmerica/New_York\nEurope/London\nAsia/Tokyo\nAustralia/Sydney\n\n选择开始与结束时间后即时计算（可载入示例对照）。\n\n口径说明与已验证示例（node Intl 计算）\n实际经过时长：两端先换算为真实时刻（UTC 毫秒）再相减，与时区无关",
-  "empty": 798,
+  "sh": 1620,
+  "text": "日期时间差计算\n\n计算两个时刻的实际经过时长与日历年月日差，支持跨时区。\n\n在线可用 · 输入不出浏览器\n收藏\n示例：普通跨日\n示例：跨夏令时（纽约 3 月拨快）\n未执行\nAsia/Shanghai\nAsia/Shanghai\n开始时间\n\n按下方所选时区的墙钟解释\n\n时区\nUTC\nAsia/Shanghai\nAmerica/New_York\nEurope/London\nAsia/Tokyo\nAustralia/Sydney\n结束时间\n\n按下方所选时区的墙钟解释\n\n时区\nUTC\nAsia/Shanghai\nAmerica/New_York\nEurope/London\nAsia/Tokyo\nAustralia/Sydney\n\n选择开始与结束时间后即时计算（可载入示例对照）。\n\n口径说明与已验证示例（node Intl 计算）\n实际经过时长：两端先换算为真实时刻（UTC 毫秒）再相减，与时区无关",
+  "empty": 1090,
   "err_text": "",
   "overflowX": false
  },
@@ -450,13 +653,15 @@
   "route": "/tools/json2java",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=953%2C953&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1821632528&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1792,
-  "text": "JSON 转 Java 类\n\n从 JSON 生成 POJO 或 record，支持 Lombok / Jackson 注解。\n\n本地处理 · 输入不出浏览器\n收藏\n类名\n包名（可选）\n形式\nPOJO\nrecord\n嵌套类\n内部静态类\n独立顶级类\n字段命名\n保持原键\n转 camelCase\n小数类型\ndouble\nBigDecimal\nLombok @Data\nJackson 注解\n载入示例\n生成 Java\n⌘/Ctrl + Enter\n未执行\nPOJO\n内部静态类\nJSON 输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nJava 输出\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n用法说明\n类型推断：整数按 int / long（超出 int 范围自动用 long）；小数默认 double，可切换 BigDecimal；超出 long 范围（> 2^63-1）的数字默认按 Stri",
-  "empty": 695,
+  "sh": 2340,
+  "text": "JSON 转 Java 类\n\n从 JSON 生成 POJO 或 record，支持 Lombok / Jackson 注解。\n\n在线可用 · 输入不出浏览器\n收藏\n类名\n包名（可选）\n形式\nPOJO\nrecord\n嵌套类\n内部静态类\n独立顶级类\n字段命名\n保持原键\n转 camelCase\n小数类型\ndouble\nBigDecimal\nLombok @Data\nJackson 注解\n载入示例\n生成 Java\n⌘/Ctrl + Enter\n未执行\nPOJO\n内部静态类\nJSON 输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nJava 输出\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n用法说明\n类型推断：整数按 int / long（超出 int 范围自动用 long）；小数默认 double，可切换 BigDecimal；超出 long 范围（> 2^63-1）的数字默认按 Stri",
+  "empty": 1052,
   "err_text": "",
   "overflowX": false
  },
@@ -464,13 +669,15 @@
   "route": "/tools/java-escape",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=959%2C959&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=376701377&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1728,
-  "text": "Java 字符串转义\n\n原文与 Java 字符串字面量互转，处理引号、换行与反斜杠。\n\n本地处理 · 输入不出浏览器\n收藏\n原文 → Java 字面量\nJava 字面量 → 原文\n输出形式\n普通字面量\n文本块（Java 15+）\n还原示例\nWindows 路径\nJSON 片段\n中文与换行\n转义\n⌘/Ctrl + Enter\n本工具只做文本转义，不解析或执行 Java 代码；字符串表达式拼接不会当作完整 Java 求值。\n未执行\n原文 → 字面量\n原文输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nJava 字面量输出\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n用法说明\n转义规则：\" → \\\"、\\ → \\\\、换行 → \\n、回车 → \\r、Tab → \\t，其余控制字符输出 \\uXXXX；中文等非 ASCII 字符保留原样不转义。\n还原是逐字符状态机：支持 \\\\ \\\" \\n \\r ",
-  "empty": 603,
+  "sh": 2255,
+  "text": "Java 字符串转义\n\n原文与 Java 字符串字面量互转，处理引号、换行与反斜杠。\n\n在线可用 · 输入不出浏览器\n收藏\n原文 → Java 字面量\nJava 字面量 → 原文\n输出形式\n普通字面量\n文本块（Java 15+）\n还原示例\nWindows 路径\nJSON 片段\n中文与换行\n转义\n⌘/Ctrl + Enter\n本工具只做文本转义，不解析或执行 Java 代码；字符串表达式拼接不会当作完整 Java 求值。\n未执行\n原文 → 字面量\n原文输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nJava 字面量输出\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n用法说明\n转义规则：\" → \\\"、\\ → \\\\、换行 → \\n、回车 → \\r、Tab → \\t，其余控制字符输出 \\uXXXX；中文等非 ASCII 字符保留原样不转义。\n还原是逐字符状态机：支持 \\\\ \\\" \\n \\r ",
+  "empty": 951,
   "err_text": "",
   "overflowX": false
  },
@@ -478,13 +685,15 @@
   "route": "/tools/properties-yaml",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=1541%2C1541&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=335660455&si=46a"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1816,
-  "text": "Properties / YAML 转换\n\nproperties 与 YAML 配置互转，处理 Unicode 转义与点路径嵌套。\n\n本地处理 · 输入不出浏览器\n收藏\nProperties → YAML\nYAML → Properties\n数组下标键\n转 YAML 数组\n保留下标键\n解码 \\uXXXX 转义\n载入示例\n转换\n⌘/Ctrl + Enter\n未执行\n自写 Properties 解析\nProperties 输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nYAML 输出\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n用法说明\nProperties 解析遵循 java.util.Properties 规则：= 与 : 分隔（也支持空白分隔）、# / ! 注释、行尾 \\ 续行；键两侧空白 trim，值只去除分隔符后的前导空白，尾部空白按 java.util.Properties",
-  "empty": 826,
+  "sh": 2386,
+  "text": "Properties / YAML 转换\n\nproperties 与 YAML 配置互转，处理 Unicode 转义与点路径嵌套。\n\n在线可用 · 输入不出浏览器\n收藏\nProperties → YAML\nYAML → Properties\n数组下标键\n转 YAML 数组\n保留下标键\n解码 \\uXXXX 转义\n载入示例\n转换\n⌘/Ctrl + Enter\n未执行\n自写 Properties 解析\nProperties 输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nYAML 输出\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n用法说明\nProperties 解析遵循 java.util.Properties 规则：= 与 : 分隔（也支持空白分隔）、# / ! 注释、行尾 \\ 续行；键两侧空白 trim，值只去除分隔符后的前导空白，尾部空白按 java.util.Properties",
+  "empty": 1216,
   "err_text": "",
   "overflowX": false
  },
@@ -492,13 +701,15 @@
   "route": "/tools/stack-trace",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=955%2C955&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1432447702&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1467,
-  "text": "Java 异常堆栈整理\n\n解析异常链与 Caused by，折叠框架调用、突出业务包。\n\n本地处理 · 输入不出浏览器\n收藏\n业务包前缀（正则）\n载入示例\n复制原文\n复制整理文本\n整理\n⌘/Ctrl + Enter\n未执行\n异常 0\n业务帧 0\n框架帧 0\n日志 / 堆栈输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n\n整理结果将显示在这里。\n\n用法说明\n识别的堆栈元素：异常链头行、at 调用帧、Caused by:、Suppressed:、... N more 公共帧省略标记；混入的普通日志行标注「非堆栈内容」原样保留。\n「业务包前缀」支持正则（默认 ^com\\.example\\.），命中的帧高亮；java. / javax. / jdk. / sun. / org.springframework. / org.apache. / io.netty. 等常见框架帧默认折叠为一行，",
-  "empty": 524,
+  "sh": 2015,
+  "text": "Java 异常堆栈整理\n\n解析异常链与 Caused by，折叠框架调用、突出业务包。\n\n在线可用 · 输入不出浏览器\n收藏\n业务包前缀（正则）\n载入示例\n复制原文\n复制整理文本\n整理\n⌘/Ctrl + Enter\n未执行\n异常 0\n业务帧 0\n框架帧 0\n日志 / 堆栈输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n\n整理结果将显示在这里。\n\n用法说明\n识别的堆栈元素：异常链头行、at 调用帧、Caused by:、Suppressed:、... N more 公共帧省略标记；混入的普通日志行标注「非堆栈内容」原样保留。\n「业务包前缀」支持正则（默认 ^com\\.example\\.），命中的帧高亮；java. / javax. / jdk. / sun. / org.springframework. / org.apache. / io.netty. 等常见框架帧默认折叠为一行，",
+  "empty": 854,
   "err_text": "",
   "overflowX": false
  },
@@ -506,13 +717,15 @@
   "route": "/tools/maven-gradle",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=978%2C978&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1787103768&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1842,
-  "text": "Maven / Gradle 依赖转换\n\nMaven XML 与 Gradle Groovy / Kotlin 依赖声明互转。\n\n本地处理 · 输入不出浏览器\n收藏\n源格式\nMaven XML\nGradle\n目标格式\nGradle Groovy\nGradle Kotlin\n载入示例\n转换\n⌘/Ctrl + Enter\n未执行\n本地转换，不查询网络、不下载依赖\nMaven XML 输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nGradle Groovy 输出\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n用法说明\nMaven scope 映射：compile → implementation、provided → compileOnly、test → testImplementation、runtime → runtimeOnly（implementation 输出不带 scope，",
-  "empty": 974,
+  "sh": 2390,
+  "text": "Maven / Gradle 依赖转换\n\nMaven XML 与 Gradle Groovy / Kotlin 依赖声明互转。\n\n在线可用 · 输入不出浏览器\n收藏\n源格式\nMaven XML\nGradle\n目标格式\nGradle Groovy\nGradle Kotlin\n载入示例\n转换\n⌘/Ctrl + Enter\n未执行\n本地转换，不查询网络、不下载依赖\nMaven XML 输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nGradle Groovy 输出\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n用法说明\nMaven scope 映射：compile → implementation、provided → compileOnly、test → testImplementation、runtime → runtimeOnly（implementation 输出不带 scope，",
+  "empty": 1362,
   "err_text": "",
   "overflowX": false
  },
@@ -520,13 +733,15 @@
   "route": "/tools/json2ts",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=996%2C996&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=804441110&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1964,
-  "text": "JSON 转 TypeScript 类型\n\n从 JSON 推断生成 TypeScript interface / type 定义。\n\n本地处理 · 输入不出浏览器\n收藏\n生成类型\n复制\n下载 .ts\n载入示例\n导入文件\n清空\n⌘⏎ 生成类型 · ⌘⇧C 复制\n目标\ninterface\ntype\n根类型名\n可选属性\n保持原样\n全部可选\n全部必填\n只读\n关闭\nreadonly\n日期字段\n保持 string\n转为 Date\n空数组策略\nunknown\nany\n手动指定\n空对象策略\nRecord<string, unknown>\n{}\n数组联合类型\n联合类型\n取首项类型\n未执行\nnull → unknown\n空对象 → Record<string, unknown>\n大整数保持 number\nJSON 输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nTypeScript 结果\n复制\n下载\n",
-  "empty": 824,
+  "sh": 2491,
+  "text": "JSON 转 TypeScript 类型\n\n从 JSON 推断生成 TypeScript interface / type 定义。\n\n在线可用 · 输入不出浏览器\n收藏\n生成类型\n复制\n下载 .ts\n载入示例\n导入文件\n清空\n⌘⏎ 生成类型 · ⌘⇧C 复制\n目标\ninterface\ntype\n根类型名\n可选属性\n保持原样\n全部可选\n全部必填\n只读\n关闭\nreadonly\n日期字段\n保持 string\n转为 Date\n空数组策略\nunknown\nany\n手动指定\n空对象策略\nRecord<string, unknown>\n{}\n数组联合类型\n联合类型\n取首项类型\n未执行\nnull → unknown\n空对象 → Record<string, unknown>\n大整数保持 number\nJSON 输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nTypeScript 结果\n复制\n下载\n",
+  "empty": 1202,
   "err_text": "",
   "overflowX": false
  },
@@ -534,13 +749,15 @@
   "route": "/tools/vue-sfc",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=967%2C967&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1571346453&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1299,
-  "text": "Vue 单文件组件模板\n\n按表单配置生成 .vue 单文件组件模板源码。\n\n本地处理 · 输入不出浏览器\n收藏\nTypeScript\nJavaScript\nscript setup + Composition API（固定）\n载入示例\n生成源码\n成功\n仅生成源码模板，不渲染组件、不执行任何源码\ndefineProps 类型 + withDefaults\ndefineEmits\n组件名\n\nPascalCase 多词命名（如 UserForm）\n\nprops（可留空）\n添加\nString\nNumber\nBoolean\nArray\nObject\nDate\n必选\nString\nNumber\nBoolean\nArray\nObject\nDate\n必选\nemits（可留空）\n添加\n样式作用域\nscoped\n非 scoped\n无样式\n样式语言\nCSS\nSCSS\nUserForm.vue\n复制\n下载 Use",
-  "empty": 833,
+  "sh": 1848,
+  "text": "Vue 单文件组件模板\n\n按表单配置生成 .vue 单文件组件模板源码。\n\n在线可用 · 输入不出浏览器\n收藏\nTypeScript\nJavaScript\nscript setup + Composition API（固定）\n载入示例\n生成源码\n成功\n仅生成源码模板，不渲染组件、不执行任何源码\ndefineProps 类型 + withDefaults\ndefineEmits\n组件名\n\nPascalCase 多词命名（如 UserForm）\n\nprops（可留空）\n添加\nString\nNumber\nBoolean\nArray\nObject\nDate\n必选\nString\nNumber\nBoolean\nArray\nObject\nDate\n必选\nemits（可留空）\n添加\n样式作用域\nscoped\n非 scoped\n无样式\n样式语言\nCSS\nSCSS\nUserForm.vue\n复制\n下载 Use",
+  "empty": 1208,
   "err_text": "",
   "overflowX": false
  },
@@ -548,13 +765,15 @@
   "route": "/tools/css-units",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=951%2C951&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1175888291&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1780,
-  "text": "CSS 单位换算\n\npx / rem / em 互转，根字号与父字号分别可设。\n\n本地处理 · 输入不出浏览器\n收藏\n换算\n复制结果\n下载 .css\n复制表格\n⌘⏎ 换算\n根字号\npx\n父字号\npx\n小数位\n2 位\n3 位\n4 位\n小数处理\n去掉多余零\n固定位数\n零值单位\n0 不带单位\n0px\n目标单位\npx\nrem\nem\n成功\n已换算 4 行 / 4 个数值，跳过 0 行；基准：根字号 16px · 父字号 20px\n根 16px · 父 20px\n小数位 2\n去掉多余零\n输入 · CSS 值\n逐行\n载入示例\n批量示例\n导入文件\n清空\nCSS 值文本\n复制\n下载\n清空\n1\n2\n3\n4\n字符 59\n字节 59\n行 4\n批量结果 · 4 行\n根 16px · 父 20px\n复制不含表头与单位说明\n复制已勾选\n原值\npx（根字号 16px）\nrem\nem（父字号 20px）\n16px\n16px",
-  "empty": 865,
+  "sh": 2307,
+  "text": "CSS 单位换算\n\npx / rem / em 互转，根字号与父字号分别可设。\n\n在线可用 · 输入不出浏览器\n收藏\n换算\n复制结果\n下载 .css\n复制表格\n⌘⏎ 换算\n根字号\npx\n父字号\npx\n小数位\n2 位\n3 位\n4 位\n小数处理\n去掉多余零\n固定位数\n零值单位\n0 不带单位\n0px\n目标单位\npx\nrem\nem\n成功\n已换算 4 行 / 4 个数值，跳过 0 行；基准：根字号 16px · 父字号 20px\n根 16px · 父 20px\n小数位 2\n去掉多余零\n输入 · CSS 值\n逐行\n载入示例\n批量示例\n导入文件\n清空\nCSS 值文本\n复制\n下载\n清空\n1\n2\n3\n4\n字符 59\n字节 59\n行 4\n批量结果 · 4 行\n根 16px · 父 20px\n复制不含表头与单位说明\n复制已勾选\n原值\npx（根字号 16px）\nrem\nem（父字号 20px）\n16px\n16px",
+  "empty": 1202,
   "err_text": "",
   "overflowX": false
  },
@@ -562,13 +781,15 @@
   "route": "/tools/color",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=1005%2C1005&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1035886757&si=46"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 2165,
-  "text": "颜色转换与对比度\n\nHEX / RGB / HSL 转换与前景背景对比度等级计算。\n\n本地处理 · 输入不出浏览器\n收藏\n转换\n复制全部格式\n下载\n蓝色示例\n低对比示例\n透明度示例\n⌘⏎ 转换\n成功\n对比度 5.17:1（WCAG 相对亮度公式）\nWCAG 2.1 相对亮度\nAA 正文 ≥4.5 / 大字 ≥3\nAAA 正文 ≥7 / 大字 ≥4.5\n\n前景色（文本）\n\n输入格式\nHEX\nRGB\nHSL\n\n切换后会把当前颜色改写成所选写法，解析本身兼容全部写法\n\n颜色\n不透明度\n%\n\n背景色\n\n颜色\n\n合成背景\n\n合成背景色（透明色先压到它上面再算对比度）\n\n默认白 #ffffff，仅影响透明色/预览的合成\n\n色值格式\n\n单行可单独复制\n复制全部\nHEX\n#2563eb\nHEX8\n#2563ebff\nRGB\nrgb(37, 99, 235)\nRGBA\nrgba(37, 99, 235, 1",
-  "empty": 994,
+  "sh": 2713,
+  "text": "颜色转换与对比度\n\nHEX / RGB / HSL 转换与前景背景对比度等级计算。\n\n在线可用 · 输入不出浏览器\n收藏\n转换\n复制全部格式\n下载\n蓝色示例\n低对比示例\n透明度示例\n⌘⏎ 转换\n成功\n对比度 5.17:1（WCAG 相对亮度公式）\nWCAG 2.1 相对亮度\nAA 正文 ≥4.5 / 大字 ≥3\nAAA 正文 ≥7 / 大字 ≥4.5\n\n前景色（文本）\n\n输入格式\nHEX\nRGB\nHSL\n\n切换后会把当前颜色改写成所选写法，解析本身兼容全部写法\n\n颜色\n不透明度\n%\n\n背景色\n\n颜色\n\n合成背景\n\n合成背景色（透明色先压到它上面再算对比度）\n\n默认白 #ffffff，仅影响透明色/预览的合成\n\n色值格式\n\n单行可单独复制\n复制全部\nHEX\n#2563eb\nHEX8\n#2563ebff\nRGB\nrgb(37, 99, 235)\nRGBA\nrgba(37, 99, 235, 1",
+  "empty": 1338,
   "err_text": "",
   "overflowX": false
  },
@@ -576,13 +797,15 @@
   "route": "/tools/svg",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=954%2C954&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=733430438&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1498,
-  "text": "SVG 预览与优化\n\nSVG 源码安全预览、体积优化与前后差异对比。\n\n本地处理 · 输入不出浏览器\n收藏\n格式化并优化\n复制 SVG\n下载\n载入示例\n不安全示例\n高精度示例\n⌘/Ctrl + Enter 优化\n压缩空白\n开启\n关闭\n保留 viewBox\n是\n否\n删除 title/desc\n否\n是\n小数位\n2 位\n3 位\n4 位\n未执行\n安全预览：不执行脚本、不加载外部资源\n\n拖入文件，或点击选择\n\n拖入 .svg 文件（≤5MB），内容保留在本地\n\n当前单文件限制 5.00 MB\n\nSVG 源码\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n安全预览\n不执行脚本\n不加载远程资源\n\n解析成功后在此预览（不执行脚本、不加载远程资源）\n\n优化结果\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n预览与优化的边界\n安全预览\n检测到 <script>、<foreignObject>、on* 事件属",
-  "empty": 739,
+  "sh": 2025,
+  "text": "SVG 预览与优化\n\nSVG 源码安全预览、体积优化与前后差异对比。\n\n在线可用 · 输入不出浏览器\n收藏\n格式化并优化\n复制 SVG\n下载\n载入示例\n不安全示例\n高精度示例\n⌘/Ctrl + Enter 优化\n压缩空白\n开启\n关闭\n保留 viewBox\n是\n否\n删除 title/desc\n否\n是\n小数位\n2 位\n3 位\n4 位\n未执行\n安全预览：不执行脚本、不加载外部资源\n\n拖入文件，或点击选择\n\n拖入 .svg 文件（≤5MB），内容保留在本地\n\n当前单文件限制 5.00 MB\n\nSVG 源码\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n安全预览\n不执行脚本\n不加载远程资源\n\n解析成功后在此预览（不执行脚本、不加载远程资源）\n\n优化结果\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n预览与优化的边界\n安全预览\n检测到 <script>、<foreignObject>、on* 事件属",
+  "empty": 1065,
   "err_text": "500",
   "overflowX": false
  },
@@ -590,13 +813,15 @@
   "route": "/tools/html-format",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=969%2C969&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=876792384&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 2236,
-  "text": "HTML / CSS / JS 格式化\n\nHTML、CSS、JavaScript 源码格式化与缩进配置。\n\n本地处理 · 输入不出浏览器\n收藏\nHTML\nCSS\nJS\n导入文件\n载入示例\n清空\n格式化\n⌘/Ctrl + Enter 执行\n缩进\n2 空格\n4 空格\nTab\n换行\nLF\nCRLF\n属性换行\n保持\n每行一个\n保留空行\n否\n是\n未执行\nHTML\n自实现保守格式化器\nHTML 输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n格式化结果\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n格式化规则（保守策略：宁可少改，不可改坏）\n\n仅重排空白与缩进，不改变标签、属性、文本内容与字符编码；HTML 不做标签闭合修复，CSS 不做属性合并，JS 不执行也不做压缩混淆。改选项后需重新点击「格式化」。\n\n通用选项\n换行：输出使用 LF 或 CRLF；保留空行：保留源码中的连续空行（是 时）。",
-  "empty": 989,
+  "sh": 2763,
+  "text": "HTML / CSS / JS 格式化\n\nHTML、CSS、JavaScript 源码格式化与缩进配置。\n\n在线可用 · 输入不出浏览器\n收藏\nHTML\nCSS\nJS\n导入文件\n载入示例\n清空\n格式化\n⌘/Ctrl + Enter 执行\n缩进\n2 空格\n4 空格\nTab\n换行\nLF\nCRLF\n属性换行\n保持\n每行一个\n保留空行\n否\n是\n未执行\nHTML\n自实现保守格式化器\nHTML 输入\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\n格式化结果\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n格式化规则（保守策略：宁可少改，不可改坏）\n\n仅重排空白与缩进，不改变标签、属性、文本内容与字符编码；HTML 不做标签闭合修复，CSS 不做属性合并，JS 不执行也不做压缩混淆。改选项后需重新点击「格式化」。\n\n通用选项\n换行：输出使用 LF 或 CRLF；保留空行：保留源码中的连续空行（是 时）。",
+  "empty": 1317,
   "err_text": "",
   "overflowX": false
  },
@@ -604,13 +829,15 @@
   "route": "/tools/jwt",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=943%2C943&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1405669732&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1248,
-  "text": "JWT 解析与验签\n\n解码 JWT Header / Payload 并本地验签，解释时间字段。\n\n本地处理 · 输入不出浏览器\n收藏\nToken\n示例：有效签名\n示例：被篡改签名\n清空\nJWT（eyJhbGciOi…）\n复制\n下载\n清空\n1\n未执行\n签名验证（独立执行：解码成功 ≠ 签名有效）\n解码成功 ≠ 签名有效：解码不使用密钥，任何人都可构造。请选择算法并用密钥验证签名。\n算法（从 Header 带出，请确认）\nHS256\nHS384\nHS512\nRS256\nES256\nnone（无签名）\n\n使用 WebCrypto HMAC（SHA-256）在本地重算签名并与第三段逐字节比对；不请求任何网络（含 JWKS）。\n\nHMAC 密钥（UTF-8 文本）\n\n示例使用公开测试密钥 devkit-secret（仅演示用，请勿在生产环境使用）\n\n验证签名\n使用 WebCrypto HMAC（S",
-  "empty": 779,
+  "sh": 1740,
+  "text": "JWT 解析与验签\n\n解码 JWT Header / Payload 并本地验签，解释时间字段。\n\n在线可用 · 输入不出浏览器\n收藏\nToken\n示例：有效签名\n示例：被篡改签名\n清空\nJWT（eyJhbGciOi…）\n复制\n下载\n清空\n1\n未执行\n签名验证（独立执行：解码成功 ≠ 签名有效）\n解码成功 ≠ 签名有效：解码不使用密钥，任何人都可构造。请选择算法并用密钥验证签名。\n算法（从 Header 带出，请确认）\nHS256\nHS384\nHS512\nRS256\nES256\nnone（无签名）\n\n使用 WebCrypto HMAC（SHA-256）在本地重算签名并与第三段逐字节比对；不请求任何网络（含 JWKS）。\n\nHMAC 密钥（UTF-8 文本）\n\n示例使用公开测试密钥 devkit-secret（仅演示用，请勿在生产环境使用）\n\n验证签名\n使用 WebCrypto HMAC（S",
+  "empty": 1107,
   "err_text": "",
   "overflowX": false
  },
@@ -618,13 +845,15 @@
   "route": "/tools/url-params",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=943%2C943&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1833265647&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 969,
-  "text": "URL 参数编辑\n\n结构化编辑 URL 的 query 参数，支持重复键与编码预览。\n\n本地处理 · 输入不出浏览器\n收藏\nURL\n载入示例\n清空\n应用修改\n复制 URL\n还原\n⌘/Ctrl + Enter 应用\n重复键\n保留\n合并\n编码\n自动\n不编码\n排序\n保持原序\n按键排序\n未执行\n\n本工具只编辑 URL，不发起任何请求。\n\n输入完整 URL 后实时解析；示例包含重复键（tag 出现两次）、空值参数（empty=）与 Fragment（#results）。\n重复键与编码规则\n同名参数（如 tag）默认保留为多条并按原顺序输出；选择「合并」后才会用逗号连接值，空值参数保留为 key=。\n「编码：自动」只对参数 key / value 做 encodeURIComponent（UTF-8 百分号编码）；「不编码」原样输出，是否编码由你确认。\n「按键排序」使用稳定的按键排序；同键多条保持原有",
-  "empty": 474,
+  "sh": 1462,
+  "text": "URL 参数编辑\n\n结构化编辑 URL 的 query 参数，支持重复键与编码预览。\n\n在线可用 · 输入不出浏览器\n收藏\nURL\n载入示例\n清空\n应用修改\n复制 URL\n还原\n⌘/Ctrl + Enter 应用\n重复键\n保留\n合并\n编码\n自动\n不编码\n排序\n保持原序\n按键排序\n未执行\n\n本工具只编辑 URL，不发起任何请求。\n\n输入完整 URL 后实时解析；示例包含重复键（tag 出现两次）、空值参数（empty=）与 Fragment（#results）。\n重复键与编码规则\n同名参数（如 tag）默认保留为多条并按原顺序输出；选择「合并」后才会用逗号连接值，空值参数保留为 key=。\n「编码：自动」只对参数 key / value 做 encodeURIComponent（UTF-8 百分号编码）；「不编码」原样输出，是否编码由你确认。\n「按键排序」使用稳定的按键排序；同键多条保持原有",
+  "empty": 776,
   "err_text": "",
   "overflowX": false
  },
@@ -632,13 +861,15 @@
   "route": "/tools/curl-convert",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=949%2C949&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=481976812&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 2010,
-  "text": "curl / fetch / Axios 转换\n\ncurl、fetch、Axios 请求代码互转，仅转换不执行。\n\n本地处理 · 输入不出浏览器\n收藏\n方向\ncurl → fetch\nfetch → curl\ncurl → Axios\n载入示例\n复制目标代码\n转换\n⌘/Ctrl + Enter 转换\n目标语言\nJavaScript\nTypeScript\n凭证处理\n保留占位\n移除\n缩进\n2 空格\n4 空格\n凭证类 header 默认替换为占位符，不会输出原值\n未执行\ncurl → fetch\nJavaScript\n缩进 2 空格\ncurl 源码\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nfetch 代码\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n转换能力与限制\n选项\n方向预设固定为 curl → fetch、fetch → curl、curl → Axios 三种。\n凭证处理：Au",
-  "empty": 1213,
+  "sh": 2524,
+  "text": "curl / fetch / Axios 转换\n\ncurl、fetch、Axios 请求代码互转，仅转换不执行。\n\n在线可用 · 输入不出浏览器\n收藏\n方向\ncurl → fetch\nfetch → curl\ncurl → Axios\n载入示例\n复制目标代码\n转换\n⌘/Ctrl + Enter 转换\n目标语言\nJavaScript\nTypeScript\n凭证处理\n保留占位\n移除\n缩进\n2 空格\n4 空格\n凭证类 header 默认替换为占位符，不会输出原值\n未执行\ncurl → fetch\nJavaScript\n缩进 2 空格\ncurl 源码\n复制\n下载\n清空\n1\n字符 0\n字节 0\n行 0\nfetch 代码\n复制\n下载\n1\n字符 0\n字节 0\n行 0\n转换能力与限制\n选项\n方向预设固定为 curl → fetch、fetch → curl、curl → Axios 三种。\n凭证处理：Au",
+  "empty": 1545,
   "err_text": "",
   "overflowX": false
  },
@@ -646,13 +877,15 @@
   "route": "/tools/http-status",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=956%2C956&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=710129032&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 3031,
-  "text": "HTTP 状态码速查\n\nHTTP 状态码分类速查，含用途说明与相近状态区别。\n\n本地处理 · 输入不出浏览器\n收藏\n命中 63 / 63\n清空条件\n分类\n全部\n1xx 信息\n2xx 成功\n3xx 重定向\n4xx 客户端错误\n5xx 服务器错误\n常用\n200\n301\n400\n401\n403\n404\n409\n429\n500\n100\nContinue\n继续\n客户端应继续发送请求体。\n101\nSwitching Protocols\n协议切换\n服务器同意升级协议，最典型的是 HTTP → WebSocket（Upgrade: websocket）。\n102\nProcessing\n处理中\nWebDAV 扩展：服务器已收到请求但尚未完成，定期发送 102 防止客户端超时断开。\n103\nEarly Hints\n早期提示\n在最终响应前预先返回 Link 头（如预加载 CSS/JS），让浏览器提前建立连接与下",
-  "empty": 4311,
+  "sh": 3523,
+  "text": "HTTP 状态码速查\n\nHTTP 状态码分类速查，含用途说明与相近状态区别。\n\n在线可用 · 输入不出浏览器\n收藏\n命中 63 / 63\n清空条件\n分类\n全部\n1xx 信息\n2xx 成功\n3xx 重定向\n4xx 客户端错误\n5xx 服务器错误\n常用\n200\n301\n400\n401\n403\n404\n409\n429\n500\n100\nContinue\n继续\n客户端应继续发送请求体。\n101\nSwitching Protocols\n协议切换\n服务器同意升级协议，最典型的是 HTTP → WebSocket（Upgrade: websocket）。\n102\nProcessing\n处理中\nWebDAV 扩展：服务器已收到请求但尚未完成，定期发送 102 防止客户端超时断开。\n103\nEarly Hints\n早期提示\n在最终响应前预先返回 Link 头（如预加载 CSS/JS），让浏览器提前建立连接与下",
+  "empty": 4605,
   "err_text": "500",
   "overflowX": false
  },
@@ -660,13 +893,15 @@
   "route": "/tools/file-digest",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=1012%2C1012&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=2000245178&si=46"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 873,
-  "text": "文件摘要与批量校验\n\n多文件摘要计算与期望值批量校验，支持导出清单。\n\n本地处理 · 输入不出浏览器\n收藏\nMD5\nSHA-256\nSHA-512\n改算法后需重新执行\n导出摘要清单\n未执行\nMD5\nSHA-256\n单文件上限 512.00 MB\n\n拖入文件，或点击选择\n\n支持多文件，全部在浏览器本地读取与计算，不会上传\n\n当前单文件限制 512.00 MB\n\n拖入多个文件后自动逐个计算；每文件可单独取消、移除、填写期望值对照。\n\n使用说明\nMD5 使用 spark-md5 增量计算（2MB 分块读取），SHA-256 / SHA-512 使用浏览器 WebCrypto，需要把整个文件载入内存。\n进度按真实读取量显示（已读取 / 共），不做耗时预估。\n单个文件失败或取消不影响其他文件；导出的 CSV 清单只包含真实算出的摘要，失败与取消按实际状态标注，不伪造结果。\n当前单文件限制 512.0",
-  "empty": 438,
+  "sh": 1400,
+  "text": "文件摘要与批量校验\n\n多文件摘要计算与期望值批量校验，支持导出清单。\n\n在线可用 · 输入不出浏览器\n收藏\nMD5\nSHA-256\nSHA-512\n改算法后需重新执行\n导出摘要清单\n未执行\nMD5\nSHA-256\n单文件上限 512.00 MB\n\n拖入文件，或点击选择\n\n支持多文件，全部在浏览器本地读取与计算，不会上传\n\n当前单文件限制 512.00 MB\n\n拖入多个文件后自动逐个计算；每文件可单独取消、移除、填写期望值对照。\n\n使用说明\nMD5 使用 spark-md5 增量计算（2MB 分块读取），SHA-256 / SHA-512 使用浏览器 WebCrypto，需要把整个文件载入内存。\n进度按真实读取量显示（已读取 / 共），不做耗时预估。\n单个文件失败或取消不影响其他文件；导出的 CSV 清单只包含真实算出的摘要，失败与取消按实际状态标注，不伪造结果。\n当前单文件限制 512.0",
+  "empty": 726,
   "err_text": "",
   "overflowX": false
  },
@@ -674,13 +909,15 @@
   "route": "/tools/image-compress",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=964%2C964&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=304488291&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 897,
-  "text": "图片压缩与格式转换\n\n本地压缩图片并转换格式，支持质量与尺寸约束。\n\n本地处理 · 输入不出浏览器\n收藏\nJPEG\nPNG\nWebP\n质量\n80\n底色\n重新转换\n未执行\n\n拖入文件，或点击选择\n\n拖入图片（PNG / JPEG / GIF / WebP 等，以当前浏览器能解码为准），全部本地处理\n\n当前单文件限制 100.00 MB\n\n选择图片后自动转换；修改格式 / 质量 / 尺寸立即重新计算。\n\n使用说明\n质量滑杆仅对 JPEG / WebP 生效（PNG 为无损格式，canvas 导出 PNG 无质量参数）。\n导出格式由 canvas.toBlob 完成；个别浏览器不支持导出 WebP 时会如实提示并显示实际输出类型。\n透明 PNG 转 JPEG 时需要选择底色（默认白色），透明区域会被底色填充。\n下载文件名为「原名.新扩展名」，例如 photo.png 转 JPEG 后是 phot",
-  "empty": 406,
+  "sh": 1424,
+  "text": "图片压缩与格式转换\n\n本地压缩图片并转换格式，支持质量与尺寸约束。\n\n在线可用 · 输入不出浏览器\n收藏\nJPEG\nPNG\nWebP\n质量\n80\n底色\n重新转换\n未执行\n\n拖入文件，或点击选择\n\n拖入图片（PNG / JPEG / GIF / WebP 等，以当前浏览器能解码为准），全部本地处理\n\n当前单文件限制 100.00 MB\n\n选择图片后自动转换；修改格式 / 质量 / 尺寸立即重新计算。\n\n使用说明\n质量滑杆仅对 JPEG / WebP 生效（PNG 为无损格式，canvas 导出 PNG 无质量参数）。\n导出格式由 canvas.toBlob 完成；个别浏览器不支持导出 WebP 时会如实提示并显示实际输出类型。\n透明 PNG 转 JPEG 时需要选择底色（默认白色），透明区域会被底色填充。\n下载文件名为「原名.新扩展名」，例如 photo.png 转 JPEG 后是 phot",
+  "empty": 698,
   "err_text": "",
   "overflowX": false
  },
@@ -688,13 +925,15 @@
   "route": "/tools/qrcode",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=987%2C987&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=963372567&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1273,
-  "text": "二维码生成与识别\n\n文本或 URL 生成二维码 PNG / SVG，本地识别图片中的二维码。\n\n本地处理 · 输入不出浏览器\n收藏\n生成\n识别\n尺寸\n128 × 128\n192 × 192\n256 × 256\n320 × 320\n384 × 384\n512 × 512\n768 × 768\n1024 × 1024\n纠错级别\nL（约 7% 纠错）\nM（约 15% 纠错）\nQ（约 25% 纠错）\nH（约 30% 纠错）\n成功\nQR Code 256×256，纠错级别 M，由输入内容真实生成\n256 × 256\n纠错 M\n内容 26 字符 / 26 字节（UTF-8）\n文本或 URL\n\n二维码内容由这里的输入真实生成，支持中文；容量有限，内容越长越容易超限\n\n下载 PNG\n下载 SVG\n识别当前预览\n填入示例 URL\n使用说明\n生成与识别全部在浏览器本地完成（qrcode / jsQR 库）。\n纠",
-  "empty": 614,
+  "sh": 1800,
+  "text": "二维码生成与识别\n\n文本或 URL 生成二维码 PNG / SVG，本地识别图片中的二维码。\n\n在线可用 · 输入不出浏览器\n收藏\n生成\n识别\n尺寸\n128 × 128\n192 × 192\n256 × 256\n320 × 320\n384 × 384\n512 × 512\n768 × 768\n1024 × 1024\n纠错级别\nL（约 7% 纠错）\nM（约 15% 纠错）\nQ（约 25% 纠错）\nH（约 30% 纠错）\n成功\nQR Code 256×256，纠错级别 M，由输入内容真实生成\n256 × 256\n纠错 M\n内容 26 字符 / 26 字节（UTF-8）\n文本或 URL\n\n二维码内容由这里的输入真实生成，支持中文；容量有限，内容越长越容易超限\n\n下载 PNG\n下载 SVG\n识别当前预览\n填入示例 URL\n使用说明\n生成与识别全部在浏览器本地完成（qrcode / jsQR 库）。\n纠",
+  "empty": 907,
   "err_text": "",
   "overflowX": false
  },
@@ -702,13 +941,15 @@
   "route": "/tools/text-encoding",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=963%2C963&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=262775384&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1093,
-  "text": "文本文件编码转换\n\n文本文件编码识别与转换，UTF-8 BOM 与换行符处理。\n\n本地处理 · 输入不出浏览器\n收藏\n下载 file-converted.txt\n未执行\n\n拖入文件，或点击选择\n\n文本类文件（.txt / .md / .log / .csv / .json 等）；文件只在本地读取\n\n选择文本文件后自动检测编码并解码预览；也可在上方 accept 之外手动输入任意文件名（拖拽不受过滤限制）。\n\n使用说明\n检测顺序：BOM（UTF-8 / UTF-16LE / UTF-16BE）→ 严格 UTF-8 验证 → 失败则标示「非 UTF-8，猜测可能为 GBK 等」并默认按 GBK 解码供预览，由你手动确认。\n目标编码可真实输出的有：UTF-8（TextEncoder）、UTF-16LE / UTF-16BE（本工具按码元逐个编码）、ISO-8859-1（Latin-1，本工具按 ",
-  "empty": 776,
+  "sh": 1620,
+  "text": "文本文件编码转换\n\n文本文件编码识别与转换，UTF-8 BOM 与换行符处理。\n\n在线可用 · 输入不出浏览器\n收藏\n下载 file-converted.txt\n未执行\n\n拖入文件，或点击选择\n\n文本类文件（.txt / .md / .log / .csv / .json 等）；文件只在本地读取\n\n选择文本文件后自动检测编码并解码预览；也可在上方 accept 之外手动输入任意文件名（拖拽不受过滤限制）。\n\n使用说明\n检测顺序：BOM（UTF-8 / UTF-16LE / UTF-16BE）→ 严格 UTF-8 验证 → 失败则标示「非 UTF-8，猜测可能为 GBK 等」并默认按 GBK 解码供预览，由你手动确认。\n目标编码可真实输出的有：UTF-8（TextEncoder）、UTF-16LE / UTF-16BE（本工具按码元逐个编码）、ISO-8859-1（Latin-1，本工具按 ",
+  "empty": 1074,
   "err_text": "",
   "overflowX": false
  },
@@ -716,13 +957,15 @@
   "route": "/tools/file-base64",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=951%2C951&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1364627190&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 844,
-  "text": "文件 / Base64 转换\n\n文件转 Base64 / Data URL，或反向导出为文件。\n\n本地处理 · 输入不出浏览器\n收藏\n文件 → Base64\nBase64 → 文件\n未执行\n选择文件后自动编码，全部在本地完成\n\n拖入文件，或点击选择\n\n任意类型文件（超过 50MB 拒绝，超过 10MB 提示卡顿风险）；文件只在本地读取\n\n当前单文件限制 50.00 MB\n\n使用说明\n文件 → Base64：输出裸串或 Data URL（前缀 data:MIME;base64,）；图片文件在 Data URL 形式下附带缩略图预览。\nBase64 → 文件：支持标准与 URL-safe 字母表、允许空白；Data URL 中声明的 MIME 与由它建议的扩展名都不可信，仅作参考。\n文件头（魔数）检测覆盖 PNG（89504E47）、JPEG（FFD8FF）、GIF（47494638）、PDF",
-  "empty": 500,
+  "sh": 1361,
+  "text": "文件 / Base64 转换\n\n文件转 Base64 / Data URL，或反向导出为文件。\n\n在线可用 · 输入不出浏览器\n收藏\n文件 → Base64\nBase64 → 文件\n未执行\n选择文件后自动编码，全部在本地完成\n\n拖入文件，或点击选择\n\n任意类型文件（超过 50MB 拒绝，超过 10MB 提示卡顿风险）；文件只在本地读取\n\n当前单文件限制 50.00 MB\n\n使用说明\n文件 → Base64：输出裸串或 Data URL（前缀 data:MIME;base64,）；图片文件在 Data URL 形式下附带缩略图预览。\nBase64 → 文件：支持标准与 URL-safe 字母表、允许空白；Data URL 中声明的 MIME 与由它建议的扩展名都不可信，仅作参考。\n文件头（魔数）检测覆盖 PNG（89504E47）、JPEG（FFD8FF）、GIF（47494638）、PDF",
+  "empty": 830,
   "err_text": "",
   "overflowX": false
  },
@@ -730,13 +973,15 @@
   "route": "/category/format",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=967%2C967&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1135621231&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 921,
-  "text": "数据格式\n4 个工具\n\nJSON、YAML、CSV 等结构化数据的格式化、校验与转换。\n\n本地处理 · 输入不上传\n全部工具\n分类切换保留左侧导航与当前筛选\nJSON 格式化\n\n格式化、压缩并校验 JSON，支持缩进选择与树形视图。\n\n数据格式\n大整数安全\nJSON 差异比较\n\n结构化比较两个 JSON，标注新增、删除与修改。\n\n数据格式\n结构化差异\nJSON / YAML 转换\n\nJSON 与 YAML 双向转换，保留中文、布尔与数组。\n\n数据格式\n双向转换\nCSV / JSON 转换\n\nCSV 与 JSON 互转，支持分隔符、表头与引号规则。\n\n数据格式\n表格预览",
-  "empty": 287,
+  "sh": 1561,
+  "text": "数据格式\n8 个工具\n\nJSON、YAML、CSV 等结构化数据的格式化、校验与转换。\n\n本地处理 · 输入不上传\n全部工具\n分类切换保留左侧导航与当前筛选\nJSON 格式化\n\n格式化、压缩并校验 JSON，支持缩进选择与树形视图。\n\n数据格式\n大整数安全\nJSON 差异比较\n\n结构化比较两个 JSON，标注新增、删除与修改。\n\n数据格式\n结构化差异\nJSON / YAML 转换\n\nJSON 与 YAML 双向转换，保留中文、布尔与数组。\n\n数据格式\n双向转换\nCSV / JSON 转换\n\nCSV 与 JSON 互转，支持分隔符、表头与引号规则。\n\n数据格式\n表格预览\nSQL 格式化\n\n格式化、压缩与美化 SQL · 支持 MySQL / PostgreSQL / SQLite 方言\n\n数据格式\n多方言\nXML 工具箱\n\n格式化、压缩、XML ↔ JSON 转换与 XPath 查询\n\n数据",
+  "empty": 628,
   "err_text": "",
   "overflowX": false
  },
@@ -744,13 +989,15 @@
   "route": "/category/text",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=1203%2C1203&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1682214789&si=46"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1345,
+  "sh": 1392,
   "text": "编码与文本\n7 个工具\n\nBase64、URL、Unicode 等编码转换与文本批量处理。\n\n本地处理 · 输入不上传\n全部工具\n分类切换保留左侧导航与当前筛选\nBase64 编解码\n\n文本与文件的 Base64 / Base64URL 编码和解码。\n\n编码与文本\n支持文件\nURL 编解码\n\n完整 URI 与组件模式的 URL 编码和解码。\n\n编码与文本\nUnicode / 字节编码转换\n\nUnicode 转义、UTF-8 文本与 Hex 字节互转，区分字符与字节。\n\n编码与文本\n字符与字节区分\n文本去重与整理\n\n逐行去重、去除空行与整理排序，可选是否处理空格。\n\n编码与文本\n命名风格转换\n\ncamelCase、snake_case、kebab-case 等命名风格批量互转。\n\n编码与文本\n批量处理\n文本差异比较\n\n逐行与行内差异比较，支持同步滚动与忽略空白。\n\n编码与文本\n行内差异\n正则",
-  "empty": 455,
+  "empty": 502,
   "err_text": "",
   "overflowX": false
  },
@@ -758,13 +1005,15 @@
   "route": "/category/crypto",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=954%2C954&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1608993911&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1327,
+  "sh": 1374,
   "text": "摘要与加密\n6 个工具\n\n对消息计算摘要、做完整性校验，或按算法做对称 / 非对称加解密；全部在本机完成\n\n本地处理 · 输入不上传\n全部工具\n分类切换保留左侧导航与当前筛选\n摘要（单向，不可逆）\n计算摘要值，用于校验完整性；摘要不可逆，不提供解密\n2 个\nMD5 / SHA 摘要\n\n计算文本或文件的 MD5、SHA-256、SHA-512 摘要并对照期望值。\n\n摘要与加密\n支持文件\nSM3 摘要\n\n国密 SM3 摘要计算，支持文本与文件、Hex 与 Base64 输出。\n\n摘要与加密\n国密\n对称加密（同一密钥加解密）\n加密与解密使用同一密钥；密钥不是口令，不做密码派生\n3 个\nAES 加解密\n\nAES-GCM 本地加解密，密钥与 IV 编码、AAD 与认证标签可配。\n\n摘要与加密\nWebCrypto\nSM4 加解密\n\n国密 SM4 CBC/ECB 加解密，PKCS#7 与 NoPaddi",
-  "empty": 566,
+  "empty": 613,
   "err_text": "",
   "overflowX": false
  },
@@ -772,13 +1021,15 @@
   "route": "/category/time",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=951%2C951&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=240068159&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 900,
-  "text": "时间与标识\n4 个工具\n\n时间戳、UUID、Cron 与日期时间差计算。\n\n本地处理 · 输入不上传\n全部工具\n分类切换保留左侧导航与当前筛选\n时间戳转换\n\n秒/毫秒时间戳与可读时间双向转换，支持时区与 ISO8601。\n\n时间与标识\nUUID 生成与解析\n\n批量生成 UUID v4 / v7，解析版本与格式信息。\n\n时间与标识\nv4 / v7\nCron 解析与执行预览\n\nUnix 五字段与 Quartz 方言解析、字段解释与未来执行预览。\n\n时间与标识\nUnix / Quartz\n日期时间差计算\n\n计算两个时刻的实际经过时长与日历年月日差，支持跨时区。\n\n时间与标识",
-  "empty": 287,
+  "sh": 947,
+  "text": "时间与标识\n4 个工具\n\n时间戳、UUID、Cron 与日期时间差计算。\n\n本地处理 · 输入不上传\n全部工具\n分类切换保留左侧导航与当前筛选\n时间戳转换\n\n秒/毫秒时间戳与可读时间双向转换，支持时区与 ISO8601。\n\n时间与标识\nUUID 生成与解析\n\n批量生成 UUID v4 / v7，解析版本与格式信息。\n\n时间与标识\nv4 / v7\nCron 解析与执行预览\n\nUnix 五字段与 Quartz 方言解析、字段解释与未来执行预览。\n\n时间与标识\nUnix / Quartz\n日期时间差计算\n\n计算两个时刻的实际经过时长与日历年月日差，支持跨时区。\n\n时间与标识\n© 2026 DevKit\n·\n鲁ICP备19015025号-2\n·\n开源仓库\n·\n隐私说明",
+  "empty": 334,
   "err_text": "",
   "overflowX": false
  },
@@ -786,13 +1037,15 @@
   "route": "/category/java",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=949%2C949&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=135762781&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1179,
+  "sh": 1226,
   "text": "Java 开发\n5 个工具\n\n面向 JVM 工程的代码与配置转换：从 JSON 生成类、整理配置与堆栈、转换依赖声明\n\n本地处理 · 输入不上传\n全部工具\n分类切换保留左侧导航与当前筛选\n代码生成与转义\n生成的是源码文本，不在本机编译或运行\n2 个\nJSON 转 Java 类\n\n从 JSON 生成 POJO 或 record，支持 Lombok / Jackson 注解。\n\nJava 开发\nPOJO / record\nJava 字符串转义\n\n原文与 Java 字符串字面量互转，处理引号、换行与反斜杠。\n\nJava 开发\n配置转换\n键冲突先报错；scope 与 configuration 不等价时要求手动选择映射\n2 个\nProperties / YAML 转换\n\nproperties 与 YAML 配置互转，处理 Unicode 转义与点路径嵌套。\n\nJava 开发\nMaven / Gra",
-  "empty": 542,
+  "empty": 589,
   "err_text": "",
   "overflowX": false
  },
@@ -800,13 +1053,15 @@
   "route": "/category/web",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=958%2C958&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=1246632141&si=46ab"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1217,
+  "sh": 1264,
   "text": "Web / Vue\n6 个工具\n\nTypeScript 类型、Vue 组件模板、CSS 单位、颜色与前端格式化。\n\n本地处理 · 输入不上传\n全部工具\n分类切换保留左侧导航与当前筛选\nJSON 转 TypeScript 类型\n\n从 JSON 推断生成 TypeScript interface / type 定义。\n\nWeb / Vue\nVue 单文件组件模板\n\n按表单配置生成 .vue 单文件组件模板源码。\n\nWeb / Vue\nComposition API\nCSS 单位换算\n\npx / rem / em 互转，根字号与父字号分别可设。\n\nWeb / Vue\n颜色转换与对比度\n\nHEX / RGB / HSL 转换与前景背景对比度等级计算。\n\nWeb / Vue\n对比度等级\nSVG 预览与优化\n\nSVG 源码安全预览、体积优化与前后差异对比。\n\nWeb / Vue\n安全预览\nHTML /",
-  "empty": 457,
+  "empty": 504,
   "err_text": "",
   "overflowX": false
  },
@@ -814,13 +1069,15 @@
   "route": "/category/api",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=972%2C972&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=392340557&si=46ab2"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 900,
-  "text": "接口辅助\n4 个工具\n\nJWT、URL 参数、请求代码转换与 HTTP 状态码速查。\n\n本地处理 · 输入不上传\n全部工具\n分类切换保留左侧导航与当前筛选\nJWT 解析与验签\n\n解码 JWT Header / Payload 并本地验签，解释时间字段。\n\n接口辅助\n本地验签\nURL 参数编辑\n\n结构化编辑 URL 的 query 参数，支持重复键与编码预览。\n\n接口辅助\ncurl / fetch / Axios 转换\n\ncurl、fetch、Axios 请求代码互转，仅转换不执行。\n\n接口辅助\nHTTP 状态码速查\n\nHTTP 状态码分类速查，含用途说明与相近状态区别。\n\n接口辅助\n离线知识",
-  "empty": 299,
+  "sh": 947,
+  "text": "接口辅助\n4 个工具\n\nJWT、URL 参数、请求代码转换与 HTTP 状态码速查。\n\n本地处理 · 输入不上传\n全部工具\n分类切换保留左侧导航与当前筛选\nJWT 解析与验签\n\n解码 JWT Header / Payload 并本地验签，解释时间字段。\n\n接口辅助\n本地验签\nURL 参数编辑\n\n结构化编辑 URL 的 query 参数，支持重复键与编码预览。\n\n接口辅助\ncurl / fetch / Axios 转换\n\ncurl、fetch、Axios 请求代码互转，仅转换不执行。\n\n接口辅助\nHTTP 状态码速查\n\nHTTP 状态码分类速查，含用途说明与相近状态区别。\n\n接口辅助\n离线知识\n© 2026 DevKit\n·\n鲁ICP备19015025号-2\n·\n开源仓库\n·\n隐私说明",
+  "empty": 346,
   "err_text": "",
   "overflowX": false
  },
@@ -828,13 +1085,15 @@
   "route": "/category/file",
   "console": [],
   "pageerrors": [],
-  "failed": [],
+  "failed": [
+   "https://hm.baidu.com/hm.gif?hca=6E102B25C2BC8609&cc=1&ck=1&cl=24-bit&ds=390x844&vl=844&ep=1058%2C1058&et=3&ja=0&ln=en-us&lo=0&lt=1789965931&rnd=365116707&si=46a"
+  ],
   "status": 200,
   "sw": 390,
   "vw": 390,
-  "sh": 1048,
-  "text": "文件与图片\n5 个工具\n\n文件摘要、图片压缩、二维码与文件编码转换。\n\n本地处理 · 输入不上传\n全部工具\n分类切换保留左侧导航与当前筛选\n文件摘要与批量校验\n\n多文件摘要计算与期望值批量校验，支持导出清单。\n\n文件与图片\n多文件\n图片压缩与格式转换\n\n本地压缩图片并转换格式，支持质量与尺寸约束。\n\n文件与图片\n本地处理\n二维码生成与识别\n\n文本或 URL 生成二维码 PNG / SVG，本地识别图片中的二维码。\n\n文件与图片\n生成 / 识别\n文本文件编码转换\n\n文本文件编码识别与转换，UTF-8 BOM 与换行符处理。\n\n文件与图片\n文件 / Base64 转换\n\n文件转 Base64 / Data URL，或反向导出为文件。\n\n文件与图片",
-  "empty": 325,
+  "sh": 1096,
+  "text": "文件与图片\n5 个工具\n\n文件摘要、图片压缩、二维码与文件编码转换。\n\n本地处理 · 输入不上传\n全部工具\n分类切换保留左侧导航与当前筛选\n文件摘要与批量校验\n\n多文件摘要计算与期望值批量校验，支持导出清单。\n\n文件与图片\n多文件\n图片压缩与格式转换\n\n本地压缩图片并转换格式，支持质量与尺寸约束。\n\n文件与图片\n本地处理\n二维码生成与识别\n\n文本或 URL 生成二维码 PNG / SVG，本地识别图片中的二维码。\n\n文件与图片\n生成 / 识别\n文本文件编码转换\n\n文本文件编码识别与转换，UTF-8 BOM 与换行符处理。\n\n文件与图片\n文件 / Base64 转换\n\n文件转 Base64 / Data URL，或反向导出为文件。\n\n文件与图片\n© 2026 DevKit\n·\n鲁ICP备19015025号-2\n·\n开源仓库\n·\n隐私说明",
+  "empty": 372,
   "err_text": "",
   "overflowX": false
  }

@@ -4,6 +4,8 @@ export interface ToolMeta {
   /** 路由 slug，如 json-format */
   slug: string
   name: string
+  /** 窄容器（侧栏、搜索）里的短名，缺省用 name */
+  short?: string
   /** 分类 key */
   cat: CategoryKey
   /** 一句用途说明 */
@@ -66,6 +68,30 @@ export const tools: ToolMeta[] = [
     desc: 'CSV 与 JSON 互转，支持分隔符、表头与引号规则。',
     alias: ['csv', 'json', '表格', 'excel', '转换', 'tsv'],
     tags: ['表格预览']
+  },
+  {
+    id: 't42', slug: 'sql-format', name: 'SQL 格式化', cat: 'format', icon: 'database',
+    desc: '格式化、压缩与美化 SQL · 支持 MySQL / PostgreSQL / SQLite 方言',
+    alias: ['sql', 'format', 'beautify', 'minify', 'mysql', 'postgres', 'postgresql', 'sqlite', '格式化', '压缩', '美化', '方言'],
+    tags: ['多方言']
+  },
+  {
+    id: 't43', slug: 'xml-toolbox', name: 'XML 工具箱', cat: 'format', icon: 'code-xml',
+    desc: '格式化、压缩、XML ↔ JSON 转换与 XPath 查询',
+    alias: ['xml', 'xpath', '节点', '格式化', '压缩', '转换', '查询', '文档'],
+    tags: ['XPath 1.0']
+  },
+  {
+    id: 't44', slug: 'jsonpath-query', name: 'JSONPath / JMESPath 查询', short: 'JSONPath 查询', cat: 'format', icon: 'list-filter',
+    desc: '用 JSONPath 或 JMESPath 从 JSON 中提取数据，并导出匹配路径',
+    alias: ['jsonpath', 'jmespath', 'query', 'filter', '查询', '过滤', '提取', '路径', '表达式'],
+    tags: ['JSONPath / JMESPath']
+  },
+  {
+    id: 't45', slug: 'json-schema', name: 'JSON Schema', cat: 'format', icon: 'file-code',
+    desc: '从 JSON 生成 Schema，或用 Schema 校验 JSON 并定位错误路径',
+    alias: ['json', 'schema', 'jsonschema', 'validate', '校验', '生成', 'draft', 'draft-07', '错误路径'],
+    tags: ['Draft 2020-12']
   },
   {
     id: 't05', slug: 'base64', name: 'Base64 编解码', cat: 'text', icon: 'binary',

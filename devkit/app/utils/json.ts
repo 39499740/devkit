@@ -70,6 +70,21 @@ function makeUnwrap(prefix: string) {
   }
 }
 
+/** 把 parseJson 结果里的 RawNumber 还原成普通值：安全范围内转 number，超出范围保留原始字符串 */
+export function toPlainJson(v: unknown): unknown {
+  if (v instanceof RawNumber) {
+    const n = Number(v.raw)
+    return Number.isFinite(n) && Math.abs(n) <= Number.MAX_SAFE_INTEGER ? n : v.raw
+  }
+  if (Array.isArray(v)) return v.map(toPlainJson)
+  if (v && typeof v === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) out[k] = toPlainJson(val)
+    return out
+  }
+  return v
+}
+
 export interface JsonParseResult {
   value: unknown
   /** 重复键列表：路径 -> 键 */
