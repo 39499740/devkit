@@ -33,9 +33,13 @@ function retry() {
   if (typeof window !== 'undefined') window.location.reload()
 }
 
-function applyUpdate() {
-  pwa.applyUpdate()
-  toast.success('正在应用新版本并重新加载页面')
+const applying = ref(false)
+
+async function applyUpdate() {
+  if (applying.value) return
+  applying.value = true
+  toast.success('正在切换到新版本，页面会自动重新加载')
+  await pwa.applyUpdate()
 }
 </script>
 
@@ -82,7 +86,7 @@ function applyUpdate() {
         <div class="pwastatus__update-workspace">
           <p class="pwastatus__update-title">当前工作区不受影响</p>
           <p class="pwastatus__update-desc">
-            未提交的输入仍保留在本次页面内存中；选择「立即更新」会在当前页面重新加载并应用新版本，选择「稍后」则保留当前版本直到下次打开。
+            未提交的输入仍保留在本次页面内存中；选择「立即更新」会先让新版本接管、再自动重新加载当前页面；选择「稍后」则保留当前版本直到下次打开，并且本次会话内不会再打扰你。
           </p>
           <div class="pwastatus__tags">
             <span class="pwastatus__tag">当前版本正在运行</span>
@@ -91,9 +95,9 @@ function applyUpdate() {
         </div>
       </div>
       <template #footer>
-        <DkButton size="sm" @click="pwa.postponeUpdate()">稍后</DkButton>
-        <DkButton size="sm" variant="primary" @click="applyUpdate">
-          <DkIcon name="refresh-cw" :size="13" />立即更新
+        <DkButton size="sm" :disabled="applying" @click="pwa.postponeUpdate()">稍后</DkButton>
+        <DkButton size="sm" variant="primary" :disabled="applying" @click="applyUpdate">
+          <DkIcon name="refresh-cw" :size="13" />{{ applying ? '切换中…' : '立即更新' }}
         </DkButton>
       </template>
     </DkModal>

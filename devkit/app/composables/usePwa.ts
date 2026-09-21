@@ -19,6 +19,9 @@ interface PwaRuntime {
   updateServiceWorker?: (reload?: boolean) => Promise<void>
 }
 
+/** 会话级「稍后」标记：同一次会话里不重复弹更新提示 */
+const UPDATE_SNOOZE_KEY = 'devkit.pwa.update-snooze'
+
 export function usePwa() {
   const installed = ref(false)
   const installable = ref(false)
@@ -89,16 +92,63 @@ export function usePwa() {
     runtime?.cancelPrompt?.()
   }
 
+  /** 本轮会话内已选过「稍后」：同一次刷新周期内不再反复弹，避免每次刷新都来一次 */
+  function snoozeUpdate() {
+    try {
+      sessionStorage.setItem(UPDATE_SNOOZE_KEY, '1')
+    } catch {
+      /* 隐私模式下写不了 sessionStorage 就算了，只是会再提示一次 */
+    }
+  }
+
+  function readSnooze() {
+    try {
+      return sessionStorage.getItem(UPDATE_SNOOZE_KEY) === '1'
+    } catch {
+      return false
+    }
+  }
+
   function postponeUpdate() {
     needRefresh.value = false
+    snoozeUpdate()
     runtime?.cancelPrompt?.()
   }
 
-  /** 立即更新：让等待中的 Service Worker 接管并重新加载当前页面 */
-  function applyUpdate() {
+  /**
+   * 立即更新：显式把等待中的新 Service Worker 切上来，等它真正接管（controllerchange）后再刷新。
+   * 不依赖 $pwa.updateServiceWorker —— 少一层封装就少一处竞态：早刷新会让新 worker 还停在 waiting，
+   * 于是刷新后又弹同一个「新版本已就绪」。
+   */
+  async function applyUpdate() {
     needRefresh.value = false
-    if (runtime?.updateServiceWorker) runtime.updateServiceWorker(true)
-    else if (typeof window !== 'undefined') window.location.reload()
+    try {
+      sessionStorage.removeItem(UPDATE_SNOOZE_KEY)
+    } catch {
+      /* 同上，忽略 */
+    }
+    runtime?.cancelPrompt?.()
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+      window.location.reload()
+      return
+    }
+    const registration = await navigator.serviceWorker.getRegistration()
+    const waiting = registration?.waiting
+    if (!waiting) {
+      // 没有等待中的 worker：要么已经接管了，要么浏览器还没拿到新版本，直接刷新即可
+      window.location.reload()
+      return
+    }
+    await new Promise<void>((resolve) => {
+      const done = () => {
+        clearTimeout(timer)
+        resolve()
+      }
+      const timer = setTimeout(done, 4000)
+      navigator.serviceWorker.addEventListener('controllerchange', done, { once: true })
+      waiting.postMessage({ type: 'SKIP_WAITING' })
+    })
+    window.location.reload()
   }
 
   onMounted(() => {
@@ -112,7 +162,8 @@ export function usePwa() {
 
     if (runtime) {
       watch(() => runtime?.offlineReady, (v) => (offlineReady.value = !!v), { immediate: true })
-      watch(() => runtime?.needRefresh, (v) => (needRefresh.value = !!v), { immediate: true })
+      // 用户点过「稍后」就安静到本次会话结束，不再每次刷新都弹一遍
+      watch(() => runtime?.needRefresh, (v) => (needRefresh.value = !!v && !readSnooze()), { immediate: true })
       watch(() => runtime?.isPWAInstalled, (v) => (installed.value = !!v), { immediate: true })
       watch(() => runtime?.showInstallPrompt, (v) => (installable.value = !!v), { immediate: true })
       watch(() => runtime?.swActivated, (v) => (swActivated.value = !!v), { immediate: true })
