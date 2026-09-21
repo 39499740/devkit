@@ -26,7 +26,13 @@ function setTheme(mode: 'light' | 'dark') {
       <NuxtLink to="/" class="topnav__brand" aria-label="DevKit 首页">
         <span class="topnav__logo">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M4 17.5 9 4l3.2 8.4L15.4 4l5 13.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+            <!-- 品牌标识：工具箱（箱体 + 盖缝 + 分格 + 提手），与 public/pwa-*.png 同一图形 -->
+            <path d="M8.2 7.6V6c0-1.1.9-2 2-2h3.6c1.1 0 2 .9 2 2v1.6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+            <path
+              d="M6 7.6h12a3.4 3.4 0 0 1 3.4 3.4v5.6a3.4 3.4 0 0 1-3.4 3.4H6a3.4 3.4 0 0 1-3.4-3.4V11A3.4 3.4 0 0 1 6 7.6Z M2.6 11.8h18.8v1.8H2.6Z M11.1 13.6h1.8v6.4h-1.8Z"
+              fill="currentColor"
+              fill-rule="evenodd"
+            />
           </svg>
         </span>
         <span class="topnav__name">DevKit</span>
