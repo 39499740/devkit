@@ -49,6 +49,7 @@ export default defineNuxtConfig({
       // 处理流程的默认三条是固定 id，直接预渲染，刷新后依然能打开编排页
       routes: [
         '/sitemap.xml',
+        '/sitemap.txt',
         '/workflows/wf-order-snapshot',
         '/workflows/wf-config-convert',
         '/workflows/wf-response-check'

@@ -46,13 +46,13 @@ npm run generate          # 产物目录：devkit/.output/public
 
 | 项 | 值 |
 |---|---|
-| 文件总数 / 体积 | 681 个 / 16 MB |
-| 预渲染路由 | 115 条（含 `/sitemap.xml`） |
-| 路由目录 index.html | 56 个（含 41 个工具页） |
-| 根目录文件 | `index.html` `200.html` `404.html` `offline-fallback.html` `sw.js` `manifest.webmanifest` `robots.txt` `sitemap.xml` `pwa-*.png` |
+| 文件总数 / 体积 | 717 个 / 18 MB |
+| 预渲染路由 | 132 条（含 `/sitemap.xml`、`/sitemap.txt`） |
+| 路由目录 index.html | 64 个（含 45 个工具页） |
+| 根目录文件 | `index.html` `200.html` `404.html` `offline-fallback.html` `sw.js` `manifest.webmanifest` `robots.txt` `sitemap.xml` `sitemap.txt` `pwa-*.png` |
 | 字体 | `_nuxt/` 下 404 个 `.woff2`（按 unicode-range 分片，**不进 Service Worker 预缓存**，首屏按需加载后进 `devkit-fonts` 运行时缓存） |
 
-> 产物已包含站点域名与 SEO：canonical / og:url 指向 `https://www.t502.fun`，`robots.txt` 声明 sitemap，`sitemap.xml` 含 56 条 URL。
+> 产物已包含站点域名与 SEO：canonical / og:url 指向 `https://www.t502.fun`，`robots.txt` 声明 sitemap，`sitemap.xml` 含 58 条 URL（另有内容等价的纯文本 `sitemap.txt`，给百度读取失败时兜底）。
 
 ---
 
@@ -138,7 +138,8 @@ COS_BUCKET=devkit-1250000000 scripts/deploy-cos.sh
 
 **存储桶 → 文件列表 → 上传文件/文件夹**。大文件多时慢，且无法设置 Cache-Control，不推荐。
 
-> 上传完成后自检：桶根目录应能看到 `index.html`、`_nuxt/`、`sw.js`、`sitemap.xml`；`tools/json-format/index.html` 等 56 个目录地址也应存在。
+> 上传完成后自检：桶根目录应能看到 `index.html`、`_nuxt/`、`sw.js`、`sitemap.xml`、`sitemap.txt`；`tools/json-format/index.html` 等 64 个目录地址也应存在。
+> 一键核对（状态码 / Content-Type / XML 结构 / 与本地产物一致）：`node scripts/check-indexing-files.mjs`
 
 ---
 
