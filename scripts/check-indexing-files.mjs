@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const site = (process.argv[2] || 'https://www.t502.fun').replace(/\/$/, '')
 const localXml = join(root, 'devkit/.output/public/sitemap.xml')
-const localTxt = join(root, 'devkit/.output/public/sitemap.txt')
+const localTxtPath = join(root, 'devkit/.output/public/sitemap.txt')
 
 const fails = []
 const ok = (msg) => console.log('  ✅ ' + msg)
@@ -102,7 +102,7 @@ try {
       bad(`线上与本地不一致（线上缺 ${miss.length} 条、多 ${extra.length} 条）：${[...miss, ...extra].slice(0, 5).join(' ')}`)
     } else ok('线上 URL 集合与本地一致')
   }
-  const localTxt = linesOf(readFileSync(localTxt, 'utf8'))
+  const localTxt = linesOf(readFileSync(localTxtPath, 'utf8'))
   if (remoteTxt && (localTxt.length !== remoteTxt.length || localTxt.some((u, i) => u !== remoteTxt[i]))) {
     bad('线上 sitemap.txt 与本地不一致')
   } else if (remoteTxt) ok('线上 sitemap.txt 与本地一致')
