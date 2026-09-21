@@ -30,21 +30,29 @@ export function usePwa() {
   const manifestReady = ref(false)
   const initialized = ref(false)
 
-  let deferred: InstallPromptEvent | null = null
+  // 用 shallowRef 而不是普通变量：安装入口是否可用要能驱动 UI 更新，
+  // 同时又不能把事件对象包成 Proxy（prompt() 必须是原始事件实例的方法）
+  const deferred = shallowRef<InstallPromptEvent | null>(null)
   let runtime: PwaRuntime | undefined
 
-  const canPrompt = computed(() => !!runtime?.install || !!deferred)
+  /**
+   * 是否真的能唤起安装弹窗：只有浏览器确实给过 beforeinstallprompt（我们自己接到的 deferred，
+   * 或 $pwa.showInstallPrompt 为 true）才算。
+   * 不能用「$pwa.install 函数存在」来判断——那个函数永远存在，会让按钮一直可点，
+   * 点下去却拿不到弹窗，只能报「当前浏览器没有给出安装入口」。
+   */
+  const canPrompt = computed(() => !!deferred.value || runtime?.showInstallPrompt === true)
 
   function onBeforeInstall(e: Event) {
     e.preventDefault()
-    deferred = e as InstallPromptEvent
+    deferred.value = e as InstallPromptEvent
     installable.value = true
   }
 
   function onInstalled() {
     installed.value = true
     installable.value = false
-    deferred = null
+    deferred.value = null
   }
 
   function onOnline() {
@@ -55,19 +63,25 @@ export function usePwa() {
     online.value = false
   }
 
-  /** 调用安装弹窗（优先走 $pwa.install）；unavailable 表示当前浏览器没有提供入口 */
+  /**
+   * 唤起安装弹窗：优先用我们自己接到的 beforeinstallprompt（同一个事件实例只能 prompt 一次），
+   * 再兜底 @vite-pwa/nuxt 的 $pwa.install()；都没有时返回 unavailable，由调用方给出手动步骤。
+   */
   async function promptInstall(): Promise<'accepted' | 'dismissed' | 'unavailable'> {
     if (installed.value) return 'unavailable'
-    if (runtime?.install) {
+    if (deferred.value) {
+      const event = deferred.value
+      deferred.value = null
+      installable.value = false
+      await event.prompt()
+      const choice = await event.userChoice
+      return choice.outcome
+    }
+    if (runtime?.showInstallPrompt && runtime.install) {
       const choice = await runtime.install()
       if (choice?.outcome) return choice.outcome
     }
-    if (!deferred) return 'unavailable'
-    await deferred.prompt()
-    const choice = await deferred.userChoice
-    deferred = null
-    installable.value = false
-    return choice.outcome
+    return 'unavailable'
   }
 
   function dismissOfflineReady() {
@@ -102,9 +116,9 @@ export function usePwa() {
       watch(() => runtime?.isPWAInstalled, (v) => (installed.value = !!v), { immediate: true })
       watch(() => runtime?.showInstallPrompt, (v) => (installable.value = !!v), { immediate: true })
       watch(() => runtime?.swActivated, (v) => (swActivated.value = !!v), { immediate: true })
-    } else {
-      window.addEventListener('beforeinstallprompt', onBeforeInstall)
     }
+    // 无论有没有 $pwa 都自己接一份：安装入口的判定与实际 prompt() 都必须基于真实事件
+    window.addEventListener('beforeinstallprompt', onBeforeInstall)
 
     window.addEventListener('appinstalled', onInstalled)
     window.addEventListener('online', onOnline)

@@ -19,7 +19,8 @@ async function install() {
     toast.warning('已取消安装，随时可以再点一次')
     return
   }
-  toast.warning('当前浏览器没有给出安装入口，可按弹层里的手动步骤安装')
+  // 只有浏览器确实没给入口时才会走到这里；保持弹层打开，让用户照手动步骤做
+  toast.warning('当前浏览器没有给出安装入口，已为你列出手动安装步骤')
 }
 </script>
 
@@ -30,9 +31,9 @@ async function install() {
       已安装为桌面应用
     </span>
     <template v-else>
-      <span class="pwa-install__badge">
+      <span class="pwa-install__badge" :class="{ 'pwa-install__badge--idle': !pwa.canPrompt.value }">
         <DkIcon name="download" :size="12" />
-        可安装为桌面应用
+        {{ pwa.canPrompt.value ? '可安装为桌面应用' : '支持安装为桌面应用' }}
       </span>
       <DkButton size="sm" @click="open = true">
         <DkIcon name="arrow-down-to-line" :size="13" />安装 DevKit
@@ -76,6 +77,7 @@ async function install() {
           </p>
           <p v-if="!pwa.canPrompt.value" class="pwa-guide__manual">
             手动安装：Chrome / Edge 打开地址栏右侧的安装图标（或菜单 →「安装 DevKit」）；Safari 用「文件 → 添加到程序坞」。
+            地址栏暂时没有图标也不用急——浏览器只在自己认为满足条件时才给出入口，先正常用一会儿或过段时间再来即可；在那之前可以先收藏本页。
           </p>
         </div>
         <p class="pwa-guide__foot">安装不会修改已有文件，也不会收集使用数据。</p>
@@ -111,6 +113,12 @@ async function install() {
 .pwa-install__badge--on {
   background: var(--ok-soft);
   color: var(--ok);
+}
+/* 浏览器还没给出安装入口时：不承诺「可安装」，避免点下去才报错 */
+.pwa-install__badge--idle {
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
 }
 .pwa-guide {
   display: flex;
