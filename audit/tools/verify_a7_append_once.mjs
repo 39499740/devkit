@@ -1,4 +1,5 @@
-// 追加步骤回归（纯 SPA 导航，不做整页刷新）：第一次进入 +1 步，返回列表再进入不得再加
+// 追加步骤回归（纯 SPA 导航，不做整页刷新）：第一次进入 +1 步，返回列表再进入不得再加。
+// 证据口径：先确认「确实从工具发送到流程」「确实从列表点进同一条流程」两个前置条件成立，再断言步骤数不变。
 const BASE = "http://localhost:4321";
 const task = await taskSpace("verify append once spa");
 const page = task.page("p1");
@@ -24,28 +25,37 @@ const click = async (label, exact = false) => {
   return ok;
 };
 const steps = () => page.evaluate(() => [...document.querySelectorAll(".wfe__node-name")].map((e) => e.innerText.trim()));
-const line = (o) => console.log(JSON.stringify(o));
+const path = () => page.evaluate(() => location.pathname);
+const failures = [];
+const record = (test, ok, detail) => {
+  console.log(JSON.stringify({ test, ok, ...detail }));
+  if (!ok) failures.push(test);
+};
 
-await click("载入示例");
-await click("发送到…");
-await page.evaluate(() => {
+const loadedSample = await click("载入示例");
+const openedMenu = await click("发送到…");
+const menuOpened = await page.evaluate(() => !!document.querySelector(".sendto__summary-text"));
+const pickedFlow = await page.evaluate(() => {
   const item = [...document.querySelectorAll(".sendto__item")].find((el) => (el.innerText || "").includes("订单快照解析"));
-  if (item) item.click();
+  if (!item) return false;
+  item.click();
+  return true;
 });
 await page.waitForTimeout(1400);
-const first = await page.evaluate(() => location.pathname);
+const firstPath = await path();
 const firstSteps = await steps();
 
 // 纯客户端导航：流程列表 → 再进同一条流程
-await click("流程列表");
-const listPath = await page.evaluate(() => location.pathname);
-await page.evaluate(() => {
+const backToList = await click("流程列表");
+const listPath = await path();
+const reenterListed = await page.evaluate(() => {
   const card = [...document.querySelectorAll(".wf__card")].find((c) => (c.innerText || "").includes("订单快照解析"));
   const btn = card ? [...card.querySelectorAll("button")].find((b) => (b.innerText || "").includes("编排")) : null;
   if (btn) btn.click();
+  return !!btn;
 });
 await page.waitForTimeout(1400);
-const secondPath = await page.evaluate(() => location.pathname);
+const secondPath = await path();
 const secondSteps = await steps();
 
 // 再来一轮，确认不会累积
@@ -56,16 +66,22 @@ await page.evaluate(() => {
   if (btn) btn.click();
 });
 await page.waitForTimeout(1400);
+const thirdPath = await path();
 const thirdSteps = await steps();
 
-line({
-  test: "G09 追加步骤只生效一次（SPA 导航）",
-  firstPath: first,
-  firstSteps,
-  listPath,
-  secondPath,
-  secondSteps,
-  thirdSteps,
-  appendedOnce: firstSteps.length === 7 && secondSteps.length === 7 && thirdSteps.length === 7
-});
+record(
+  "G09 追加步骤只生效一次（纯 SPA 导航）",
+  loadedSample && openedMenu && menuOpened && pickedFlow && firstPath === "/workflows/wf-order-snapshot" && listPath === "/workflows" && secondPath === firstPath && thirdPath === firstPath && firstSteps.length > 2 && secondSteps.length === firstSteps.length && thirdSteps.length === firstSteps.length,
+  {
+    preconditions: { loadedSample, openedMenu, menuOpened, pickedFlow, reenterListed, backToList },
+    firstPath, listPath, secondPath, thirdPath,
+    firstSteps, secondSteps, thirdSteps,
+    appendedOnce: firstSteps.length === secondSteps.length && secondSteps.length === thirdSteps.length
+  }
+);
 console.log("SPACE " + task.spaceId);
+if (failures.length) {
+  console.error("✗ 失败用例：" + failures.join(" / "));
+  process.exit(1);
+}
+console.log("✓ 追加步骤用例通过（前置条件均已确认）");

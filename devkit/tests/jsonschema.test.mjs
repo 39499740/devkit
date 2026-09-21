@@ -103,6 +103,11 @@ export const cases = [
   eq('format 非严格模式仅提示', validateInstance('nope', { type: 'string', format: 'email' }, { strict: false }).valid, true),
   check('format 非严格模式产生警告', () => validateInstance('nope', { type: 'string', format: 'email' }, { strict: false }).warnings.length === 1),
   eq('未知 format 跳过并提示', validateInstance('x', { type: 'string', format: 'custom-thing' }, { strict: true }).warnings.length, 1),
+  eq(
+    '失败分支的 format 提示不泄漏到最终警告',
+    validateInstance('abc', { anyOf: [{ type: 'string', format: 'custom-thing', minLength: 10 }, { type: 'number' }] }, { strict: true }).warnings.length,
+    0
+  ),
 
   // 推断
   eq('推断 integer/number', inferSchema({ a: 1, b: 1.5 }, { draft: '2020-12', strict: false }).properties.a.type, 'integer'),

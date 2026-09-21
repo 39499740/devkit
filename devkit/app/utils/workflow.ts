@@ -245,9 +245,12 @@ export type WorkflowSelection = { kind: 'input' } | { kind: 'step'; index: numbe
  * 越界（例如删除步骤后选中项还停在旧下标）不会再去访问不存在的步骤。
  */
 export function normalizeSelection(stepCount: number, selected: number): WorkflowSelection {
-  if (!Number.isFinite(selected) || selected < 0) return { kind: 'input' }
-  if (selected >= stepCount) return { kind: 'output' }
-  return { kind: 'step', index: selected }
+  const count = Number.isFinite(stepCount) ? Math.max(0, Math.trunc(stepCount)) : 0
+  if (!Number.isFinite(selected)) return { kind: 'input' }
+  const index = Math.trunc(selected)
+  if (index < 0) return { kind: 'input' }
+  if (index >= count) return { kind: 'output' }
+  return { kind: 'step', index }
 }
 
 export interface WorkflowRunResult {

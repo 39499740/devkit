@@ -10,6 +10,8 @@ export const cases = [
   eq('4 是流程输出', normalizeSelection(4, 4), { kind: 'output' }),
   eq('越界（10）落回流程输出', normalizeSelection(4, 10), { kind: 'output' }),
   eq('空流程的 0 是流程输出', normalizeSelection(0, 0), { kind: 'output' }),
+  eq('小数下标向下取整到实际步骤', normalizeSelection(4, 1.7), { kind: 'step', index: 1 }),
+  eq('stepCount 为 NaN 时没有步骤可选中', normalizeSelection(Number.NaN, 0), { kind: 'output' }),
   eq('NaN 落回流程输入', normalizeSelection(4, Number.NaN), { kind: 'input' }),
   check('规范化结果永远不会指向不存在的步骤', () => {
     for (const n of [0, 1, 3, 6]) {

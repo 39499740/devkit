@@ -21,6 +21,7 @@ const SAMPLE = 'https://example.com/搜索?q=hello world&tag=中文&page=2+2'
 
 const sig = () => JSON.stringify([direction.value, mode.value, plusAsSpace.value, input.value])
 const run = useToolRun(sig)
+const transfer = useTransfer()
 
 const MODE_LABEL: Record<UriMode, string> = { uri: '完整 URI', component: '组件' }
 
@@ -104,6 +105,21 @@ function onKeydown(e: KeyboardEvent) {
     execute()
   }
 }
+// G09：接收来自其他工具的内存传递（transferTargets 里的 url-encode 目标，按「尝试解码」语义装载）
+onMounted(() => {
+  const p = transfer.take('url-encode')
+  if (p && p.from !== 'url-encode') {
+    direction.value = 'decode'
+    input.value = p.text
+    execute()
+    // 传过来的不一定是百分号编码：解码失败就切回编码方向，保证接收后一定有可用结果
+    if (run.status.value !== 'ok') {
+      direction.value = 'encode'
+      execute()
+    }
+  }
+})
+
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 </script>

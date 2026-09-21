@@ -1,4 +1,6 @@
 // 第二轮验收 · T43 传递类型（按当前模式切换后重测）+ 流程追加只生效一次
+// 注意：本脚本只打印观察值、不做断言，按证据口径不计入验收。
+// T43 两类结果的断言见 verify_a7_fixes.mjs，SPA 追加只生效一次见 verify_a7_append_once.mjs。
 const BASE = "http://localhost:4321";
 const EV = "/Users/hao/WebstormProjects/web_tools/audit/evidence/";
 const task = await taskSpace("verify fixes round2b");

@@ -104,9 +104,13 @@ export function validateInstance(
     }
   }
 
-  /** 在隔离收集器里跑一段校验，返回它自己的错误，不改动外层结果 */
+  /**
+   * 在隔离收集器里跑一段校验：错误与警告都收在局部，不改动外层结果。
+   * 分支确实失败时（没人会上报它）连它产生的 format 提示一起丢掉，避免失败分支的警告泄漏到最终结果里。
+   */
   function isolate(fn: () => void): SchemaError[] {
     const saved = sink
+    const savedWarnings = warnings.length
     const local: SchemaError[] = []
     sink = local
     try {
@@ -114,6 +118,7 @@ export function validateInstance(
     } finally {
       sink = saved
     }
+    if (local.length) warnings.length = savedWarnings
     return local
   }
 

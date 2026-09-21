@@ -63,6 +63,16 @@ export const cases = [
   check('压缩成一行且不再有换行', () => !min('select a, b from t where c = 1').includes('\n')),
   check('压缩移除注释', () => !min('select a /* x */ from t').includes('/*')),
   check('压缩后分号紧贴结尾', () => min('select a from t ;').endsWith(';')),
+
+  // 压缩：字面量内部一个字符都不能动（回归：token join 成整段后跑空白/标点正则会改写字面量）
+  eq('压缩不改字符串内连续空格', min("SELECT 'a   b' FROM t"), "SELECT 'a   b' FROM t"),
+  eq('压缩不改字符串内逗号间距', min("SELECT 'a , b' FROM t"), "SELECT 'a , b' FROM t"),
+  eq('压缩不改字符串内点号', min("SELECT 'a . b' FROM t"), "SELECT 'a . b' FROM t"),
+  eq('压缩不改字符串内括号', min("SELECT 'f( x )' FROM t"), "SELECT 'f( x )' FROM t"),
+  eq('压缩不改 $tag$ 内空白与逗号', min('SELECT $tag$a  ,  b$tag$ FROM t'), 'SELECT $tag$a  ,  b$tag$ FROM t'),
+  check('压缩保留字符串内的换行（不能为了一行而改数据）', () =>
+    min("SELECT $$line1\n\nline2$$ FROM t").includes('$$line1\n\nline2$$')
+  ),
   check('设计稿样例格式化结果稳定', () => {
     const sample = 'select u.id,u.name,o.total,o.created_at\nfrom users u\njoin orders o\non o.user_id=u.id\nwhere o.total>1000\nand u.status=\'active\'\norder by o.total desc\nlimit 20;'
     const out = fmt(sample, 'mysql', 2)

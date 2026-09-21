@@ -51,11 +51,23 @@ function escapeAttr(s: string): string {
   return escapeText(s).replace(/"/g, '&quot;')
 }
 
-/** 元素是否含非空白文本（混合内容）：这类元素绝不重排空白，原样序列化 */
-function hasMixedText(el: Element): boolean {
-  return Array.from(el.childNodes).some(
-    (n) => (n.nodeType === 3 || n.nodeType === 4) && (n.nodeValue ?? '').trim() !== ''
-  )
+/**
+ * 元素是否含“有意义的文本”（即混合内容）：这类元素绝不重排空白，整段原样序列化。
+ * - 含非空白文本、或含 CDATA → 有意义；
+ * - 纯空白且元素没有子元素 → 视为可忽略（<a>   </a> 与 <a/> 同样处理）；
+ * - 纯空白、不含换行、旁边又有子元素 → 有意义：<p><em>a</em> <em>b</em></p> 里的空格是词语分隔符，
+ *   删掉会把 a、b 粘成一个词；只有含换行的空白才当作缩进丢弃。
+ */
+function hasSignificantText(el: Element): boolean {
+  const hasElementChild = Array.from(el.childNodes).some((n) => n.nodeType === 1)
+  return Array.from(el.childNodes).some((n) => {
+    if (n.nodeType !== 3 && n.nodeType !== 4) return false
+    if (n.nodeType === 4) return true
+    const value = n.nodeValue ?? ''
+    if (value.trim() !== '') return true
+    if (!hasElementChild) return false
+    return !/[\r\n]/.test(value)
+  })
 }
 
 /** 原文里的 XML 声明与 DOCTYPE（DOM 不保留声明文本，DOCTYPE 内部子集也会丢，这里按原文取回） */
@@ -86,7 +98,7 @@ function writeNode(node: Node, depth: number, indent: string, out: string[], war
   const el = node as Element
 
   // 混合内容：一个空白都不动、一个换行都不加，保证 textContent 与原文一致
-  if (hasMixedText(el)) {
+  if (hasSignificantText(el)) {
     if (!warnings.includes('检测到混合内容（文本与元素交错），该元素保持原样不做缩进')) {
       warnings.push('检测到混合内容（文本与元素交错），该元素保持原样不做缩进')
     }
@@ -98,14 +110,6 @@ function writeNode(node: Node, depth: number, indent: string, out: string[], war
   const head = openTag(el)
   if (!kids.length) {
     out.push(`${pad}${head}/>`)
-    return
-  }
-  if (kids.length === 1 && kids[0]!.nodeType === 3) {
-    out.push(`${pad}${head}>${escapeText((kids[0]!.nodeValue ?? '').trim())}</${el.tagName}>`)
-    return
-  }
-  if (kids.length === 1 && kids[0]!.nodeType === 4) {
-    out.push(`${pad}${head}>${serializeExact(kids[0]!)}</${el.tagName}>`)
     return
   }
   out.push(`${pad}${head}>`)
@@ -135,7 +139,7 @@ export function minifyXml(text: string): XmlResult {
   const clone = doc.documentElement.cloneNode(true) as Element
   const walk = (el: Element) => {
     for (const child of Array.from(el.children)) walk(child)
-    if (hasMixedText(el)) {
+    if (hasSignificantText(el)) {
       if (!warnings.includes('检测到混合内容（文本与元素交错），该元素保持原样不做压缩')) {
         warnings.push('检测到混合内容（文本与元素交错），该元素保持原样不做压缩')
       }
@@ -167,9 +171,10 @@ function elementToJson(el: Element): unknown {
   const obj: Record<string, unknown> = {}
   for (const a of Array.from(el.attributes)) obj[`@${a.name}`] = a.value
   const childEls = Array.from(el.children)
+  // 保留文本节点的原始值再拼接：逐个 trim 会把 <p>Hello <b>w</b>!</p> 的 "Hello " 与 "!" 粘成 "Hello!"
   const text = Array.from(el.childNodes)
-    .filter((n) => n.nodeType === 3)
-    .map((n) => (n.nodeValue ?? '').trim())
+    .filter((n) => n.nodeType === 3 && (n.nodeValue ?? '').trim() !== '')
+    .map((n) => n.nodeValue ?? '')
     .join('')
     .trim()
   if (!childEls.length) {
@@ -279,25 +284,146 @@ function nodePath(node: Node): string {
   return `/${parts.join('/')}`
 }
 
-/** 在源文本中定位节点：优先用开标签，其次用文本内容 */
-function locate(source: string, node: Node, cursor: number): { from: number; to: number } {
+interface TagSpan {
+  name: string
+  from: number
+  to: number
+}
+
+/** 找到标签的结束 '>'，跳过引号里的内容 */
+function findTagEnd(source: string, lt: number): number {
+  let quote: string | null = null
+  for (let i = lt + 1; i < source.length; i += 1) {
+    const ch = source[i]!
+    if (quote) {
+      if (ch === quote) quote = null
+      continue
+    }
+    if (ch === '"' || ch === "'") quote = ch
+    else if (ch === '>') return i
+  }
+  return -1
+}
+
+/**
+ * 按原文顺序扫描标签，用栈配对出每个元素的完整区间（from = 开标签起点，to = 配对闭合标签终点）。
+ * 嵌套时按标签名配对，所以 <r><b><b>1</b></b><b>2</b></r> 里内层 <b> 也能拿到自己的区间，
+ * 不会像「开标签 → 第一个同名闭合标签」那样把内层与外层配错。
+ */
+function scanTagSpans(source: string): TagSpan[] {
+  const spans: TagSpan[] = []
+  const stack: number[] = []
+  let i = 0
+  while (i < source.length) {
+    const lt = source.indexOf('<', i)
+    if (lt === -1) break
+    if (source.startsWith('<!--', lt)) {
+      const end = source.indexOf('-->', lt + 4)
+      i = end === -1 ? source.length : end + 3
+      continue
+    }
+    if (source.startsWith('<![CDATA[', lt)) {
+      const end = source.indexOf(']]>', lt + 9)
+      i = end === -1 ? source.length : end + 3
+      continue
+    }
+    if (source.startsWith('<?', lt)) {
+      const end = source.indexOf('?>', lt + 2)
+      i = end === -1 ? source.length : end + 2
+      continue
+    }
+    if (source.startsWith('<!', lt)) {
+      const end = source.indexOf('>', lt + 2)
+      i = end === -1 ? source.length : end + 1
+      continue
+    }
+    const gt = findTagEnd(source, lt)
+    if (gt === -1) break
+    const raw = source.slice(lt, gt + 1)
+    i = gt + 1
+    const head = /^<\s*(\/?)\s*([^\s/>]+)/.exec(raw)
+    if (!head) continue
+    const name = head[2]!
+    if (head[1] === '/') {
+      for (let k = stack.length - 1; k >= 0; k -= 1) {
+        const idx = stack[k]!
+        if (spans[idx]!.name === name) {
+          spans[idx]!.to = gt + 1
+          stack.length = k
+          break
+        }
+      }
+      continue
+    }
+    const selfClosing = /\/\s*>$/.test(raw)
+    spans.push({ name, from: lt, to: gt + 1 })
+    if (!selfClosing) stack.push(spans.length - 1)
+  }
+  return spans
+}
+
+/** 把扫描出的区间按文档顺序对齐到 DOM 元素；数量或标签名对不上就返回 null（调用方回退到游标定位） */
+function buildElementSpans(doc: Document, source: string): Map<Element, TagSpan> | null {
+  const els = Array.from(doc.getElementsByTagName('*'))
+  const spans = scanTagSpans(source)
+  if (!els.length || els.length !== spans.length) return null
+  const map = new Map<Element, TagSpan>()
+  for (let i = 0; i < els.length; i += 1) {
+    const el = els[i]!
+    const span = spans[i]!
+    if (el.tagName !== span.name) return null
+    map.set(el, span)
+  }
+  return map
+}
+
+function searchIn(source: string, needle: string, from: number, to: number): number {
+  const at = source.indexOf(needle, from)
+  return at >= 0 && at < to ? at : -1
+}
+
+/**
+ * 在源文本中定位节点：元素优先用扫描配对出的区间（嵌套同名也能各自对应自己），
+ * 属性 / 文本节点优先在所属元素的区间内搜索，全部失败再退回原来的游标搜索。
+ */
+function locate(
+  source: string,
+  node: Node,
+  cursor: number,
+  spans: Map<Element, TagSpan> | null
+): { from: number; to: number } {
   if (node.nodeType === 1) {
-    const head = openTag(node as Element)
+    const el = node as Element
+    const span = spans?.get(el)
+    if (span) return { from: span.from, to: span.to }
+    const head = openTag(el)
     let at = source.indexOf(head, cursor)
     if (at === -1) at = source.indexOf(head)
     if (at === -1) return { from: -1, to: -1 }
-    const close = `</${(node as Element).tagName}>`
+    const close = `</${el.tagName}>`
     const end = source.indexOf(close, at)
     return { from: at, to: end === -1 ? at + head.length : end + close.length }
   }
   if (node.nodeType === 2) {
     const a = node as Attr
-    let at = source.indexOf(`${a.name}="${a.value}"`, cursor)
-    if (at === -1) at = source.indexOf(`${a.name}="${a.value}"`)
-    return at === -1 ? { from: -1, to: -1 } : { from: at, to: at + a.name.length + a.value.length + 3 }
+    const needle = `${a.name}="${a.value}"`
+    const owner = a.ownerElement ? spans?.get(a.ownerElement) : undefined
+    if (owner) {
+      const inOwner = searchIn(source, needle, owner.from, owner.to)
+      if (inOwner >= 0) return { from: inOwner, to: inOwner + needle.length }
+    }
+    let at = source.indexOf(needle, cursor)
+    if (at === -1) at = source.indexOf(needle)
+    return at === -1 ? { from: -1, to: -1 } : { from: at, to: at + needle.length }
   }
   const text = (node.nodeValue ?? '').trim()
   if (!text) return { from: -1, to: -1 }
+  const parent = node.parentElement
+  const parentSpan = parent ? spans?.get(parent) : undefined
+  if (parentSpan) {
+    const inParent = searchIn(source, text, parentSpan.from, parentSpan.to)
+    if (inParent >= 0) return { from: inParent, to: inParent + text.length }
+  }
   let at = source.indexOf(text, cursor)
   if (at === -1) at = source.indexOf(text)
   return at === -1 ? { from: -1, to: -1 } : { from: at, to: at + text.length }
@@ -328,6 +454,7 @@ export function queryXPath(
   if (!result.snapshotLength) {
     warnings.push('没有匹配到节点，检查路径大小写与层级')
   }
+  const spans = buildElementSpans(doc, text)
   const matches: XPathMatch[] = []
   let cursor = 0
   for (let i = 0; i < result.snapshotLength; i += 1) {
@@ -335,7 +462,7 @@ export function queryXPath(
     if (!node) continue
     const type: XPathMatch['type'] =
       node.nodeType === 2 ? 'attribute' : node.nodeType === 3 ? 'text' : 'element'
-    const pos = locate(text, node, cursor)
+    const pos = locate(text, node, cursor, spans)
     // 游标必须推到本次匹配的结尾，否则后续匹配会重复定位到第一条
     if (pos.to >= 0) cursor = pos.to
     matches.push({

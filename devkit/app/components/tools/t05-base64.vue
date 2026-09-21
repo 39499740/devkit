@@ -9,6 +9,7 @@ type InputType = 'text' | 'file'
 type DecodeView = 'text' | 'hex'
 
 const toast = useToast()
+const transfer = useTransfer()
 
 const direction = ref<Direction>('encode')
 const alphabet = ref<Alphabet>('std')
@@ -153,6 +154,25 @@ function onKeydown(e: KeyboardEvent) {
     execute()
   }
 }
+// G09：接收来自其他工具的内存传递（transferTargets 里的 base64 目标，按「尝试解码」语义装载）
+onMounted(() => {
+  const p = transfer.take('base64')
+  if (p && p.from !== 'base64') {
+    inputType.value = 'text'
+    direction.value = 'decode'
+    file.value = null
+    fileBytes.value = null
+    input.value = p.text
+    execute()
+    // 传过来的不一定是 Base64：解码失败就切回编码方向，保证接收后一定有可用结果
+    if (run.status.value !== 'ok') {
+      direction.value = 'encode'
+      execute()
+    }
+    toast.success('已接收其他工具传来的内容（仅内存）')
+  }
+})
+
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 </script>

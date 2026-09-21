@@ -497,28 +497,23 @@ export function formatSql(sql: string, opts: SqlFormatOptions): SqlFormatResult 
   }
 }
 
-/** 压缩成一行：移除注释与多余空白 */
+/**
+ * 压缩成一行：移除注释，并且只在 token 之间决定空白。
+ * 字符串 / 标识符 token 一律原样输出——不对拼接后的整段文本跑空白或标点正则，
+ * 否则字面量内部的空格、逗号、点号会被一起改写（'a   b' → 'a b' 这类静默改数据）。
+ */
 export function minifySql(sql: string, dialect: SqlDialect): SqlFormatResult {
   const toks = tokenizeSql(sql, dialect)
-  const out: string[] = []
-  let removed = 0
-  for (const t of toks) {
-    if (t.type === 'comment') {
-      removed += 1
-      continue
-    }
-    out.push(t.text)
+  const kept = toks.filter((t) => t.type !== 'comment')
+  const removed = toks.length - kept.length
+  let text = ''
+  let prev: Tok | null = null
+  for (const t of kept) {
+    if (prev && !NO_SPACE_BEFORE.has(t.text) && !NO_SPACE_AFTER.has(prev.text)) text += ' '
+    text += t.text
+    prev = t
   }
-  const text = out
-    .join(' ')
-    .replace(/\s*,\s*/g, ', ')
-    .replace(/\(\s+/g, '(')
-    .replace(/\s+\)/g, ')')
-    .replace(/\s*\.\s*/g, '.')
-    .replace(/\s*::\s*/g, '::')
-    .replace(/\s{2,}/g, ' ')
-    .replace(/\s+;/g, ';')
-    .trim()
+  text = text.trim()
   const notes = [removed ? `已移除 ${removed} 处注释` : '无注释可移除']
   return {
     sql: text,

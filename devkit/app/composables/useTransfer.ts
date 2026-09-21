@@ -100,13 +100,13 @@ export function useTransfer() {
     name: string,
     stepType?: StepType
   ) {
-    const store = useWorkflows()
-    const wf = store.create(name || '来自工具的新流程', '由「发送到…」创建的流程')
-    if (stepType) store.addStep(wf.id, { type: stepType, config: {} })
     if (!text.trim()) {
       toast.warning('没有可发送的内容')
       return
     }
+    const store = useWorkflows()
+    const wf = store.create(name || '来自工具的新流程', '由「发送到…」创建的流程')
+    if (stepType) store.addStep(wf.id, { type: stepType, config: {} })
     stashPayload(text, fromTool, kind, { intent: { workflowId: wf.id }, target: wf.id })
     router.push(`/workflows/${wf.id}`)
     toast.success(`已新建「${wf.name}」，结果已作为流程输入`)

@@ -104,7 +104,46 @@ export const cases = [
   eq('XML→JSON 同名子节点合并', xmlToJson('<r><b>1</b><b>2</b></r>').value.b, ['1', '2']),
   eq('XML→JSON 纯文本直接给字符串', xmlToJson('<a>hi</a>').value, 'hi'),
   eq('XML→JSON 带属性时文本写 #text', xmlToJson('<a x="1">hi</a>').value, { '@x': '1', '#text': 'hi' }),
-  throws('非法 XML 报错', () => formatXml('<a><b></a>'), /./)
+  throws('非法 XML 报错', () => formatXml('<a><b></a>'), /./),
+
+  // 空白交错的混合内容同样不能改（回归：判定只看「非空白文本」时会删掉词语分隔用的空格）
+  check('格式化不改纯空白交错的混合内容 textContent', () => {
+    const src = '<p><em>a</em> <em>b</em></p>'
+    return parse(formatXml(src, 2).xml).documentElement.textContent === parse(src).documentElement.textContent
+  }),
+  check('压缩不改纯空白交错的混合内容 textContent', () => {
+    const src = '<p><em>a</em> <em>b</em></p>'
+    return parse(minifyXml(src).xml).documentElement.textContent === parse(src).documentElement.textContent
+  }),
+  check('格式化保留元素后的行内空格', () => {
+    const src = '<a><b>x</b> </a>'
+    return parse(formatXml(src, 2).xml).documentElement.textContent === parse(src).documentElement.textContent
+  }),
+  check('缩进用的换行空白仍会被重排', () => minifyXml('<a>\n  <b/>\n</a>').xml === '<a><b/></a>'),
+
+  // 嵌套同名元素：每个匹配区间必须对应自己的节点（回归：开标签 → 第一个同名闭合标签会配错）
+  eq(
+    'XPath 嵌套同名元素各自对应自己',
+    (() => {
+      const src = '<r><b><b>1</b></b><b>2</b></r>'
+      return queryXPath(src, '//b').matches.map((m) => src.slice(m.from, m.to))
+    })(),
+    ['<b><b>1</b></b>', '<b>1</b>', '<b>2</b>']
+  ),
+  check('XPath 嵌套同名元素区间递增不重复', () => {
+    const src = '<r><b><b>1</b></b><b>2</b></r>'
+    const froms = queryXPath(src, '//b').matches.map((m) => m.from)
+    return froms.every((v) => v >= 0) && new Set(froms).size === froms.length && froms.every((v, i) => i === 0 || v > froms[i - 1])
+  }),
+  eq(
+    'XPath 嵌套里的文本节点各自定位',
+    (() => {
+      const src = '<r><b><b>1</b></b><b>2</b></r>'
+      return queryXPath(src, '//b/text()').matches.map((m) => src.slice(m.from, m.to))
+    })(),
+    ['1', '2']
+  ),
+  eq('XML→JSON 混合内容保留词语间空格', xmlToJson('<p>Hello <b>w</b>!</p>').value, { b: 'w', '#text': 'Hello !' })
 ].map((c) => c)
 
 void XMLSerializer
