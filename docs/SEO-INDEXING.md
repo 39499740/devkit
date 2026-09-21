@@ -136,6 +136,8 @@ BAIDU_PUSH_TOKEN=xxx node scripts/baidu-push.mjs      # 把 sitemap 推给百度
 - **裸域不可用**：所有 canonical / sitemap / 平台提交统一用 `https://www.t502.fun`，不要混用 t502.fun
 - **sitemap 里的 URL 必须与真实 200 地址一致**（带尾斜杠），否则百度对重定向 URL 的处理会打折扣
 - **资源平台 sitemap 报「无法读取此站点地图」**：先跑 `node scripts/check-indexing-files.mjs` 证明服务端无问题，再按 2.5 节用「抓取诊断」取证 + 换 `sitemap.txt`
+- **GSC 报「DNS 错误」**：`t502.fun` 裸域在 DNSPod **没有任何 A/AAAA/CNAME 记录**（DoH 复核为 NODATA，只有 SOA），Googlebot 因此解析不到；不要在 Search Console 里为裸域另建资源，只提交 `https://www.t502.fun`。**判断 DNS 是否真有问题必须走 DoH**（`https://dns.google/resolve?name=…&type=A`）——本机 `dig` 会被代理 fake-ip 劫持到 `198.18.x.x`，据此 `curl` 得到的 SSL 报错是假象，不是裸域真的配了服务
+- **favicon 不能只留 PNG**：浏览器与部分爬虫会默认探测 `/favicon.ico`，缺失就是白拿一条 404。现由 `devkit/public/favicon.ico`（48/32/16 三尺寸 ICO）+ 首页 `rel="icon"` 声明提供，`scripts/check-indexing-files.mjs` 第 5 项会守住它
 
 ---
 
@@ -152,3 +154,25 @@ Google 不读百度资源平台的任何设置，需要单独做一次，步骤�
 4. **和百度不冲突**：canonical、robots、sitemap 三者对两家搜索引擎是同一套标准，无需为 Google 改任何页面
 
 > 说明：登录 Google 账号、收验证码属于实名/账号操作，需你本人完成；验证串（meta / TXT 值）拿到后发我，代码与部署侧我来做。
+
+### 7.1 Sitemap 报「无法抓取」怎么排查（2026-09-21 现场结论）
+
+先在 Googlebot UA 下自证服务端无罪：
+
+| 检查项 | 实测结果 |
+|---|---|
+| `https://www.t502.fun/sitemap.xml` | 200 / `application/xml` / 8503 字节 / HTTP/2 |
+| `https://www.t502.fun/sitemap.txt` | 200 / `text/plain` / 2129 字节 |
+| 压缩与协议 | `Accept-Encoding: gzip` 正常（600 字节），`br` 询问回落 gzip，无异常 |
+| TLS | TLSv1.3 + 完整证书链（TrustAsia DV → Certum，`Verify return code: 0`），SAN 含 `www.t502.fun` 与 `t502.fun` |
+| robots.txt | `Allow: /`，git 历史里从未出现过 `Disallow: /`，且声明了两个 sitemap |
+| 境外可达性 | 第三方境外节点（r.jina.ai）能完整取回 XML 内容 |
+
+结论：**文件本身没有问题**，「无法抓取」出在 Google 的读取环节。按下面顺序处理：
+
+1. **在 GSC 里当场做 Google 侧实测**：Search Console →「网址检查」→ 输入 `https://www.t502.fun/sitemap.xml` → **测试实际网址**。这是 Google 自己发起的抓取，是唯一权威判据：
+   - 显示「已成功抓取」→ 是 sitemap 记录里的陈旧失败状态，走第 2 步重提即可
+   - 显示超时 / 无法连接 → 才是跨境链路问题，此时开 CDN「全球加速」才有意义（Google 的抓取器在境外）
+2. **删除后重新提交**：Sitemap → 删掉 `sitemap.xml`、`sitemap.txt` 两条记录 → 重新提交 `sitemap.xml`。GSC 的失败状态不会自动回填，必须触发一次新读取。
+3. **确认提交归属**：sitemap 要提交在已验证的 `https://www.t502.fun`（网址前缀）或网域资源下，且与 `robots.txt` 中声明的地址一致。
+4. **不要空等**：收录不依赖 sitemap —— 抓取统计里页面已有 77% 的 200。

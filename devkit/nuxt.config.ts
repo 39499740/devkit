@@ -85,7 +85,9 @@ export default defineNuxtConfig({
         { name: 'twitter:card', content: 'summary' }
       ],
       link: [
-        { rel: 'icon', type: 'image/png', href: '/pwa-192.png' },
+        // 浏览器与爬虫会默认探测 /favicon.ico，显式声明并随产物提供，避免无谓 404
+        { rel: 'icon', href: '/favicon.ico', sizes: 'any' },
+        { rel: 'icon', type: 'image/png', sizes: '192x192', href: '/pwa-192.png' },
         { rel: 'apple-touch-icon', href: '/pwa-192.png' },
         // S13：显式声明 manifest，浏览器才会给出安装入口（@vite-pwa/nuxt 的注入组件未被渲染）
         { rel: 'manifest', href: '/manifest.webmanifest' }

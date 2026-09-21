@@ -5,7 +5,8 @@
  *   node scripts/check-indexing-files.mjs https://other.host   # 换站点
  *
  * 检查项：robots.txt 可读且声明了 sitemap；sitemap.xml 返回 200 / application/xml / XML 结构完整；
- * sitemap.txt 返回 200 / text/plain 且行数一致；两者 URL 集合与本地构建产物完全一致。
+ * sitemap.txt 返回 200 / text/plain 且行数一致；两者 URL 集合与本地构建产物完全一致；
+ * favicon.ico 返回 200 / 图标 MIME 且字节数与本地一致，首页声明了它。
  * 任一不符 → 退出码 1（可直接用于发版门禁）。
  */
 import { readFileSync } from 'node:fs'
@@ -108,6 +109,26 @@ try {
   } else if (remoteTxt) ok('线上 sitemap.txt 与本地一致')
 } catch (e) {
   bad('读取本地产物失败（先跑 npm run generate）：' + e.message)
+}
+
+// 5. favicon（浏览器与部分爬虫会默认探测 /favicon.ico，缺失会白拿 404）
+console.log('[5] favicon.ico')
+try {
+  const res = await fetch(site + '/favicon.ico')
+  const buf = Buffer.from(await res.arrayBuffer())
+  if (res.status !== 200) bad(`状态码 ${res.status}`)
+  else ok('200')
+  const type = res.headers.get('content-type') || ''
+  if (!/icon|image\//.test(type)) bad('Content-Type 不像图标：' + type)
+  else ok('Content-Type ' + type)
+  const localIco = readFileSync(join(root, 'devkit/.output/public/favicon.ico'))
+  if (buf.length !== localIco.length) bad(`线上 ${buf.length} 字节 ≠ 本地 ${localIco.length} 字节`)
+  else ok(`字节数与本地一致（${buf.length}）`)
+  const html = await (await fetch(site + '/')).text()
+  if (!/rel="icon"[^>]*favicon\.ico/.test(html)) bad('首页未声明 /favicon.ico')
+  else ok('首页已声明 /favicon.ico')
+} catch (e) {
+  bad('favicon 检查失败：' + e.message)
 }
 
 console.log('')
