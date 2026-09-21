@@ -121,6 +121,16 @@ export const cases = [
   }),
   check('缩进用的换行空白仍会被重排', () => minifyXml('<a>\n  <b/>\n</a>').xml === '<a><b/></a>'),
 
+  // 叶子元素里的纯空白也是数据（回归：把「无子元素的纯空白」当可忽略，<a> </a> 被吃成 <a/>）
+  eq('格式化保留叶子元素里的空白', formatXml('<a> </a>', 2).xml, '<a> </a>'),
+  eq('压缩保留叶子元素里的空白', minifyXml('<a> </a>').xml, '<a> </a>'),
+  eq('压缩保留叶子子元素里的空白', minifyXml('<a><b> </b><c/></a>').xml, '<a><b> </b><c/></a>'),
+  check('叶子元素的空白不再误报混合内容', () =>
+    formatXml('<a> </a>', 2).warnings.length === 0 &&
+    minifyXml('<a> </a>').warnings.length === 0 &&
+    formatXml('<a>\n</a>', 2).warnings.length === 0
+  ),
+
   // 嵌套同名元素：每个匹配区间必须对应自己的节点（回归：开标签 → 第一个同名闭合标签会配错）
   eq(
     'XPath 嵌套同名元素各自对应自己',
@@ -143,6 +153,25 @@ export const cases = [
     })(),
     ['1', '2']
   ),
+  // 同值兄弟节点：注释 / 处理指令把文本切成两段后，第二段不能又指回第一段
+  eq(
+    'XPath 同值兄弟文本节点各自定位',
+    (() => {
+      const src = '<r>x<!--c-->x</r>'
+      return queryXPath(src, '//r/text()').matches.map((m) => [m.from, m.to])
+    })(),
+    [[3, 4], [12, 13]]
+  ),
+  check('XPath 文本匹配位置互不重复且递增', () => {
+    const src = '<r>one<b>one</b>one</r>'
+    const froms = queryXPath(src, '//text()').matches.map((m) => m.from)
+    return froms.length === 3 && froms.every((v, i) => v >= 0 && (i === 0 || v > froms[i - 1]))
+  }),
+  check('XPath 同值属性位置互不重复且递增', () => {
+    const src = '<r><b x="1"><b x="1">1</b></b><b x="1">2</b></r>'
+    const froms = queryXPath(src, '//b/@x').matches.map((m) => m.from)
+    return froms.length === 3 && froms.every((v, i) => v >= 0 && (i === 0 || v > froms[i - 1]))
+  }),
   eq('XML→JSON 混合内容保留词语间空格', xmlToJson('<p>Hello <b>w</b>!</p>').value, { b: 'w', '#text': 'Hello !' })
 ].map((c) => c)
 

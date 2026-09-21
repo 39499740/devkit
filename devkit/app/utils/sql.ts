@@ -498,6 +498,17 @@ export function formatSql(sql: string, opts: SqlFormatOptions): SqlFormatResult 
 }
 
 /**
+ * 两个 token 之间要不要留空格：与格式化同一条规则——括号只在关键字之后留
+ * （IN (…) / VALUES (…)），函数调用 count(*) 后面不留；其余按标点集合判定。
+ */
+function needsSpaceBetween(prev: Tok, next: Tok): boolean {
+  if (next.text === '(') return prev.type === 'word' && KEYWORDS.has(prev.text.toLowerCase())
+  if (NO_SPACE_BEFORE.has(next.text)) return false
+  if (NO_SPACE_AFTER.has(prev.text)) return false
+  return true
+}
+
+/**
  * 压缩成一行：移除注释，并且只在 token 之间决定空白。
  * 字符串 / 标识符 token 一律原样输出——不对拼接后的整段文本跑空白或标点正则，
  * 否则字面量内部的空格、逗号、点号会被一起改写（'a   b' → 'a b' 这类静默改数据）。
@@ -509,7 +520,7 @@ export function minifySql(sql: string, dialect: SqlDialect): SqlFormatResult {
   let text = ''
   let prev: Tok | null = null
   for (const t of kept) {
-    if (prev && !NO_SPACE_BEFORE.has(t.text) && !NO_SPACE_AFTER.has(prev.text)) text += ' '
+    if (prev && needsSpaceBetween(prev, t)) text += ' '
     text += t.text
     prev = t
   }

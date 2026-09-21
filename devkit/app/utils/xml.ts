@@ -51,22 +51,26 @@ function escapeAttr(s: string): string {
   return escapeText(s).replace(/"/g, '&quot;')
 }
 
+/** 元素子节点里有没有元素（决定一段纯空白是不是「元素之间的缩进」） */
+function hasElementChildren(el: Element): boolean {
+  return Array.from(el.childNodes).some((n) => n.nodeType === 1)
+}
+
 /**
  * 元素是否含“有意义的文本”（即混合内容）：这类元素绝不重排空白，整段原样序列化。
  * - 含非空白文本、或含 CDATA → 有意义；
- * - 纯空白且元素没有子元素 → 视为可忽略（<a>   </a> 与 <a/> 同样处理）；
- * - 纯空白、不含换行、旁边又有子元素 → 有意义：<p><em>a</em> <em>b</em></p> 里的空格是词语分隔符，
- *   删掉会把 a、b 粘成一个词；只有含换行的空白才当作缩进丢弃。
+ * - 纯空白只有在「元素之间的换行缩进」时才算可重排（<a>\n  <b/>\n</a> → <a><b/></a>）；
+ * - 其余纯空白一律保留：<p><em>a</em> <em>b</em></p> 里的空格是词语分隔符，
+ *   而叶子元素里的空白（<a> </a>）删掉就是改数据。
  */
 function hasSignificantText(el: Element): boolean {
-  const hasElementChild = Array.from(el.childNodes).some((n) => n.nodeType === 1)
+  const hasChildren = hasElementChildren(el)
   return Array.from(el.childNodes).some((n) => {
-    if (n.nodeType !== 3 && n.nodeType !== 4) return false
     if (n.nodeType === 4) return true
+    if (n.nodeType !== 3) return false
     const value = n.nodeValue ?? ''
     if (value.trim() !== '') return true
-    if (!hasElementChild) return false
-    return !/[\r\n]/.test(value)
+    return !(hasChildren && /[\r\n]/.test(value))
   })
 }
 
@@ -99,7 +103,8 @@ function writeNode(node: Node, depth: number, indent: string, out: string[], war
 
   // 混合内容：一个空白都不动、一个换行都不加，保证 textContent 与原文一致
   if (hasSignificantText(el)) {
-    if (!warnings.includes('检测到混合内容（文本与元素交错），该元素保持原样不做缩进')) {
+    // 只有真「文本与元素交错」才提示；叶子元素里的空白属正常保留，不报混合内容
+    if (hasElementChildren(el) && !warnings.includes('检测到混合内容（文本与元素交错），该元素保持原样不做缩进')) {
       warnings.push('检测到混合内容（文本与元素交错），该元素保持原样不做缩进')
     }
     out.push(pad + serializeExact(el))
@@ -140,7 +145,7 @@ export function minifyXml(text: string): XmlResult {
   const walk = (el: Element) => {
     for (const child of Array.from(el.children)) walk(child)
     if (hasSignificantText(el)) {
-      if (!warnings.includes('检测到混合内容（文本与元素交错），该元素保持原样不做压缩')) {
+      if (hasElementChildren(el) && !warnings.includes('检测到混合内容（文本与元素交错），该元素保持原样不做压缩')) {
         warnings.push('检测到混合内容（文本与元素交错），该元素保持原样不做压缩')
       }
       return
@@ -383,6 +388,16 @@ function searchIn(source: string, needle: string, from: number, to: number): num
 }
 
 /**
+ * 在所属元素区间内定位一段内容：先从游标之后找，找不到再退回区间开头。
+ * 文本 / 属性分支若总从区间开头找，同一元素里两个值相同的兄弟文本节点
+ * （<r>x<!--c-->x</r>）会一起指向第一个，重复定位。
+ */
+function searchInSpan(source: string, needle: string, from: number, to: number, cursor: number): number {
+  const afterCursor = searchIn(source, needle, Math.max(from, cursor), to)
+  return afterCursor >= 0 ? afterCursor : searchIn(source, needle, from, to)
+}
+
+/**
  * 在源文本中定位节点：元素优先用扫描配对出的区间（嵌套同名也能各自对应自己），
  * 属性 / 文本节点优先在所属元素的区间内搜索，全部失败再退回原来的游标搜索。
  */
@@ -409,7 +424,7 @@ function locate(
     const needle = `${a.name}="${a.value}"`
     const owner = a.ownerElement ? spans?.get(a.ownerElement) : undefined
     if (owner) {
-      const inOwner = searchIn(source, needle, owner.from, owner.to)
+      const inOwner = searchInSpan(source, needle, owner.from, owner.to, cursor)
       if (inOwner >= 0) return { from: inOwner, to: inOwner + needle.length }
     }
     let at = source.indexOf(needle, cursor)
@@ -421,7 +436,7 @@ function locate(
   const parent = node.parentElement
   const parentSpan = parent ? spans?.get(parent) : undefined
   if (parentSpan) {
-    const inParent = searchIn(source, text, parentSpan.from, parentSpan.to)
+    const inParent = searchInSpan(source, text, parentSpan.from, parentSpan.to, cursor)
     if (inParent >= 0) return { from: inParent, to: inParent + text.length }
   }
   let at = source.indexOf(text, cursor)

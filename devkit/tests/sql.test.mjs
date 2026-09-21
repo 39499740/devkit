@@ -73,6 +73,12 @@ export const cases = [
   check('压缩保留字符串内的换行（不能为了一行而改数据）', () =>
     min("SELECT $$line1\n\nline2$$ FROM t").includes('$$line1\n\nline2$$')
   ),
+
+  // 压缩：括号前只跟关键字留空格（回归：一律留空格会把 count(*) 压成 count (*)）
+  eq('压缩不留函数调用前的空格', min('SELECT count(*) FROM t'), 'SELECT count(*) FROM t'),
+  eq('压缩去掉实参表内多余空格', min('SELECT f( x , y ) FROM t'), 'SELECT f(x, y) FROM t'),
+  eq('压缩在关键字与括号之间留空格', min('SELECT a FROM t WHERE a IN (1, 2)'), 'SELECT a FROM t WHERE a IN (1, 2)'),
+  eq('压缩不把带引号的标识符当关键字', min('SELECT "in"(1) FROM t'), 'SELECT "in"(1) FROM t'),
   check('设计稿样例格式化结果稳定', () => {
     const sample = 'select u.id,u.name,o.total,o.created_at\nfrom users u\njoin orders o\non o.user_id=u.id\nwhere o.total>1000\nand u.status=\'active\'\norder by o.total desc\nlimit 20;'
     const out = fmt(sample, 'mysql', 2)
