@@ -93,6 +93,29 @@ export function validateInstance(
   const warnings: string[] = []
   const max = opts.maxErrors ?? 50
   let checked = 0
+  /** 当前收集器：组合关键字在隔离收集器里试算，避免失败分支的错误污染最终结果 */
+  let sink: SchemaError[] = errors
+
+  /** 把隔离分支收集到的错误合并进当前收集器（受 maxErrors 限制） */
+  function merge(list: SchemaError[]) {
+    for (const e of list) {
+      if (sink.length >= max) return
+      sink.push(e)
+    }
+  }
+
+  /** 在隔离收集器里跑一段校验，返回它自己的错误，不改动外层结果 */
+  function isolate(fn: () => void): SchemaError[] {
+    const saved = sink
+    const local: SchemaError[] = []
+    sink = local
+    try {
+      fn()
+    } finally {
+      sink = saved
+    }
+    return local
+  }
 
   const resolveRef = (ref: string): unknown => {
     if (!ref.startsWith('#')) throw new Error(`只支持文档内的 $ref，收到 ${ref}`)
@@ -110,8 +133,8 @@ export function validateInstance(
   }
 
   function push(pointer: string, schemaPath: string, keyword: string, message: string) {
-    if (errors.length >= max) return
-    errors.push({ path: jsonPath(pointer), pointer: pointer || '/', schemaPath: schemaPath || '/', keyword, message })
+    if (sink.length >= max) return
+    sink.push({ path: jsonPath(pointer), pointer: pointer || '/', schemaPath: schemaPath || '/', keyword, message })
   }
 
   function eq(a: unknown, b: unknown): boolean {
@@ -119,7 +142,7 @@ export function validateInstance(
   }
 
   function walk(inst: unknown, sch: unknown, pointer: string, spath: string, depth: number) {
-    if (errors.length >= max || depth > 64) return
+    if (sink.length >= max || depth > 64) return
     if (sch === true || sch === undefined) return
     if (sch === false) {
       push(pointer, spath, 'false', '该位置不允许出现任何值（schema 为 false）')
@@ -134,43 +157,53 @@ export function validateInstance(
       return
     }
 
-    // 组合关键字
+    // 组合关键字：每个分支在隔离收集器里试算，只有确定失败的才上报
     for (const kw of ['allOf', 'anyOf', 'oneOf'] as const) {
       const list = s[kw]
       if (!Array.isArray(list)) continue
-      const results = list.map((sub) => {
-        const before = errors.length
-        const saved = errors.length
-        walk(inst, sub, pointer, `${spath}/${kw}/${list.indexOf(sub)}`, depth + 1)
-        const own = errors.length - saved
-        void before
-        return own
-      })
-      const passed = results.filter((n) => n === 0).length
-      if (kw === 'allOf' && passed !== list.length) {
-        push(pointer, spath, kw, `不满足 allOf 中的 ${list.length - passed} 个子 schema`)
+      const branchErrors = list.map((sub, i) =>
+        isolate(() => walk(inst, sub, pointer, `${spath}/${kw}/${i}`, depth + 1))
+      )
+      const passedIdx = branchErrors.map((errs, i) => (errs.length === 0 ? i : -1)).filter((i) => i >= 0)
+
+      if (kw === 'allOf') {
+        branchErrors.forEach((errs, i) => {
+          if (!errs.length) return
+          push(pointer, `${spath}/allOf/${i}`, kw, `不满足 allOf 第 ${i + 1} 个子 schema`)
+          merge(errs)
+        })
+      } else if (kw === 'anyOf') {
+        if (!passedIdx.length) {
+          push(pointer, spath, kw, `不满足 anyOf 中的任何一个子 schema（共 ${list.length} 个分支）`)
+          branchErrors.slice(0, 3).forEach((errs, i) => {
+            const first = errs[0]
+            if (first) push(pointer, `${spath}/anyOf/${i}`, kw, `分支 ${i + 1} 未通过：${first.message}`)
+          })
+        }
+      } else if (kw === 'oneOf') {
+        if (!passedIdx.length) {
+          push(pointer, spath, kw, `oneOf 没有任何分支通过（共 ${list.length} 个分支）`)
+        } else if (passedIdx.length > 1) {
+          push(
+            pointer,
+            spath,
+            kw,
+            `oneOf 要求恰好 1 个分支通过，实际通过 ${passedIdx.length} 个（分支 ${passedIdx.map((i) => i + 1).join('、')}）`
+          )
+        }
       }
-      if (kw === 'anyOf' && passed === 0) push(pointer, spath, kw, '不满足 anyOf 中的任何一个子 schema')
-      if (kw === 'oneOf' && passed !== 1) push(pointer, spath, kw, `oneOf 要求恰好满足 1 个，实际 ${passed} 个`)
     }
-    if (s.not && (() => {
-      const saved = errors.length
-      const mark = saved
-      walk(inst, s.not, pointer, `${spath}/not`, depth + 1)
-      const violated = errors.length === mark
-      errors.length = saved
-      return violated
-    })()) {
-      push(pointer, spath, 'not', '命中了 not 排除的 schema')
+    if (s.not) {
+      const notErrors = isolate(() => walk(inst, s.not, pointer, `${spath}/not`, depth + 1))
+      if (!notErrors.length) push(pointer, spath, 'not', '命中了 not 排除的 schema')
     }
     if (s.if) {
-      const saved = errors.length
-      const mark = errors.length
-      walk(inst, s.if, pointer, `${spath}/if`, depth + 1)
-      const matched = errors.length === mark
-      errors.length = saved
-      if (matched && s.then) walk(inst, s.then, pointer, `${spath}/then`, depth + 1)
-      if (!matched && s.else) walk(inst, s.else, pointer, `${spath}/else`, depth + 1)
+      const condErrors = isolate(() => walk(inst, s.if, pointer, `${spath}/if`, depth + 1))
+      if (!condErrors.length) {
+        if (s.then) walk(inst, s.then, pointer, `${spath}/then`, depth + 1)
+      } else if (s.else) {
+        walk(inst, s.else, pointer, `${spath}/else`, depth + 1)
+      }
     }
 
     // type
@@ -265,14 +298,9 @@ export function validateInstance(
         })
       }
       if (s.contains) {
-        const any = inst.some((v) => {
-          const saved = errors.length
-          const mark = errors.length
-          walk(v, s.contains, pointer, `${spath}/contains`, depth + 1)
-          const ok = errors.length === mark
-          errors.length = saved
-          return ok
-        })
+        const any = inst.some(
+          (v) => isolate(() => walk(v, s.contains, pointer, `${spath}/contains`, depth + 1)).length === 0
+        )
         if (!any) push(pointer, `${spath}/contains`, 'contains', '没有任何元素满足 contains 条件')
       }
     }
@@ -352,12 +380,10 @@ export function validateInstance(
 }
 
 function inferNode(value: unknown, opts: InferOptions): Record<string, unknown> {
-  const t = actualType(value)
-  if (t === 'null') return { type: 'null' }
-  if (t === 'integer') return { type: 'integer' }
-  if (t === 'number') return { type: 'number' }
-  if (t === 'boolean') return { type: 'boolean' }
-  if (t === 'string') return { type: 'string' }
+  if (value === null) return { type: 'null' }
+  if (typeof value === 'number') return Number.isInteger(value) ? { type: 'integer' } : { type: 'number' }
+  if (typeof value === 'boolean') return { type: 'boolean' }
+  if (typeof value === 'string') return { type: 'string' }
   if (Array.isArray(value)) {
     if (!value.length) return { type: 'array', items: {} }
     const itemSchemas = value.map((v) => inferNode(v, opts))

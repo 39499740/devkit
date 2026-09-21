@@ -50,8 +50,4 @@ export function useToolRun(getSignature: () => string) {
   return { status, errorMsg, staleNote, markOk, markFail, markIdle }
 }
 
-/** 统一的错误信息提取 */
-export function errMessage(e: unknown): string {
-  if (e instanceof Error) return e.message
-  return String(e)
-}
+// errMessage 已收敛到 app/utils/errors.ts（utils 层显式 import，组件仍走自动导入）

@@ -62,7 +62,7 @@ const run = useToolRun(sig)
 
 // G01/G09：接收来自其他工具的内存传递
 onMounted(() => {
-  const p = transfer.peek()
+  const p = transfer.take('xml-toolbox')
   if (p && p.from !== 'xml-toolbox') {
     input.value = p.text
     execute()
@@ -186,6 +186,11 @@ const sourceLines = computed(() => {
 })
 
 const hitCount = computed(() => matches.value.filter((m) => m.from >= 0).length)
+
+/** 结果内容类型：XPath 结果与 XML→JSON 输出是 JSON，其余（格式化 / 压缩 / JSON→XML）是文本 */
+const resultKind = computed<'json' | 'text'>(() =>
+  mode.value === 'xpath' || (mode.value === 'convert' && direction.value === 'xml2json') ? 'json' : 'text'
+)
 
 const inputMeta = computed(() => {
   if (!input.value) return []
@@ -403,7 +408,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
     <div v-if="output && run.status.value === 'ok'" class="t43__send">
       <span class="tertiary">继续处理：</span>
-      <SendToMenu :text="output" from="xml-toolbox" kind="json" />
+      <SendToMenu :text="output" from="xml-toolbox" :kind="resultKind" />
     </div>
   </div>
 </template>

@@ -64,17 +64,18 @@ const sw = await page.evaluate(async () => {
 });
 line({ test: "G10 Service Worker", sw });
 
-// 3) 离线提示条（真实 offline 事件）
-await page.evaluate(() => window.dispatchEvent(new Event("offline")));
-await page.waitForTimeout(600);
+// 3) 离线提示条：用 CDP 真实断网（不再手动派发 DOM 事件；整页重载后的缓存可用性见 verify_a7_real_offline.mjs）
+await page.cdp("Network.enable")
+await page.cdp("Network.emulateNetworkConditions", { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 })
+await page.waitForTimeout(1200);
 s = await page.evaluate(() => ({
   offline: document.querySelector(".pwastatus__offline")?.innerText.replace(/\s+/g, " ").trim() ?? null,
   tools: [...document.querySelectorAll(".pwastatus__tool")].map((e) => e.innerText.trim())
 }));
-line({ test: "G10 当前离线提示", text: s.offline, cachedTools: s.tools });
+line({ test: "G10 当前离线提示（CDP 真实断网）", onLine: await page.evaluate(() => navigator.onLine), text: s.offline, cachedTools: s.tools });
 await page.screenshot({ path: EV + "a7-g10-pwa-offline.png" });
-await page.evaluate(() => window.dispatchEvent(new Event("online")));
-await page.waitForTimeout(400);
+await page.cdp("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 })
+await page.waitForTimeout(1200);
 line({ test: "G10 恢复在线", bannerGone: await page.evaluate(() => !document.querySelector(".pwastatus__offline")) });
 
 console.log("SPACE " + task.spaceId);

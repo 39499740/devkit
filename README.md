@@ -36,6 +36,8 @@ npm run dev        # 开发，默认 http://localhost:3000
 npm run build      # SSR 构建
 npm run generate   # 静态站点生成
 npm run typecheck  # 类型检查
+npm test           # 引擎回归测试（SQL / XML→JSON / JSONPath / JMESPath / JSON Schema / 流程 / 传递）
+npm run test:dom   # 需要真实浏览器的 DOM 用例（XML 格式化与 XPath，走 ego-browser）
 ```
 
 ## 目录结构

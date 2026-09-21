@@ -41,8 +41,8 @@ const summary = computed(() => {
   return `将传递：${shape} · ${lines} 行 · ${size}`
 })
 
-const validJson = computed(() => {
-  if (props.kind !== 'json') return false
+/** 内容本身是否为合法 JSON（与来源声明的 kind 无关：解码结果也可能是 JSON） */
+const contentIsJson = computed(() => {
   try {
     JSON.parse(props.text)
     return true
@@ -51,13 +51,29 @@ const validJson = computed(() => {
   }
 })
 
-const selected = computed(() => targets.value.find((t) => t.slug === selectedSlug.value) ?? null)
+const contentTag = computed(() =>
+  props.kind === 'json' ? (contentIsJson.value ? '格式有效' : '格式待确认') : contentIsJson.value ? '文本（合法 JSON）' : '文本内容'
+)
+
+/** 内容不是合法 JSON 时，需要 JSON 的目标不可选（但保留说明，便于理解为什么灰掉） */
+const usable = (t: { requiresJson?: boolean }) => !t.requiresJson || contentIsJson.value
+
+const tagOf = (t: { requiresJson?: boolean; needsExtra?: boolean }) => {
+  if (t.requiresJson && !contentIsJson.value) return { text: '需合法 JSON', cls: 'sendto__tag--off' }
+  if (t.needsExtra) return { text: '需补充 Schema', cls: 'sendto__tag--warn' }
+  return { text: '完全兼容', cls: 'sendto__tag--ok' }
+}
+
+const selected = computed(() => {
+  const t = targets.value.find((x) => x.slug === selectedSlug.value)
+  return t && usable(t) ? t : null
+})
 
 function toggle() {
   if (!props.text.trim()) return
   open.value = !open.value
   if (open.value) {
-    selectedSlug.value = targets.value[0]?.slug ?? null
+    selectedSlug.value = (targets.value.find((t) => usable(t)) ?? targets.value[0])?.slug ?? null
     newFlowName.value = ''
   }
 }
@@ -146,9 +162,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
             <div class="sendto__summary">
               <DkIcon name="corner-right-down" :size="14" />
               <span class="sendto__summary-text">{{ summary }}</span>
-              <span class="sendto__tag" :class="validJson ? 'sendto__tag--ok' : ''">
-                {{ validJson ? '格式有效' : kind === 'json' ? '格式待确认' : '文本内容' }}
-              </span>
+              <span class="sendto__tag" :class="contentIsJson ? 'sendto__tag--ok' : ''">{{ contentTag }}</span>
             </div>
 
             <p class="sendto__group">继续处理</p>
@@ -157,7 +171,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
                 v-for="t in targets"
                 :key="t.slug"
                 class="sendto__item"
-                :class="{ 'sendto__item--on': selectedSlug === t.slug }"
+                :class="{ 'sendto__item--on': selectedSlug === t.slug, 'sendto__item--off': !usable(t) }"
+                :disabled="!usable(t)"
+                :title="usable(t) ? t.note : '当前内容不是合法 JSON，该工具无法接收'"
                 @click="selectedSlug = t.slug"
               >
                 <span class="sendto__item-icon">
@@ -167,9 +183,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
                   <span class="sendto__item-name">{{ t.name }}</span>
                   <span class="sendto__item-note">{{ t.note }}</span>
                 </span>
-                <span class="sendto__tag" :class="t.needsExtra ? 'sendto__tag--warn' : 'sendto__tag--ok'">
-                  {{ t.needsExtra ? '需补充 Schema' : '完全兼容' }}
-                </span>
+                <span class="sendto__tag" :class="tagOf(t).cls">{{ tagOf(t).text }}</span>
                 <DkIcon name="chevron-right" :size="15" />
               </button>
               <p v-if="!targets.length" class="sendto__empty">当前没有兼容的目标工具。</p>
@@ -345,6 +359,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 .sendto__tag--warn {
   background: var(--warn-soft);
   color: var(--warn);
+}
+.sendto__tag--off {
+  background: var(--surface-subtle);
+  color: var(--text-tertiary);
+}
+.sendto__item--off {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .sendto__group {
   padding: 10px 16px 4px;

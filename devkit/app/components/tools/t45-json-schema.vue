@@ -72,7 +72,7 @@ const sig = () => JSON.stringify([mode.value, draft.value, strict.value, doc.val
 const run = useToolRun(sig)
 
 onMounted(() => {
-  const p = transfer.take()
+  const p = transfer.take('json-schema')
   if (p) {
     doc.value = p.text
     toast.success('已接收其他工具传来的 JSON')

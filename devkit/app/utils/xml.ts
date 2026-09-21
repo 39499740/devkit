@@ -3,6 +3,8 @@
  * 使用浏览器原生 DOMParser / document.evaluate，不做自研 XML 解析器。
  */
 
+import { errMessage } from './errors'
+
 export interface XmlResult {
   xml: string
   warnings: string[]
@@ -49,27 +51,50 @@ function escapeAttr(s: string): string {
   return escapeText(s).replace(/"/g, '&quot;')
 }
 
-function writeNode(node: Node, depth: number, indent: string, out: string[]) {
+/** 元素是否含非空白文本（混合内容）：这类元素绝不重排空白，原样序列化 */
+function hasMixedText(el: Element): boolean {
+  return Array.from(el.childNodes).some(
+    (n) => (n.nodeType === 3 || n.nodeType === 4) && (n.nodeValue ?? '').trim() !== ''
+  )
+}
+
+/** 原文里的 XML 声明与 DOCTYPE（DOM 不保留声明文本，DOCTYPE 内部子集也会丢，这里按原文取回） */
+function extractProlog(text: string): { declaration: string | null; doctype: string | null } {
+  const head = text.slice(0, text.indexOf('<', text.indexOf('<') + 1) + 1)
+  const scope = text.slice(0, Math.max(0, text.length))
+  const decl = /^\s*<\?xml[\s\S]*?\?>/.exec(scope)
+  void head
+  const dt = /<!DOCTYPE[^>[]*(?:\[[\s\S]*?\])?\s*>/i.exec(scope)
+  return { declaration: decl ? decl[0].trim() : null, doctype: dt ? dt[0].trim() : null }
+}
+
+function serializeExact(node: Node): string {
+  return new XMLSerializer().serializeToString(node)
+}
+
+function writeNode(node: Node, depth: number, indent: string, out: string[], warnings: string[]) {
   const pad = indent.repeat(depth)
-  if (node.nodeType === 3) {
-    const text = (node.nodeValue ?? '').trim()
-    if (text) out.push(pad + escapeText(text))
+  if (node.nodeType === 8 || node.nodeType === 7) {
+    out.push(pad + serializeExact(node))
     return
   }
   if (node.nodeType === 4) {
-    const text = (node.nodeValue ?? '').trim()
-    if (text) out.push(pad + `<![CDATA[${text}]]>`)
-    return
-  }
-  if (node.nodeType === 8) {
-    out.push(`${pad}<!--${node.nodeValue ?? ''}-->`)
+    out.push(pad + serializeExact(node))
     return
   }
   if (node.nodeType !== 1) return
   const el = node as Element
-  const kids = Array.from(el.childNodes).filter(
-    (n) => n.nodeType === 1 || n.nodeType === 4 || n.nodeType === 8 || (n.nodeType === 3 && (n.nodeValue ?? '').trim())
-  )
+
+  // 混合内容：一个空白都不动、一个换行都不加，保证 textContent 与原文一致
+  if (hasMixedText(el)) {
+    if (!warnings.includes('检测到混合内容（文本与元素交错），该元素保持原样不做缩进')) {
+      warnings.push('检测到混合内容（文本与元素交错），该元素保持原样不做缩进')
+    }
+    out.push(pad + serializeExact(el))
+    return
+  }
+
+  const kids = Array.from(el.childNodes).filter((n) => n.nodeType !== 3 || (n.nodeValue ?? '').trim() !== '')
   const head = openTag(el)
   if (!kids.length) {
     out.push(`${pad}${head}/>`)
@@ -79,36 +104,60 @@ function writeNode(node: Node, depth: number, indent: string, out: string[]) {
     out.push(`${pad}${head}>${escapeText((kids[0]!.nodeValue ?? '').trim())}</${el.tagName}>`)
     return
   }
+  if (kids.length === 1 && kids[0]!.nodeType === 4) {
+    out.push(`${pad}${head}>${serializeExact(kids[0]!)}</${el.tagName}>`)
+    return
+  }
   out.push(`${pad}${head}>`)
-  for (const k of kids) writeNode(k, depth + 1, indent, out)
+  for (const k of kids) writeNode(k, depth + 1, indent, out, warnings)
   out.push(`${pad}</${el.tagName}>`)
 }
 
-/** 格式化：按元素缩进重排，保留注释与 CDATA */
+/** 格式化：只重排“纯元素内容”，混合内容原样保留；声明 / DOCTYPE / 根节点外的注释与处理指令都保留 */
 export function formatXml(text: string, indentSize = 2): XmlResult {
   const { doc, warnings } = parse(text)
+  const prolog = extractProlog(text)
   const out: string[] = []
-  writeNode(doc.documentElement, 0, ' '.repeat(indentSize), out)
+  if (prolog.declaration) out.push(prolog.declaration)
+  if (prolog.doctype) out.push(prolog.doctype)
+  for (const node of Array.from(doc.childNodes)) {
+    if (node.nodeType === 1) writeNode(node, 0, ' '.repeat(indentSize), out, warnings)
+    else if (node.nodeType === 8 || node.nodeType === 7) out.push(serializeExact(node))
+  }
   const xml = out.join('\n')
   return { xml, warnings, nodes: countNodes(doc.documentElement), lines: out.length, chars: xml.length }
 }
 
-/** 压缩：移除元素之间的空白节点，保留文本内容 */
+/** 压缩：只在“纯元素内容”里移除元素之间的空白节点；声明与 DOCTYPE 保留 */
 export function minifyXml(text: string): XmlResult {
   const { doc, warnings } = parse(text)
+  const prolog = extractProlog(text)
   const clone = doc.documentElement.cloneNode(true) as Element
   const walk = (el: Element) => {
+    for (const child of Array.from(el.children)) walk(child)
+    if (hasMixedText(el)) {
+      if (!warnings.includes('检测到混合内容（文本与元素交错），该元素保持原样不做压缩')) {
+        warnings.push('检测到混合内容（文本与元素交错），该元素保持原样不做压缩')
+      }
+      return
+    }
     for (const child of Array.from(el.childNodes)) {
       if (child.nodeType === 3 && !(child.nodeValue ?? '').trim()) el.removeChild(child)
-      else if (child.nodeType === 1) walk(child as Element)
     }
   }
   walk(clone)
-  const xml = new XMLSerializer().serializeToString(clone)
+  const body = serializeExact(clone)
+  const xml = [prolog.declaration, prolog.doctype, body].filter(Boolean).join('')
   return { xml, warnings, nodes: countNodes(doc.documentElement), lines: 1, chars: xml.length }
 }
 
-/** XML → JSON：属性前缀 @，文本用 #text，重复元素合并为数组 */
+/**
+ * XML → JSON：
+ * - 属性写成 @name
+ * - 只有文本、没有属性与子元素的节点直接给字符串
+ * - 既含属性/子元素又含文本时，文本放在 #text
+ * - 同名子节点合并为数组
+ */
 export function xmlToJson(text: string): { value: unknown; warnings: string[] } {
   const { doc, warnings } = parse(text)
   return { value: elementToJson(doc.documentElement), warnings }
@@ -124,8 +173,9 @@ function elementToJson(el: Element): unknown {
     .join('')
     .trim()
   if (!childEls.length) {
+    if (!Object.keys(obj).length) return text
     if (text) obj['#text'] = text
-    return Object.keys(obj).length ? obj : ''
+    return obj
   }
   for (const child of childEls) {
     const key = child.tagName
@@ -286,7 +336,8 @@ export function queryXPath(
     const type: XPathMatch['type'] =
       node.nodeType === 2 ? 'attribute' : node.nodeType === 3 ? 'text' : 'element'
     const pos = locate(text, node, cursor)
-    if (pos.from >= 0) cursor = pos.from
+    // 游标必须推到本次匹配的结尾，否则后续匹配会重复定位到第一条
+    if (pos.to >= 0) cursor = pos.to
     matches.push({
       path: nodePath(node),
       value: (node.nodeValue ?? node.textContent ?? '').trim(),

@@ -44,3 +44,6 @@ __pycache__/
 coscli_output/
 # 一次性脚本与临时产物（可复跑脚本放 audit/tools/）
 audit/tmp/
+
+# 测试中间产物
+devkit/tests/.tmp/

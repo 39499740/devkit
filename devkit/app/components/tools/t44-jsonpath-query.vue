@@ -58,7 +58,7 @@ const sourceAge = computed(() => {
 
 // 接收其他工具的内存传递
 onMounted(() => {
-  const p = transfer.take()
+  const p = transfer.take('jsonpath-query')
   if (!p) return
   input.value = p.text
   source.value = { from: p.from, at: p.ts }

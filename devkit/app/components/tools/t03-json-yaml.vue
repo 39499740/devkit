@@ -369,7 +369,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
 /* G01：接收来自其他工具的内存传递；已有输入时先确认 */
 onMounted(() => {
-  const p = transfer.peek()
+  const p = transfer.take('json-yaml')
   if (p && p.from !== 'json-yaml') {
     if (input.value.trim()) replaceAsk.value = { text: p.text, from: p.from }
     else applyIncoming(p.text)

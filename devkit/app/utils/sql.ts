@@ -140,6 +140,38 @@ const NEWLINE_WORDS = new Set(['on', 'and', 'or', 'when', 'then', 'else', 'end']
 const NO_SPACE_BEFORE = new Set([',', ';', ')', '.', '::', '->', '->>', '#>', '#>>'])
 const NO_SPACE_AFTER = new Set(['(', '.', '::', '->', '->>', '#>', '#>>'])
 
+/** 字符串前缀：E' / e' / B' / b' / X' / x' / U&' / u&'（长度表示前缀字符数） */
+function stringPrefixAt(sql: string, i: number): string | null {
+  const two = sql.slice(i, i + 2)
+  if (two === 'U&' || two === 'u&') return sql[i + 2] === "'" ? two : null
+  const one = sql[i]
+  if ((one === 'E' || one === 'e' || one === 'B' || one === 'b' || one === 'X' || one === 'x') && sql[i + 1] === "'") {
+    return one
+  }
+  return null
+}
+
+/** 从引号位置读到闭合引号之后（支持 '' 与反斜杠转义），未闭合时报错 */
+function readSingleQuoted(sql: string, quoteIndex: number, backslashEscapes: boolean): number {
+  const n = sql.length
+  let j = quoteIndex + 1
+  while (j < n) {
+    if (backslashEscapes && sql[j] === '\\') {
+      j += 2
+      continue
+    }
+    if (sql[j] === "'") {
+      if (sql[j + 1] === "'") {
+        j += 2
+        continue
+      }
+      return j + 1
+    }
+    j += 1
+  }
+  throw new Error('单引号字符串未闭合')
+}
+
 function isWordStart(ch: string) {
   return /[A-Za-z_\u4e00-\u9fff$]/.test(ch)
 }
@@ -179,33 +211,31 @@ export function tokenizeSql(sql: string, dialect: SqlDialect): Tok[] {
       i = j + 2
       continue
     }
-    if (ch === "'") {
-      let j = i + 1
-      while (j < n) {
-        if (sql[j] === '\\' && dialect === 'mysql') {
-          j += 2
-          continue
-        }
-        if (sql[j] === "'") {
-          if (sql[j + 1] === "'") {
-            j += 2
-            continue
-          }
-          break
-        }
-        j += 1
-      }
-      if (j >= n) throw new Error('单引号字符串未闭合')
-      toks.push({ type: 'string', text: sql.slice(i, j + 1) })
-      i = j + 1
+    // 带前缀的字符串字面量：E'..'（PG 转义）、B'..'、X'..'、U&'..'
+    const prefix = stringPrefixAt(sql, i)
+    if (prefix) {
+      const end = readSingleQuoted(sql, i + prefix.length, prefix !== 'U&')
+      toks.push({ type: 'string', text: sql.slice(i, end) })
+      i = end
       continue
     }
-    if (ch === '$' && dialect === 'postgres' && sql[i + 1] === '$') {
-      const end = sql.indexOf('$$', i + 2)
-      if (end === -1) throw new Error('$$ 字符串未闭合')
-      toks.push({ type: 'string', text: sql.slice(i, end + 2) })
-      i = end + 2
+    if (ch === "'") {
+      const end = readSingleQuoted(sql, i, dialect === 'mysql')
+      toks.push({ type: 'string', text: sql.slice(i, end) })
+      i = end
       continue
+    }
+    // 美元引用字符串：$$...$$ 与 $tag$...$tag$（PostgreSQL）
+    if (ch === '$' && dialect === 'postgres') {
+      const m = /^\$([A-Za-z_\u4e00-\u9fff][\w\u4e00-\u9fff]*)?\$/.exec(sql.slice(i))
+      if (m) {
+        const delim = m[0]
+        const end = sql.indexOf(delim, i + delim.length)
+        if (end === -1) throw new Error(`${delim} 字符串未闭合`)
+        toks.push({ type: 'string', text: sql.slice(i, end + delim.length) })
+        i = end + delim.length
+        continue
+      }
     }
     if (ch === '"' || ch === '`') {
       const close = ch

@@ -12,6 +12,9 @@ npm run dev        # 开发（默认 3000 端口）
 npm run build      # SSR 构建
 npm run generate   # 静态站点生成（可部署到任意静态托管）
 npm run preview    # 预览构建产物
+npm run typecheck  # 类型检查
+npm test           # 引擎回归测试（Node，无额外依赖）
+npm run test:dom   # DOM 用例（真实浏览器，需 ego-browser）
 ```
 
 ## 功能范围

@@ -17,7 +17,7 @@ const replaceAsk = ref<{ text: string; from: string } | null>(null)
 
 // G01：接收来自其他工具的内存传递；已有输入时先确认
 onMounted(() => {
-  const p = transfer.peek()
+  const p = transfer.take('json-format')
   if (p && p.from !== 'json-format') {
     if (input.value.trim()) {
       replaceAsk.value = { text: p.text, from: p.from }

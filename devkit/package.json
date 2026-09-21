@@ -10,6 +10,8 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "typecheck": "nuxt typecheck",
+    "test": "node tests/run.mjs",
+    "test:dom": "node tests/dom.mjs",
     "postinstall": "nuxt prepare"
   },
   "dependencies": {

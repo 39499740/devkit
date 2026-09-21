@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { stepDef, stepLibrary, runStep, runWorkflow, type StepResult, type StepType } from '~/utils/workflow'
+import { stepDef, stepLibrary, runStep, runWorkflow, normalizeSelection, type StepResult, type StepType } from '~/utils/workflow'
 
 const route = useRoute()
 const router = useRouter()
@@ -40,19 +40,26 @@ const filtered = computed(() => {
 
 const addedTypes = computed(() => new Set(steps.value.map((s) => s.type)))
 
-/** 接收跨工具传递：只有带 workflow 意图时才会自动追加步骤 */
+/**
+ * 接收跨工具传递：以流程 id 作为消费方，只有带本流程 intent 的载荷才会追加步骤。
+ * take 是一次性消费，回到列表再进来不会重复追加。
+ */
 onMounted(() => {
-  const p = transfer.take()
+  const p = transfer.take(id.value)
   if (!p) return
   input.value = p.text
-  const intent = (p as { intent?: { workflowId: string; stepType?: StepType } }).intent
-  if (intent && intent.workflowId === id.value && intent.stepType) {
-    store.addStep(id.value, { type: intent.stepType, config: {} })
-    toast.success(`已把「${stepDef(intent.stepType).name}」追加为第 ${steps.value.length} 步`)
-    selected.value = steps.value.length - 1
-  } else {
-    toast.success('已接收其他工具传来的内容（仅内存）')
+  const intent = p.intent
+  if (intent?.workflowId === id.value) {
+    if (intent.stepType) {
+      store.addStep(id.value, { type: intent.stepType, config: {} })
+      selected.value = steps.value.length - 1
+      toast.success(`已把「${stepDef(intent.stepType).name}」追加为第 ${steps.value.length} 步`)
+      return
+    }
+    toast.success('结果已作为流程输入带入（仅内存传递）')
+    return
   }
+  toast.success('已接收其他工具传来的内容（仅内存）')
 })
 
 function stepStatus(i: number): StepResult['status'] | 'pending' {
@@ -77,8 +84,9 @@ function runAll() {
   busy.value = true
   const res = runWorkflow(wf.value, input.value, { stopOnError: stopOnError.value })
   results.value = res.results
-  selected.value = Math.max(0, res.results.findIndex((r) => r.status === 'fail'))
-  if (selected.value === -1) selected.value = Math.min(steps.value.length - 1, res.results.length - 1)
+  // 运行完成后选中「第一个失败步骤」，全部成功则停在最后一步（不落到流程输出，避免误以为还能单步运行）
+  const failedAt = res.results.findIndex((r) => r.status === 'fail')
+  selected.value = failedAt >= 0 ? failedAt : Math.max(0, steps.value.length - 1)
   lastRunAt.value = Date.now()
   store.addRun({
     workflowId: id.value,
@@ -95,7 +103,10 @@ function runAll() {
 
 function runOne(i: number) {
   const step = steps.value[i]
-  if (!step) return
+  if (!step) {
+    toast.warning('该位置没有步骤可运行')
+    return
+  }
   busy.value = true
   const res = runStep(step, inputOf(i), i)
   const list = [...results.value]
@@ -108,11 +119,14 @@ function runOne(i: number) {
 }
 
 function runSelected() {
-  if (selected.value < 0) {
-    toast.warning('当前选中的是「流程输入」，请先选择要运行的步骤')
+  const sel = selection.value
+  if (sel.kind !== 'step') {
+    toast.warning(
+      sel.kind === 'input' ? '当前选中的是「流程输入」，请先在步骤链里选择要运行的步骤' : '当前选中的是「流程输出」，没有可单独运行的步骤'
+    )
     return
   }
-  runOne(selected.value)
+  runOne(sel.index)
 }
 
 function clearInput() {
@@ -133,14 +147,34 @@ function removeStep(i: number) {
   if (selected.value >= i) selected.value = Math.max(-1, selected.value - 1)
 }
 
+/** 选中项可以是流程输入（-1）、某一步（0..n-1）或流程输出（n 及以上），越界不再直接取 steps[i] */
+const selection = computed(() => normalizeSelection(steps.value.length, selected.value))
+
 const currentNodeTitle = computed(() => {
-  if (selected.value < 0) return '流程输入'
-  return `第 ${selected.value + 1} / ${steps.value.length} 步`
+  const sel = selection.value
+  if (sel.kind === 'input') return '流程输入'
+  if (sel.kind === 'output') return '流程输出'
+  return `第 ${sel.index + 1} / ${steps.value.length} 步`
 })
 
-const currentDef = computed(() => (selected.value < 0 ? null : stepDef(steps.value[selected.value]!.type)))
+const currentStepIndex = computed(() => (selection.value.kind === 'step' ? selection.value.index : -1))
 
-const currentLogs = computed(() => (selected.value < 0 ? [] : (results.value[selected.value]?.logs ?? [])))
+const currentStep = computed(() => (currentStepIndex.value >= 0 ? (steps.value[currentStepIndex.value] ?? null) : null))
+
+const currentDef = computed(() => (currentStep.value ? stepDef(currentStep.value.type) : null))
+
+const currentResult = computed(() => (currentStepIndex.value >= 0 ? (results.value[currentStepIndex.value] ?? null) : null))
+
+const currentLogs = computed(() => currentResult.value?.logs ?? [])
+
+/** 流程输出：最后一步成功时才有可用输出 */
+const finalOutput = computed(() => {
+  const last = results.value[steps.value.length - 1]
+  if (steps.value.length && results.value.length === steps.value.length && last?.status === 'ok') {
+    return { text: last.output, ok: true as const }
+  }
+  return { text: '', ok: false as const }
+})
 
 const doneCount = computed(() => results.value.filter((r) => r.status === 'ok').length)
 const failCount = computed(() => results.value.filter((r) => r.status === 'fail').length)
@@ -402,7 +436,7 @@ function exportJson() {
           <span class="wfe__badge wfe__badge--soft">{{ currentNodeTitle }}</span>
         </div>
 
-        <div v-if="currentDef" class="wfe__cfg">
+        <div v-if="currentStep && currentDef" class="wfe__cfg">
           <label class="wfe__field">
             <span class="wfe__field-label">步骤类型</span>
             <input class="wfe__field-input" :value="currentDef.name" readonly aria-label="步骤类型" />
@@ -411,16 +445,36 @@ function exportJson() {
             <span class="wfe__field-label">{{ f.label }}</span>
             <input
               class="wfe__field-input mono"
-              :value="steps[selected]?.config[f.key] ?? ''"
+              :value="currentStep.config[f.key] ?? ''"
               :placeholder="f.placeholder"
               :aria-label="f.label"
-              @input="store.updateStepConfig(id, selected, f.key, ($event.target as HTMLInputElement).value)"
+              @input="store.updateStepConfig(id, currentStepIndex, f.key, ($event.target as HTMLInputElement).value)"
             />
           </label>
           <label class="wfe__switch">
             <DkSwitch :on="stopOnError" label="失败时中断流程" @toggle="stopOnError = !stopOnError" />
             <span>失败时中断流程</span>
           </label>
+        </div>
+        <div v-else-if="selection.kind === 'output'" class="wfe__cfg">
+          <p class="wfe__hint">
+            这是「流程输出」。{{ finalOutput.ok ? '最后一步已成功，可以直接复制或下载完整结果。' : '所有步骤都成功后才会有输出。' }}
+          </p>
+          <div class="wfe__out">
+            <span class="wfe__badge wfe__badge--soft">{{ finalOutput.ok ? sizeText(finalOutput.text) : '暂无输出' }}</span>
+            <span class="grow"></span>
+            <DkButton size="sm" variant="ghost" :disabled="!finalOutput.ok" @click="clipboard.copy(finalOutput.text, '流程输出')">
+              <DkIcon name="copy" :size="12" />复制
+            </DkButton>
+            <DkButton
+              size="sm"
+              variant="ghost"
+              :disabled="!finalOutput.ok"
+              @click="downloadText(wf?.name ? wf.name + '.out.txt' : 'workflow-output.txt', finalOutput.text)"
+            >
+              <DkIcon name="download" :size="12" />下载
+            </DkButton>
+          </div>
         </div>
         <div v-else class="wfe__cfg">
           <p class="wfe__hint">
@@ -433,47 +487,46 @@ function exportJson() {
           <span class="tertiary">仅本次页面内存</span>
           <span class="grow"></span>
           <span
-            v-if="selected >= 0 && results[selected]"
+            v-if="currentResult"
             class="wfe__badge"
-            :class="results[selected]!.status === 'ok' ? 'wfe__badge--ok' : 'wfe__badge--err'"
+            :class="currentResult.status === 'ok' ? 'wfe__badge--ok' : 'wfe__badge--err'"
           >
-            {{ results[selected]!.status === 'ok' ? '成功' : '失败' }}
+            {{ currentResult.status === 'ok' ? '成功' : '失败' }}
           </span>
         </div>
         <div class="wfe__console mono">
           <p v-if="!currentLogs.length" class="wfe__empty">
-            还没有这一步的运行日志。点击「单步运行」或「运行全部」后，这里会打印真实的执行过程。
+            {{ selection.kind === 'step' ? '还没有这一步的运行日志。点击「单步运行」或「运行全部」后，这里会打印真实的执行过程。' : '选中一个步骤后，这里会显示它的执行日志。' }}
           </p>
           <p v-for="(l, i) in currentLogs" :key="i" class="wfe__log">{{ l }}</p>
         </div>
         <div class="wfe__stat">
-          <span v-if="selected >= 0 && results[selected]">
-            {{ sizeText(results[selected]!.output) }} 输出 · {{ results[selected]!.ms }} ms
-          </span>
+          <span v-if="currentResult">{{ sizeText(currentResult.output) }} 输出 · {{ currentResult.ms }} ms</span>
+          <span v-else-if="selection.kind === 'output'">{{ finalOutput.ok ? sizeText(finalOutput.text) + ' 可用输出' : '未生成结果' }}</span>
           <span v-else>未生成结果</span>
           <span class="grow"></span>
-          <span v-if="selected >= 0 && results[selected]?.status === 'ok'" class="wfe__badge wfe__badge--ok wfe__badge--mini">
+          <span v-if="currentResult?.status === 'ok'" class="wfe__badge wfe__badge--ok wfe__badge--mini">
             <DkIcon name="circle-check" :size="11" />步骤成功
           </span>
         </div>
 
         <div class="wfe__cur-foot">
-          <DkButton size="sm" :disabled="selected < 0 || busy" @click="runOne(selected)">
+          <DkButton size="sm" :disabled="currentStepIndex < 0 || busy" @click="runSelected">
             <DkIcon name="refresh-cw" :size="13" />重试此步
           </DkButton>
           <DkButton
             size="sm"
             variant="ghost"
             :disabled="selected <= 0"
-            @click="selected = selected - 1"
+            @click="selected = Math.max(-1, selected - 1)"
           >
             <DkIcon name="chevron-left" :size="12" />查看上一步
           </DkButton>
           <DkButton
             size="sm"
             variant="ghost"
-            :disabled="selected < 0 || !results[selected]"
-            @click="clipboard.copy(results[selected]?.output ?? '', '该步输出')"
+            :disabled="currentStepIndex < 0 || !currentResult"
+            @click="clipboard.copy(currentResult?.output ?? '', '该步输出')"
           >
             <DkIcon name="copy" :size="12" />复制输出
           </DkButton>
@@ -900,6 +953,12 @@ function exportJson() {
   font-size: 11.5px;
   color: var(--text-tertiary);
   flex-shrink: 0;
+}
+.wfe__out {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .wfe__cur-foot {
   display: flex;
