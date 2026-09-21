@@ -125,6 +125,7 @@ function onMouseOver(i: number) {
                     <DkIcon :name="t.icon" :size="14" />
                   </span>
                   <span class="palette__name">{{ t.name }}</span>
+                  <span v-if="t.isNew" class="palette__new" title="本次新增">新</span>
                   <span class="palette__desc ellipsis">{{ t.desc }}</span>
                   <DkIcon v-if="results.indexOf(t) === sel" name="corner-down-left" :size="13" class="palette__enter" />
                 </button>
@@ -237,6 +238,20 @@ function onMouseOver(i: number) {
   font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
+}
+/* 「新」徽标：与目录 / 卡片同一套样式 */
+.palette__new {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 15px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
 }
 .palette__desc {
   font-size: 12px;

@@ -26,7 +26,10 @@ function toggleFav(e: Event) {
         <DkIcon :name="tool.icon" :size="15" />
       </span>
       <span class="tool-card__text">
-        <span class="tool-card__name tool-card__name--row ellipsis">{{ tool.name }}</span>
+        <span class="tool-card__nameline">
+          <span class="tool-card__name tool-card__name--row ellipsis">{{ tool.name }}</span>
+          <span v-if="tool.isNew" class="tool-card__new" title="本次新增">新</span>
+        </span>
         <span class="tool-card__use ellipsis">{{ tool.desc }}</span>
       </span>
       <button
@@ -45,6 +48,7 @@ function toggleFav(e: Event) {
           <DkIcon :name="tool.icon" :size="16" />
         </span>
         <span class="tool-card__name ellipsis">{{ tool.name }}</span>
+        <span v-if="tool.isNew" class="tool-card__new" title="本次新增">新</span>
         <button
           class="tool-card__star"
           :class="{ 'tool-card__star--on': isFav }"
@@ -105,6 +109,26 @@ function toggleFav(e: Event) {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
+}
+.tool-card__nameline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+/* 「新」徽标：本次新增的工具在目录 / 列表里标出来 */
+.tool-card__new {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
 }
 .tool-card__star {
   margin-left: auto;

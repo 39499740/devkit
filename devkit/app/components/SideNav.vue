@@ -49,6 +49,7 @@ function isActiveCat(key: string) {
       >
         <DkIcon name="workflow" :size="15" />
         <span class="sidenav__label">处理流程</span>
+        <span class="sidenav__new" title="本次新增">新</span>
         <span class="grow"></span>
         <span class="sidenav__count">{{ workflows.workflows.value.length }}</span>
       </NuxtLink>
@@ -84,6 +85,7 @@ function isActiveCat(key: string) {
           >
             <span class="sidenav__marker"></span>
             <span class="ellipsis">{{ t.short ?? t.name }}</span>
+            <span v-if="t.isNew" class="sidenav__new sidenav__new--end" title="本次新增">新</span>
           </NuxtLink>
         </div>
       </div>
@@ -225,6 +227,23 @@ function isActiveCat(key: string) {
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 500;
+}
+/* 「新」徽标：本次新增的工具与功能（处理流程）在目录里标出来 */
+.sidenav__new {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 15px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+.sidenav__new--end {
+  margin-left: auto;
 }
 .sidenav__marker {
   width: 4px;
