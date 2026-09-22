@@ -97,7 +97,7 @@ function goSearch() {
             <DkButton variant="primary" size="sm" @click="goHome">
               <DkIcon name="home" :size="13" />返回首页
             </DkButton>
-            <NuxtLink to="/" class="err__link-btn">
+            <NuxtLink to="/tools" class="err__link-btn">
               <DkIcon name="grid" :size="13" />浏览全部工具
             </NuxtLink>
           </div>

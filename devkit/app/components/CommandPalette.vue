@@ -137,7 +137,7 @@ function onMouseOver(i: number) {
               <p class="palette__empty-hint">搜索只覆盖工具目录，不会搜索你输入过的内容。</p>
               <div class="palette__empty-actions">
                 <DkButton size="sm" @click="query = ''">清空关键词</DkButton>
-                <DkButton size="sm" variant="primary" @click="palette.hide(); router.push('/')">回到全部工具</DkButton>
+                <DkButton size="sm" variant="primary" @click="palette.hide(); router.push('/tools')">回到全部工具</DkButton>
               </div>
             </div>
           </div>

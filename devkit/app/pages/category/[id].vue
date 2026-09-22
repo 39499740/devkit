@@ -137,7 +137,7 @@ watch(key, () => {
           <DkIcon class="cat-page__badge-icon" name="shield-check" :size="13" />
           本地处理 · 输入不上传
         </span>
-        <NuxtLink to="/" class="cat-page__back">
+        <NuxtLink to="/tools" class="cat-page__back">
           <DkIcon name="grid" :size="13" />
           全部工具
         </NuxtLink>

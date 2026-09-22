@@ -41,6 +41,48 @@ async function applyUpdate() {
   toast.success('正在切换到新版本，页面会自动重新加载')
   await pwa.applyUpdate()
 }
+
+/**
+ * 更新会整页重新加载，而输入只存在于页面内存里。
+ * 主内容区还有内容时先不提示刷新，等用户把输入清掉（或复制走）再出现，避免打断正在做的事。
+ */
+function hasPendingInput() {
+  if (typeof document === 'undefined') return false
+  const nodes = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+    'main textarea, main input[type="text"]'
+  )
+  for (const el of nodes) {
+    if (el.disabled || el.readOnly) continue
+    if (el.value.trim()) return true
+  }
+  return false
+}
+
+const pendingInput = ref(false)
+/** 非模态更新条：不阻断操作，且只在没有未执行输入时出现 */
+const showUpdateBar = computed(() => pwa.needRefresh.value && !pendingInput.value)
+
+function refreshPendingInput() {
+  pendingInput.value = hasPendingInput()
+}
+
+watch(
+  () => pwa.needRefresh.value,
+  (v) => {
+    if (v) refreshPendingInput()
+  }
+)
+
+onMounted(() => {
+  refreshPendingInput()
+  document.addEventListener('input', refreshPendingInput, true)
+  document.addEventListener('focusout', refreshPendingInput, true)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('input', refreshPendingInput, true)
+  document.removeEventListener('focusout', refreshPendingInput, true)
+})
 </script>
 
 <template>
@@ -75,32 +117,23 @@ async function applyUpdate() {
       </div>
     </Transition>
 
-    <!-- 状态 3：发现新版本（由用户决定何时生效） -->
-    <DkModal :open="pwa.needRefresh.value" title="DevKit 新版本已就绪" width="470px" @close="pwa.postponeUpdate()">
-      <div class="pwastatus__update">
-        <p class="pwastatus__update-lead">后台已下载更新，由你决定何时生效。</p>
-        <div class="pwastatus__update-row">
-          <DkIcon name="arrow-down-to-line" :size="15" />
-          <span>更新将在下次打开时生效，不会中断当前工作。</span>
-        </div>
-        <div class="pwastatus__update-workspace">
-          <p class="pwastatus__update-title">当前工作区不受影响</p>
-          <p class="pwastatus__update-desc">
-            未提交的输入仍保留在本次页面内存中；选择「立即更新」会先让新版本接管、再自动重新加载当前页面；选择「稍后」则保留当前版本直到下次打开，并且本次会话内不会再打扰你。
+    <!-- 状态 3：发现新版本（底部更新条，非模态；有未执行输入时不出现） -->
+    <Transition name="pwa-pop">
+      <div v-if="showUpdateBar" class="pwastatus__update" role="status">
+        <DkIcon class="pwastatus__update-icon" name="arrow-down-to-line" :size="15" />
+        <div class="pwastatus__update-text">
+          <p class="pwastatus__update-title">新版本已下载，刷新后生效</p>
+          <p class="pwastatus__update-sub">
+            当前页面还能继续用；刷新会重新加载页面，输入只在内存里，请先复制要保留的结果。
           </p>
-          <div class="pwastatus__tags">
-            <span class="pwastatus__tag">当前版本正在运行</span>
-            <span class="pwastatus__tag pwastatus__tag--new">新版本已下载</span>
-          </div>
         </div>
-      </div>
-      <template #footer>
-        <DkButton size="sm" :disabled="applying" @click="pwa.postponeUpdate()">稍后</DkButton>
+        <span class="grow"></span>
+        <DkButton size="sm" variant="ghost" :disabled="applying" @click="pwa.postponeUpdate()">稍后</DkButton>
         <DkButton size="sm" variant="primary" :disabled="applying" @click="applyUpdate">
           <DkIcon name="refresh-cw" :size="13" />{{ applying ? '切换中…' : '立即更新' }}
         </DkButton>
-      </template>
-    </DkModal>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -177,59 +210,51 @@ async function applyUpdate() {
   color: var(--ok);
   font-size: 11.5px;
 }
+/* 更新条：贴底、非模态，随时可略过 */
 .pwastatus__update {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.pwastatus__update-lead {
-  font-size: 12.5px;
-  color: var(--text-secondary);
-}
-.pwastatus__update-row {
+  position: fixed;
+  left: 20px;
+  right: 20px;
+  bottom: 20px;
+  z-index: 190;
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12.5px;
-  color: var(--text-primary);
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 11px 14px;
+  border: 1px solid var(--accent-ring);
+  border-radius: 11px;
+  background: var(--accent-soft);
+  box-shadow: var(--shadow-2);
 }
-.pwastatus__update-workspace {
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--surface-subtle);
+.pwastatus__update-icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.pwastatus__update-text {
+  flex: 1;
+  min-width: 200px;
 }
 .pwastatus__update-title {
   font-size: 12.5px;
   font-weight: 600;
+  color: var(--text-primary);
 }
-.pwastatus__update-desc {
-  margin-top: 4px;
+.pwastatus__update-sub {
   font-size: 11.5px;
   color: var(--text-secondary);
-  line-height: 1.7;
+  line-height: 1.6;
 }
-.pwastatus__tags {
-  display: flex;
-  gap: 6px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-.pwastatus__tag {
-  display: inline-flex;
-  align-items: center;
-  height: 22px;
-  padding: 0 9px;
-  border-radius: 11px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  font-size: 11.5px;
-}
-.pwastatus__tag--new {
-  background: var(--ok-soft);
-  border-color: transparent;
-  color: var(--ok);
+@media (max-width: 720px) {
+  .pwastatus__update {
+    left: 12px;
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  /* 窄屏把按钮挤到下一行，避免文字被压成一条 */
+  .pwastatus__update-text {
+    flex-basis: 100%;
+  }
 }
 .pwa-pop-enter-active,
 .pwa-pop-leave-active {

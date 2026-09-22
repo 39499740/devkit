@@ -101,10 +101,8 @@ onUnmounted(() => {
   flex: 1;
   min-width: 0;
 }
+/* 页脚只有备案 / 仓库 / 隐私链接，常驻吸附会持续遮挡约 60px 内容，保持普通文档流 */
 .shell__foot {
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -112,8 +110,6 @@ onUnmounted(() => {
   margin-top: 32px;
   padding: 16px 0 24px;
   border-top: 1px solid var(--border);
-  background: var(--bg);
-  box-shadow: 0 -10px 18px -16px rgba(15, 17, 21, 0.55);
   font-size: 12px;
   color: var(--text-tertiary);
 }

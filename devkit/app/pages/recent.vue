@@ -153,7 +153,7 @@ function doClear() {
           <span class="recent__empty-icon"><DkIcon name="history" :size="19" /></span>
           <p class="recent__empty-title">暂无访问记录</p>
           <p class="recent__empty-hint">打开任意工具后，这里会记录工具名称与访问时间。</p>
-          <NuxtLink to="/"><DkButton variant="primary" size="sm"><DkIcon name="grid" :size="13" />浏览全部工具</DkButton></NuxtLink>
+          <NuxtLink to="/tools"><DkButton variant="primary" size="sm"><DkIcon name="grid" :size="13" />浏览全部工具</DkButton></NuxtLink>
           <p class="recent__empty-note">也可以在“偏好设置”里关闭“记录最近使用”。</p>
         </div>
 

@@ -38,7 +38,15 @@ function setTheme(mode: 'light' | 'dark') {
         <span class="topnav__name">DevKit</span>
       </NuxtLink>
 
-      <button class="topnav__search" @click="openPalette">
+      <!-- 移动端只留图标，按钮必须有可访问名称（aria-label 在文本被隐藏时生效） -->
+      <button
+        class="topnav__search"
+        type="button"
+        aria-label="搜索工具"
+        aria-keyshortcuts="Control+K Meta+K"
+        title="搜索工具（⌘K / Ctrl K）"
+        @click="openPalette"
+      >
         <DkIcon name="search" :size="14" />
         <span class="topnav__search-text">搜索工具，例如 JSON、国密、时间戳</span>
         <span class="topnav__kbd">

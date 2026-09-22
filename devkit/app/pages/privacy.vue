@@ -235,7 +235,7 @@ const statsName = computed(() => (runtime.public.analytics.provider === 'cnzz' ?
         </p>
       </div>
       <div class="outro__actions">
-        <NuxtLink to="/"><DkButton variant="primary" size="sm"><DkIcon name="grid" :size="13" />返回全部工具</DkButton></NuxtLink>
+        <NuxtLink to="/tools"><DkButton variant="primary" size="sm"><DkIcon name="grid" :size="13" />返回全部工具</DkButton></NuxtLink>
         <NuxtLink to="/help"><DkButton size="sm"><DkIcon name="keyboard" :size="13" />帮助与快捷键</DkButton></NuxtLink>
         <NuxtLink to="/offline"><DkButton size="sm"><DkIcon name="wifi-off" :size="13" />查看离线说明</DkButton></NuxtLink>
       </div>

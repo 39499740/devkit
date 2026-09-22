@@ -219,7 +219,7 @@ function tone(t: string) {
         <p class="outro__desc">每个工具页的说明区都包含与自身相关的最小帮助；更完整的解释始终在本页。</p>
       </div>
       <div class="outro__actions">
-        <NuxtLink to="/"><DkButton variant="primary" size="sm"><DkIcon name="grid" :size="13" />返回全部工具</DkButton></NuxtLink>
+        <NuxtLink to="/tools"><DkButton variant="primary" size="sm"><DkIcon name="grid" :size="13" />返回全部工具</DkButton></NuxtLink>
         <NuxtLink to="/settings"><DkButton size="sm"><DkIcon name="sliders" :size="13" />偏好设置</DkButton></NuxtLink>
         <NuxtLink to="/privacy"><DkButton size="sm"><DkIcon name="shield-check" :size="13" />隐私说明</DkButton></NuxtLink>
       </div>

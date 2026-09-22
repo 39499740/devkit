@@ -2,7 +2,13 @@
 import type { ToolMeta } from '~/data/tools'
 import { getCategory } from '~/data/tools'
 
-const props = defineProps<{ tool: ToolMeta; compact?: boolean; variant?: 'grid' | 'row' }>()
+const props = defineProps<{
+  tool: ToolMeta
+  compact?: boolean
+  variant?: 'grid' | 'row'
+  /** 页内搜索的方向键选中态 */
+  highlight?: boolean
+}>()
 
 const fav = useFavorites()
 const cat = computed(() => getCategory(props.tool.cat))
@@ -19,7 +25,7 @@ function toggleFav(e: Event) {
   <NuxtLink
     :to="`/tools/${tool.slug}`"
     class="tool-card"
-    :class="[`tool-card--${variant ?? 'grid'}`, { 'tool-card--compact': compact }]"
+    :class="[`tool-card--${variant ?? 'grid'}`, { 'tool-card--compact': compact, 'tool-card--on': highlight }]"
   >
     <template v-if="variant === 'row'">
       <span class="tool-card__icon tool-card__icon--row" :style="{ background: `var(--cat-${tool.cat}-soft)`, color: `var(--cat-${tool.cat})` }">
@@ -87,6 +93,10 @@ function toggleFav(e: Event) {
 .tool-card:hover {
   border-color: var(--accent-ring);
   box-shadow: var(--shadow-2);
+}
+.tool-card--on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-ring);
 }
 .tool-card:active {
   transform: translateY(1px);
@@ -201,9 +211,10 @@ function toggleFav(e: Event) {
 .tool-card__name--row {
   font-size: 13px;
 }
+/* 说明文字是正文信息，11px + text-tertiary 在白底只有 3.06:1，不满足 AA；提到 12px 并用 text-secondary（约 6:1） */
 .tool-card__use {
-  font-size: 11px;
-  color: var(--text-tertiary);
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 .tool-card__star--row {
   margin-left: 0;

@@ -20,7 +20,7 @@ npm run test:dom   # DOM 用例（真实浏览器，需 ego-browser）
 ## 功能范围
 
 - **45 个工具**（T01–T45）：数据格式（JSON/YAML/CSV/SQL 格式化/XML 工具箱与 XPath/JSONPath 与 JMESPath 查询/JSON Schema 生成与校验）、编码与文本（Base64/URL/Unicode/去重/命名/差异/正则）、摘要与加密（MD5/SHA/HMAC/AES/SM2/SM3/SM4 国密）、时间与标识（时间戳/UUID/Cron/日期差）、Java 开发（JSON 转 Java/转义/Properties/YAML/堆栈/Maven）、Web / Vue（TS 类型/SFC 模板/CSS 单位/颜色/SVG/格式化）、接口辅助（JWT/URL 参数/curl 转换/状态码）、文件与图片（摘要/图片压缩/二维码/编码转换/Base64）
-- **系统页**：首页、分类列表、全局搜索（⌘K 命令面板）、收藏、最近使用、处理流程（`/workflows` 列表 + `/workflows/[id]` 三栏编排与逐步运行）、偏好设置、隐私说明、帮助、404、离线状态
+- **系统页**：首页（快捷入口 + 分类入口）、全部工具目录（`/tools`，45 个工具按分类完整列出，支持分类锚点跳转）、分类列表、全局搜索（⌘K 命令面板）、收藏、最近使用、处理流程（`/workflows` 列表 + `/workflows/[id]` 三栏编排与逐步运行）、偏好设置、隐私说明、帮助、404、离线状态
 - **共享交互**：结果待更新（stale）模式、文件处理反馈、剪贴板降级、跨工具内存传递（「发送到…」路由弹层，含加入处理流程）、PWA 安装引导与离线 / 新版本提示、明暗主题、响应式（桌面/移动）
 
 ## 设计原则

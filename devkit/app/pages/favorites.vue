@@ -147,7 +147,7 @@ function doClear() {
           <span class="fav__empty-icon"><DkIcon name="star" :size="19" /></span>
           <p class="fav__empty-title">还没有收藏任何工具</p>
           <p class="fav__empty-hint">在工具页点击右上角星标按钮即可收藏，收藏只保存工具标识与收藏时间。</p>
-          <NuxtLink to="/"><DkButton variant="primary" size="sm"><DkIcon name="grid" :size="13" />浏览全部工具</DkButton></NuxtLink>
+          <NuxtLink to="/tools"><DkButton variant="primary" size="sm"><DkIcon name="grid" :size="13" />浏览全部工具</DkButton></NuxtLink>
           <p class="fav__empty-note">也可以用顶部搜索直接进入工具，例如“国密”“时间戳”。</p>
         </div>
 

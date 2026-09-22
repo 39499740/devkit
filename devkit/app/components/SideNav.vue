@@ -6,7 +6,20 @@ const fav = useFavorites()
 const recent = useRecent()
 const workflows = useWorkflows()
 
-const collapsed = ref<Record<string, boolean>>({})
+/**
+ * 分类默认折叠：45 个工具全列出来会把侧栏塞满，也盖住首页要突出的入口。
+ * 手动展开/收起记在 manual 里；没手动过时按「当前所在分类自动展开」决定。
+ */
+const manual = ref<Record<string, boolean>>({})
+
+function isOpen(key: string) {
+  const m = manual.value[key]
+  return m === undefined ? isActiveCat(key) : m
+}
+
+function toggleCat(key: string) {
+  manual.value[key] = !isOpen(key)
+}
 
 const currentSlug = computed(() => {
   const m = route.path.match(/^\/tools\/([^/]+)/)
@@ -25,6 +38,10 @@ function isActiveCat(key: string) {
   <nav class="sidenav" aria-label="工具导航">
     <div class="sidenav__scroll">
       <NuxtLink to="/" class="sidenav__item" :class="{ 'sidenav__item--on': route.path === '/' }">
+        <DkIcon name="home" :size="15" />
+        <span class="sidenav__label">首页</span>
+      </NuxtLink>
+      <NuxtLink to="/tools" class="sidenav__item" :class="{ 'sidenav__item--on': route.path === '/tools' }">
         <DkIcon name="grid" :size="15" />
         <span class="sidenav__label">全部工具</span>
         <span class="grow"></span>
@@ -61,8 +78,8 @@ function isActiveCat(key: string) {
         <button
           class="sidenav__cat-btn"
           :class="{ 'sidenav__cat-btn--on': isActiveCat(cat.key) }"
-          :aria-expanded="!collapsed[cat.key]"
-          @click="collapsed[cat.key] = !collapsed[cat.key]"
+          :aria-expanded="isOpen(cat.key)"
+          @click="toggleCat(cat.key)"
         >
           <span class="sidenav__dot" :style="{ background: `var(--cat-${cat.key})` }"></span>
           <span class="sidenav__label">{{ cat.name }}</span>
@@ -70,12 +87,12 @@ function isActiveCat(key: string) {
           <span class="sidenav__count">{{ toolsOfCategory(cat.key).length }}</span>
           <DkIcon
             class="sidenav__chev"
-            :class="{ 'sidenav__chev--open': !collapsed[cat.key] }"
+            :class="{ 'sidenav__chev--open': isOpen(cat.key) }"
             name="chevron-down"
             :size="12"
           />
         </button>
-        <div v-show="!collapsed[cat.key]" class="sidenav__sub">
+        <div v-show="isOpen(cat.key)" class="sidenav__sub">
           <NuxtLink
             v-for="t in toolsOfCategory(cat.key)"
             :key="t.id"
