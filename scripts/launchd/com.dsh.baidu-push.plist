@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  百度主动推送 · 每日定时任务（每天 10:00 推 10 条未推过的 URL）
+  安装（在仓库根执行）：
+    cp scripts/launchd/com.dsh.baidu-push.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.dsh.baidu-push.plist
+  查看：launchctl list | grep baidu-push ；日志在 .tools/logs/
+  卸载：launchctl unload ~/Library/LaunchAgents/com.dsh.baidu-push.plist && rm ~/Library/LaunchAgents/com.dsh.baidu-push.plist
+  说明：plist 里必须是绝对路径（launchd 不展开 ~）；机器休眠时错过的时间点会在唤醒后补跑。
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.dsh.baidu-push</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/hao/WebstormProjects/web_tools/scripts/baidu-daily-push.sh</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>10</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>StandardOutPath</key>
+  <string>/Users/hao/WebstormProjects/web_tools/.tools/logs/launchd-baidu-push.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/hao/WebstormProjects/web_tools/.tools/logs/launchd-baidu-push.err.log</string>
+</dict>
+</plist>

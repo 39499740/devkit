@@ -46,6 +46,28 @@
 3. **手动提交**：普通收录 → 手动提交，把首页和最想被人搜到的工具页贴进去（每天有配额，优先这几个：
    `/tools/json-format/`、`/tools/base64/`、`/tools/timestamp/`、`/tools/md5/`、`/tools/aes/`）
 
+### 2.2.1 自动化：每天自动推 10 条（已配置，不用人工）
+
+百度新站 API 配额是 10 条/天，人工天天记得跑不现实，因此在本机装了 launchd 定时任务：
+
+| 项 | 值 |
+|---|---|
+| 任务 | `scripts/baidu-daily-push.sh`（每天 10:00 推 10 条未推过的 URL，推完自动停） |
+| 安装件 | `~/Library/LaunchAgents/com.dsh.baidu-push.plist`（仓库内模板 `scripts/launchd/com.dsh.baidu-push.plist`） |
+| token | 环境变量 `BAIDU_PUSH_TOKEN` → 回退 `.tools/baidu-token`（600 权限，`.tools/` 已被 .gitignore 忽略，与 `.tools/cos.yaml` 同一套本地密钥约定） |
+| 游标 | `.tools/baidu-pushed.json`：推过的不再重复推（手工提交与 API 推送共用） |
+| 日志 | `.tools/logs/baidu-push-<日期>.log` |
+| 配额用尽 | 记为「配额用尽，跳过（次日自动重试）」并 exit 0，不算失败 |
+
+```bash
+tail -20 .tools/logs/baidu-push-$(date +%F).log          # 看当天日志
+node scripts/baidu-push.mjs --dry-run                     # 看还剩多少条待推
+launchctl kickstart -k gui/$(id -u)/com.dsh.baidu-push    # 立即触发一次，不用等 10:00
+launchctl unload ~/Library/LaunchAgents/com.dsh.baidu-push.plist && rm ~/Library/LaunchAgents/com.dsh.baidu-push.plist   # 卸载
+```
+
+> 机器休眠时错过 10:00 会在唤醒后补跑。换机器或换 node 版本时改 `scripts/baidu-daily-push.sh` 里的 `NODE` 默认值，或用 `NODE_BIN=/path/to/node` 覆盖。
+
 ### 2.3 抓取诊断（判断百度看到了什么）
 
 资源平台 → **抓取诊断** → 输入 URL → 看返回的 HTML：预渲染站点应能直接看到标题、正文与 canonical；
@@ -96,7 +118,7 @@
 COS_BUCKET=devkit-1252844153 scripts/deploy-cos.sh   # 构建 + 同步
 node scripts/cdn-purge.mjs                            # 刷新 CDN（必须，见 DEPLOY-COS.md 第 7 节）
 node scripts/check-indexing-files.mjs                 # 核对线上 robots/sitemap.xml/sitemap.txt/favicon 与本地一致
-BAIDU_PUSH_TOKEN=xxx node scripts/baidu-push.mjs      # 把 sitemap 推给百度
+BAIDU_PUSH_TOKEN=xxx node scripts/baidu-push.mjs      # 发版后立刻推新页面（日常由 launchd 每天自动跑，见 2.2.1）
 node scripts/indexnow-push.mjs                        # 把 sitemap 推给 Bing / Yandex / Seznam / Naver（见第 8 节）
 ```
 
