@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
+import { csvToJson, jsonToCsv } from '~/utils/csv'
 
 defineProps<{ tool: ToolMeta }>()
 
@@ -47,235 +48,43 @@ const SAMPLE_JSON = `[
 const sig = () => JSON.stringify([input.value, dir.value, sep.value, headerOn.value, infer.value, customFields.value])
 const run = useToolRun(sig)
 
-/* ---------------- CSV 解析（RFC 4180：引号内逗号 / 换行，"" 转义） ---------------- */
-function parseCsv(text: string, separator: string): { rows: string[][]; warns: string[] } {
-  const rows: string[][] = []
-  const warns: string[] = []
-  let row: string[] = []
-  let field = ''
-  let inQuotes = false
-  let fieldStarted = false // 当前字段已出现内容（含仅引号的空字段）
-  let rowHasContent = false
-  const endField = () => {
-    row.push(field)
-    field = ''
-    fieldStarted = false
-  }
-  const endRow = () => {
-    endField()
-    rows.push(row)
-    row = []
-    rowHasContent = false
-  }
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i]!
-    if (inQuotes) {
-      if (c === '"') {
-        if (text[i + 1] === '"') {
-          field += '"'
-          fieldStarted = true
-          i++
-        } else {
-          inQuotes = false
-        }
-      } else {
-        field += c // 引号内的换行 / 分隔符均按字面保留
-        fieldStarted = true
-      }
-      continue
-    }
-    if (c === '"' && field === '' && !fieldStarted) {
-      inQuotes = true
-      fieldStarted = true
-      continue
-    }
-    if (c === '"') {
-      // 字段中间出现的裸引号：按字面保留
-      field += c
-      fieldStarted = true
-      continue
-    }
-    if (c === separator) {
-      endField()
-      rowHasContent = true
-      continue
-    }
-    if (c === '\n' || c === '\r') {
-      if (c === '\r' && text[i + 1] === '\n') i++
-      if (rowHasContent || fieldStarted || field !== '') endRow()
-      continue // 其余空行跳过
-    }
-    field += c
-    fieldStarted = true
-  }
-  if (inQuotes) warns.push('存在未闭合的引号：末尾字段内容按字面保留，请检查是否缺少结束引号')
-  if (rowHasContent || fieldStarted || field !== '') endRow()
-  return { rows, warns }
-}
-
-/** CSV 单元格写出：仅在包含分隔符 / 引号 / 换行时加引号，引号翻倍转义 */
-function csvCell(v: string, separator: string): string {
-  if (v.includes('"') || v.includes(separator) || v.includes('\n') || v.includes('\r')) {
-    return '"' + v.replace(/"/g, '""') + '"'
-  }
-  return v
-}
-
-/** 类型推断（开启后）：布尔 / null / 数字；前导零（007）始终保持字符串 */
-function inferValue(s: string): unknown {
-  if (s === 'true') return true
-  if (s === 'false') return false
-  if (s === 'null') return null
-  if (/^-?(?:0|[1-9][0-9]*)$/.test(s)) {
-    const n = Number(s)
-    if (Number.isSafeInteger(n)) return n
-  }
-  if (/^-?(?:[1-9][0-9]*\.[0-9]*|0?\.[0-9]+)$/.test(s)) {
-    const n = Number(s)
-    if (Number.isFinite(n)) return n
-  }
-  return s
-}
-
-/* ---------------- JSON 拍平与取值 ---------------- */
-function flattenPaths(v: unknown, prefix: string, out: string[]) {
-  if (v !== null && typeof v === 'object' && !Array.isArray(v) && !(v instanceof RawNumber)) {
-    for (const [k, val] of Object.entries(v)) flattenPaths(val, prefix ? `${prefix}.${k}` : k, out)
-  } else {
-    out.push(prefix)
-  }
-}
-
-function getByPath(obj: Record<string, unknown>, path: string): unknown {
-  let cur: unknown = obj
-  for (const part of path.split('.')) {
-    if (cur === null || cur === undefined || typeof cur !== 'object' || Array.isArray(cur)) return undefined
-    cur = (cur as Record<string, unknown>)[part]
-  }
-  return cur
-}
-
-function cellText(v: unknown): string {
-  if (v === undefined || v === null) return ''
-  if (v instanceof RawNumber) return v.raw
-  if (typeof v === 'string') return v
-  if (typeof v === 'number' || typeof v === 'boolean') return String(v)
-  return minifyJson(v) // 数组 / 对象值序列化为 JSON 字符串
-}
-
-function typeOf(v: unknown): string {
-  if (v instanceof RawNumber) return 'number'
-  if (v === null) return 'null'
-  if (Array.isArray(v)) return 'array'
-  return typeof v === 'object' ? 'object' : typeof v
-}
-
 /* ---------------- CSV → JSON ---------------- */
 function runCsv2Json(): string {
-  const { rows, warns } = parseCsv(input.value, sep.value)
-  warnings.value = [...warns]
-  const conv = (s: string) => (infer.value ? inferValue(s) : s)
-  let header: string[] | null = null
-  let data: string[][]
-  if (headerOn.value) {
-    header = rows.length ? rows[0]! : []
-    data = rows.slice(1)
-  } else {
-    data = rows
-  }
-  if (!rows.length) {
+  const res = csvToJson(input.value, { separator: sep.value, header: headerOn.value, infer: infer.value })
+  warnings.value = [...res.warnings]
+  // 一行都没解析到（表头为空且无数据行）：保持「无预览」的既有行为
+  if (!res.preview.rows.length && !res.preview.header?.length) {
     previewData.value = null
     run.markOk('未解析到任何数据行')
-    return '[]'
+    return res.json
   }
+  previewData.value = { header: res.preview.header, rows: res.preview.rows }
   if (headerOn.value) {
-    const keys = (header as string[]).map((h, i) => (h === '' ? `列${i + 1}` : h))
-    data.forEach((row, i) => {
-      if (row.length !== keys.length) {
-        warnings.value.push(`第 ${i + 2} 行（含表头）有 ${row.length} 列，与表头的 ${keys.length} 列不一致，该行已保留`)
-      }
-    })
-    const arr = data.map((row) => {
-      const obj: Record<string, unknown> = {}
-      keys.forEach((k, ci) => {
-        obj[k] = ci < row.length ? conv(row[ci]!) : null // 缺失的列补 null
-      })
-      return obj
-    })
-    previewData.value = { header: keys, rows: data }
     run.markOk(
-      arr.length
-        ? `已转换 ${arr.length} 行数据${infer.value ? '（类型推断已开启）' : '（全部按字符串，保留前导零）'}`
+      res.rows
+        ? `已转换 ${res.rows} 行数据${infer.value ? '（类型推断已开启）' : '（全部按字符串，保留前导零）'}`
         : '只有表头，没有数据行'
     )
-    return stringifyJson(arr, 2)
+    return res.json
   }
-  previewData.value = { header: null, rows: data }
-  run.markOk(`已转换 ${data.length} 行数据（无表头，输出为数组的数组）`)
-  return stringifyJson(data.map((row) => row.map(conv)), 2)
+  run.markOk(`已转换 ${res.rows} 行数据（无表头，输出为数组的数组）`)
+  return res.json
 }
 
 /* ---------------- JSON → CSV ---------------- */
 function runJson2Csv(): string {
-  warnings.value = []
-  let value: unknown
-  try {
-    value = parseJson(input.value).value
-  } catch (e) {
-    const pos = jsonErrorPosition(e, input.value)
-    const detail = pos ? `第 ${pos.line} 行第 ${pos.column} 列附近：${pos.message}` : errMessage(e)
-    run.markFail(`JSON 解析失败：${detail}`)
-    throw new Error('__fail__')
-  }
-  if (!Array.isArray(value)) {
-    run.markFail(`JSON → CSV 需要顶层数组（对象数组），当前顶层是 ${typeOf(value)}。请提供形如 [ { … }, { … } ] 的数据`)
-    throw new Error('__fail__')
-  }
-  if (!value.length) {
-    run.markFail('数组为空，没有可转换的数据行')
-    throw new Error('__fail__')
-  }
-  for (let i = 0; i < value.length; i++) {
-    const t = typeOf(value[i])
-    if (t !== 'object') {
-      run.markFail(`第 ${i + 1} 个元素不是 JSON 对象（是 ${t}），无法按字段路径取值。请把每个元素改为 { … } 对象`)
-      throw new Error('__fail__')
-    }
-  }
-  // 自动拍平：按首个出现顺序合并所有行的叶子字段路径
-  const union: string[] = []
-  const seen = new Set<string>()
-  for (const el of value as unknown[]) {
-    const paths: string[] = []
-    flattenPaths(el, '', paths)
-    for (const p of paths) {
-      if (!seen.has(p)) {
-        seen.add(p)
-        union.push(p)
-      }
-    }
-  }
-  const fields = customFields.value ? customFields.value.map((f) => f.trim()).filter(Boolean) : union
-  autoFields.value = union
-  if (!fields.length) {
-    run.markFail('未找到可输出的字段路径（对象内没有叶子字段）。请检查数据或在下方手动配置字段路径')
-    throw new Error('__fail__')
-  }
-  for (const f of fields) {
-    if (!seen.has(f)) warnings.value.push(`字段路径 ${f} 在所有行中都不存在，将输出空列`)
-  }
-  const objs = value as Record<string, unknown>[]
-  const lines: string[] = []
-  if (headerOn.value) lines.push(fields.map((f) => csvCell(f, sep.value)).join(sep.value))
-  for (const obj of objs) {
-    lines.push(fields.map((f) => csvCell(cellText(getByPath(obj, f)), sep.value)).join(sep.value))
-  }
-  const out = lines.join('\n')
-  // 预览：按同样的解析器读回输出，保证与结果一致
-  const back = parseCsv(out + '\n', sep.value)
-  previewData.value = { header: headerOn.value ? back.rows[0] ?? [] : null, rows: headerOn.value ? back.rows.slice(1) : back.rows }
-  run.markOk(`已生成 ${objs.length} 行 × ${fields.length} 列${customFields.value ? '（自定义字段）' : '（自动拍平字段，可在下方调整）'}`)
-  return out
+  const res = jsonToCsv(input.value, {
+    separator: sep.value,
+    header: headerOn.value,
+    fields: customFields.value ?? undefined
+  })
+  warnings.value = [...res.warnings]
+  autoFields.value = res.autoFields
+  previewData.value = { header: res.preview.header, rows: res.preview.rows }
+  run.markOk(
+    `已生成 ${res.rows} 行 × ${res.columns.length} 列${customFields.value ? '（自定义字段）' : '（自动拍平字段，可在下方调整）'}`
+  )
+  return res.csv
 }
 
 /* ---------------- 执行 ---------------- */
@@ -291,14 +100,11 @@ function execute() {
   try {
     output.value = dir.value === 'csv2json' ? runCsv2Json() : runJson2Csv()
   } catch (e) {
-    if (errMessage(e) !== '__fail__') {
-      output.value = ''
-      errInput.value = errMessage(e)
-      run.markFail(`转换失败：${errInput.value}`)
-    } else {
-      output.value = ''
-      errInput.value = run.errorMsg.value
-    }
+    // 转换函数抛出的中文消息本身就是状态栏文案（与今天的 markFail 文案逐字一致）
+    const msg = errMessage(e)
+    output.value = ''
+    errInput.value = msg
+    run.markFail(msg)
     return
   }
 }

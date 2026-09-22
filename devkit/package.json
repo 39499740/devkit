@@ -9,7 +9,7 @@
     "preview:lan": "HOST=0.0.0.0 nuxt preview",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "typecheck": "nuxt typecheck",
+    "typecheck": "node scripts/typecheck.mjs",
     "test": "node tests/run.mjs",
     "test:dom": "node tests/dom.mjs",
     "postinstall": "nuxt prepare"

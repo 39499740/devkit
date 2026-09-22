@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
+import { regexWorkerSource, validateFlags } from '~/utils/regex'
 
 defineProps<{ tool: ToolMeta }>()
 
@@ -35,21 +36,6 @@ const clipboard = useClipboard()
 const sig = () => JSON.stringify([source.value, flags.value, text.value, replacement.value])
 const run = useToolRun(sig)
 
-/** JS 合法 flags：d g i m s u v y；u/v 互斥 */
-const VALID_FLAGS = 'dgimsuvy'
-
-function validateFlags(f: string): string | null {
-  if (!f) return null
-  const seen = new Set<string>()
-  for (const ch of f) {
-    if (!VALID_FLAGS.includes(ch)) return `不支持的 flag「${ch}」（JavaScript 支持 d g i m s u v y）`
-    if (seen.has(ch)) return `flag「${ch}」重复`
-    seen.add(ch)
-  }
-  if (seen.has('u') && seen.has('v')) return 'u 与 v 不能同时使用'
-  return null
-}
-
 /** 行内实时语法校验（构造正则不会执行匹配，同步安全） */
 const liveError = computed(() => {
   const fe = validateFlags(flags.value)
@@ -64,45 +50,7 @@ const liveError = computed(() => {
 })
 
 /** Web Worker 内联脚本：Blob 创建，只在执行时实例化（SSR 安全） */
-const WORKER_SRC = `
-self.onmessage = function (e) {
-  var d = e.data
-  function serialize(m) {
-    var groups = []
-    for (var i = 1; i < m.length; i++) groups.push(m[i] === undefined ? null : m[i])
-    var named = null
-    if (m.groups) {
-      named = []
-      for (var k in m.groups) named.push({ name: k, value: m.groups[k] === undefined ? null : m.groups[k] })
-    }
-    return { index: m.index, end: m.index + m[0].length, text: m[0], groups: groups, named: named }
-  }
-  try {
-    var re = new RegExp(d.source, d.flags)
-    var matches = []
-    var capped = false
-    if (re.global || re.sticky) {
-      var m
-      var guard = 0
-      while ((m = re.exec(d.text)) !== null) {
-        matches.push(serialize(m))
-        if (m[0] === '') re.lastIndex++
-        if (++guard > 200000) { capped = true; break }
-      }
-    } else {
-      var one = re.exec(d.text)
-      if (one) matches.push(serialize(one))
-    }
-    var replaced = null
-    if (d.replacement !== '') {
-      replaced = d.text.replace(new RegExp(d.source, d.flags), d.replacement)
-    }
-    self.postMessage({ ok: true, matches: matches, replaced: replaced, capped: capped })
-  } catch (err) {
-    self.postMessage({ ok: false, matches: [], replaced: null, capped: false, error: String(err && err.message ? err.message : err) })
-  }
-}
-`
+const WORKER_SRC = regexWorkerSource()
 
 const TIMEOUT_MS = 2000
 let workerRef: Worker | null = null

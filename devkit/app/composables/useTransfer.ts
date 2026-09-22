@@ -3,6 +3,7 @@
  * 载荷本身的状态语义在 utils/transfer.ts 里，便于单测。
  */
 import { stashPayload, takePayload, type TransferIntent, type TransferPayload } from '~/utils/transfer'
+import { isSensitiveStep, stepDef } from '~/utils/workflow'
 import type { StepType } from '~/utils/workflow'
 
 export type { TransferPayload }
@@ -106,7 +107,15 @@ export function useTransfer() {
     }
     const store = useWorkflows()
     const wf = store.create(name || '来自工具的新流程', '由「发送到…」创建的流程')
-    if (stepType) store.addStep(wf.id, { type: stepType, config: {} })
+    if (stepType) {
+      if (isSensitiveStep(stepType)) {
+        // 敏感步骤必须先风险确认，而「发送到」这条路径没有确认弹窗：
+        // 这里只把结果作为流程输入带入，由用户在编排页确认后再添加，绝不绕过确认
+        toast.warning(`「${stepDef(stepType).name}」包含密钥配置，已只把结果带入流程；请在编排页确认风险后再添加该步骤`)
+      } else {
+        store.addStep(wf.id, stepType)
+      }
+    }
     stashPayload(text, fromTool, kind, { intent: { workflowId: wf.id }, target: wf.id })
     router.push(`/workflows/${wf.id}`)
     toast.success(`已新建「${wf.name}」，结果已作为流程输入`)

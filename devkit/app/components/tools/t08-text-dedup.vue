@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
+import { tidyText } from '~/utils/text'
 
 defineProps<{ tool: ToolMeta }>()
 
@@ -36,33 +37,17 @@ function execute() {
     run.markIdle()
     return
   }
-  const lines = src.split('\n')
-  const seen = new Set<string>()
-  const result: string[] = []
-  let dup = 0
-  let blank = 0
-  for (const raw of lines) {
-    // 仅在显式勾选「trim」时才去掉行首尾空格
-    const line = trimLines.value ? raw.trim() : raw
-    // 空行 = 只含空白字符的行；仅在显式勾选「去除空行」时删除
-    if (removeBlank.value && line.trim() === '') {
-      blank++
-      continue
-    }
-    const key = caseSensitive.value ? line : line.toLowerCase()
-    if (seen.has(key)) {
-      dup++
-      continue
-    }
-    seen.add(key)
-    result.push(line)
-  }
-  if (sortMode.value === 'dict') result.sort()
-  output.value = result.join('\n')
-  stat.value = { inLines: lines.length, outLines: result.length, dup, blank }
+  const res = tidyText(src, {
+    caseSensitive: caseSensitive.value,
+    removeBlank: removeBlank.value,
+    trim: trimLines.value,
+    sort: sortMode.value
+  })
+  output.value = res.text
+  stat.value = { inLines: res.inLines, outLines: res.outLines, dup: res.dup, blank: res.blank }
   const parts: string[] = []
-  if (dup > 0) parts.push(`删除重复 ${dup} 行`)
-  if (blank > 0) parts.push(`删除空行 ${blank} 行`)
+  if (res.dup > 0) parts.push(`删除重复 ${res.dup} 行`)
+  if (res.blank > 0) parts.push(`删除空行 ${res.blank} 行`)
   run.markOk(parts.length ? `${parts.join('，')}` : '未发现重复行')
 }
 

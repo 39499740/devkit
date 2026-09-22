@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { stepDef, runWorkflow } from '~/utils/workflow'
+import { presetNeedsSecret, stepDef, runWorkflow, type WorkflowPreset } from '~/utils/workflow'
+import { CONSENT_NOTICE_VERSION } from '~/workflow/secrets'
 
 useSeo({
   title: '在线处理流程编排 - 免登录 · DevKit',
   description:
-    '把 Base64、JSON 格式化、JSONPath 提取、JSON Schema 校验等本地工具串成一条流水线，逐步查看每一步输出。数据只在浏览器内存中传递，不落盘、不上传、不保存输入。'
+    '把 Base64、JSON 格式化、JSONPath 提取、JSON Schema 校验等本地工具串成一条流水线，逐步查看每一步输出。运行数据只在浏览器内存中传递，不上传、不保存输入；流程配置保存在本机浏览器。'
 })
 
 const store = useWorkflows()
@@ -21,6 +22,35 @@ const running = ref<string | null>(null)
 const sampleInput = ref('')
 
 const wfs = computed(() => store.workflows.value)
+const stepLibrary = store.stepLibrary
+
+const { open: consentOpen, request: requestConsent, accept: acceptConsent, cancel: cancelConsent } =
+  useSecretConsent()
+
+/** 确认记录只对刚确认过的那一次有效，所以每次添加都现造一个 */
+const currentConsent = () => ({
+  accepted: true as const,
+  acceptedAt: Date.now(),
+  noticeVersion: CONSENT_NOTICE_VERSION
+})
+
+function presetChain(preset: WorkflowPreset): string[] {
+  return preset.steps.map((s) => stepDef(s.type).name)
+}
+
+/** 含密钥的预设必须先取得风险确认，被拒就什么都不加 */
+async function addPresetFlow(preset: WorkflowPreset) {
+  if (presetNeedsSecret(preset) && !(await requestConsent())) {
+    toast.warning('已取消：未添加含密钥的预设')
+    return
+  }
+  try {
+    const wf = store.addPreset(preset.key, { consent: currentConsent() })
+    router.push(`/workflows/${wf.id}`)
+  } catch (e) {
+    toast.warning(errMessage(e))
+  }
+}
 
 function open(id: string) {
   router.push(`/workflows/${id}`)
@@ -34,10 +64,22 @@ function create() {
   router.push(`/workflows/${wf.id}`)
 }
 
-function doImport() {
+async function doImport() {
   importError.value = ''
+  let needsConsent = false
   try {
-    const wf = store.importWorkflow(importText.value)
+    needsConsent = store.inspectImport(importText.value).secretTypes.length > 0
+  } catch (e) {
+    importError.value = errMessage(e)
+    return
+  }
+  // 含密钥的流程先确认风险；被拒时整体不导入，不留半条流程
+  if (needsConsent && !(await requestConsent())) {
+    toast.warning('已取消导入：该流程包含密钥步骤')
+    return
+  }
+  try {
+    const wf = store.importWorkflow(importText.value, { consent: currentConsent() })
     importing.value = false
     importText.value = ''
     router.push(`/workflows/${wf.id}`)
@@ -52,7 +94,7 @@ function remove(id: string, name: string) {
 }
 
 /** 用一段示例输入把整条流程跑一遍，并把真实结果记入运行记录 */
-function quickRun(id: string) {
+async function quickRun(id: string) {
   const wf = store.get(id)
   if (!wf) return
   if (!wf.steps.length) {
@@ -62,7 +104,10 @@ function quickRun(id: string) {
   running.value = id
   try {
     const input = sampleInput.value.trim() || lastRunInput(wf.steps.map((s) => s.type))
-    const res = runWorkflow(wf, input, { stopOnError: true })
+    const res = await runWorkflow(wf, input, {
+      stopOnError: true,
+      secretOf: (s) => store.stepSecrets(wf.id, s.id)
+    })
     store.addRun({
       workflowId: wf.id,
       name: wf.name,
@@ -120,7 +165,7 @@ function lastRunOf(id: string) {
     <div class="wf__ops">
       <span class="wf__ops-count">{{ wfs.length }} 个流程 · 全部在浏览器内执行</span>
       <span class="wf__badge wf__badge--soft">
-        <DkIcon name="circle-check" :size="12" />不保存输入
+        <DkIcon name="circle-check" :size="12" />输入不落盘
       </span>
       <span class="grow"></span>
       <DkButton size="sm" @click="importing = true">
@@ -130,6 +175,41 @@ function lastRunOf(id: string) {
         <DkIcon name="plus" :size="12" />新建处理流程
       </DkButton>
     </div>
+
+    <section class="wf__presets">
+      <div class="wf__presets-head">
+        <DkIcon name="package" :size="14" />
+        <h2 class="wf__presets-title">预设流程</h2>
+        <span class="tertiary">点一下就能加进我的流程，含密钥的预设会先弹出风险确认</span>
+      </div>
+      <div class="wf__preset-grid">
+        <article v-for="p in store.presets" :key="p.key" class="wf__preset">
+          <div class="wf__preset-head">
+            <span class="wf__preset-name">{{ p.name }}</span>
+            <span v-if="presetNeedsSecret(p)" class="wf__badge wf__badge--warn">含密钥</span>
+            <span class="grow"></span>
+            <DkButton size="sm" @click="addPresetFlow(p)">
+              <DkIcon name="plus" :size="12" />添加
+            </DkButton>
+          </div>
+          <p class="wf__preset-desc">{{ p.desc }}</p>
+          <div class="wf__chain">
+            <template v-for="(s, i) in presetChain(p)" :key="`${p.key}-${i}`">
+              <span class="wf__step">
+                <span class="wf__step-idx">{{ i + 1 }}</span>
+                <span class="ellipsis">{{ s }}</span>
+              </span>
+              <span v-if="i < presetChain(p).length - 1" class="wf__arrow">
+                <DkIcon name="chevron-right" :size="11" />
+              </span>
+            </template>
+          </div>
+          <p v-if="p.secretHint" class="wf__preset-hint">
+            <DkIcon name="key" :size="12" />{{ p.secretHint }}
+          </p>
+        </article>
+      </div>
+    </section>
 
     <section class="wf__cards">
       <article v-for="wf in wfs" :key="wf.id" class="wf__card">
@@ -179,7 +259,7 @@ function lastRunOf(id: string) {
       <div class="wf__runs-head">
         <DkIcon name="history" :size="14" />
         <h2 class="wf__runs-title">最近运行</h2>
-        <span class="tertiary">记录仅存于本机内存</span>
+        <span class="tertiary">记录只保存状态、耗时与步骤摘要，不含输入与输出；保存在本机浏览器</span>
         <span class="grow"></span>
         <DkButton size="sm" variant="ghost" :disabled="!store.runs.value.length" @click="store.clearRuns()">
           <DkIcon name="trash" :size="12" />清空记录
@@ -203,7 +283,7 @@ function lastRunOf(id: string) {
         </div>
       </div>
       <p class="wf__runs-foot">
-        共 {{ store.runs.value.length }} 次运行 · 刷新页面后记录与中间结果一并清空，记录里不含任何输入数据
+        共 {{ store.runs.value.length }} 次运行 · 记录只保存状态、耗时与步骤摘要，不含输入与输出；保存在本机浏览器
       </p>
     </section>
 
@@ -212,15 +292,18 @@ function lastRunOf(id: string) {
         <DkIcon name="shield-check" :size="16" />
       </span>
       <div class="wf__privacy-text">
-        <p class="wf__privacy-title">数据仅在内存中传递</p>
+        <p class="wf__privacy-title">运行数据只在内存中，流程配置在本机</p>
         <p class="wf__privacy-desc">
-          相邻步骤之间直接传值，不写入 localStorage / IndexedDB，也不发送到服务器；关闭或刷新页面后，输入与中间结果立即清除。
+          运行输入和中间结果仅在本次页面内存中传递，不发送到服务器。流程配置会保存到本机浏览器；加解密步骤中的密钥仅在你确认风险后保存到 localStorage。
         </p>
       </div>
       <span class="grow"></span>
-      <span class="wf__badge wf__badge--soft">不落盘</span>
+      <span class="wf__badge wf__badge--soft">输入不落盘</span>
       <span class="wf__badge wf__badge--soft">不上传</span>
-      <span class="wf__badge wf__badge--soft">不保存输入</span>
+      <span class="wf__badge wf__badge--soft">密钥明文保存在本机</span>
+      <NuxtLink to="/settings" class="wf__privacy-link">
+        <DkIcon name="sliders" :size="12" />数据清理入口
+      </NuxtLink>
     </section>
 
     <DkModal :open="creating" title="新建处理流程" width="440px" @close="creating = false">
@@ -251,14 +334,22 @@ function lastRunOf(id: string) {
         </DkField>
         <p v-if="importError" class="wf__error">{{ importError }}</p>
         <p class="wf__hint tertiary">
-          只接受结构正确的 JSON；步骤类型必须是步骤库里的 8 种之一，出现不支持的步骤会整体拒绝导入。
+          只接受结构正确的 JSON；步骤类型必须是步骤库里的 {{ stepLibrary.length }} 种之一，出现不支持的步骤会整体拒绝导入。
         </p>
+        <p class="wf__hint tertiary">导入含密钥的步骤时不会带入任何密钥，需要重新填写。</p>
       </div>
       <template #footer>
         <DkButton size="sm" @click="importing = false">取消</DkButton>
         <DkButton size="sm" variant="primary" @click="doImport">导入</DkButton>
       </template>
     </DkModal>
+
+    <DkRiskConsent
+      :open="consentOpen"
+      title="添加含密钥的流程"
+      @confirm="acceptConsent"
+      @cancel="cancelConsent"
+    />
   </div>
 </template>
 
@@ -315,6 +406,10 @@ function lastRunOf(id: string) {
   background: var(--surface-subtle);
   color: var(--text-secondary);
 }
+.wf__badge--warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
 .wf__badge--ok {
   background: var(--ok-soft);
   color: var(--ok);
@@ -337,6 +432,74 @@ function lastRunOf(id: string) {
 .wf__ops-count {
   font-size: 13px;
   color: var(--text-secondary);
+}
+.wf__presets {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wf__presets-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* 窄屏时让说明整行换下去，标题不会被挤成两行 */
+  flex-wrap: wrap;
+}
+.wf__presets-title {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.wf__preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 14px;
+}
+.wf__preset {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  min-width: 0;
+}
+.wf__preset-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.wf__preset-name {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.wf__preset-desc {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.wf__preset-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  line-height: 1.6;
+}
+.wf__privacy-link {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: var(--surface-subtle);
+  color: var(--accent);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.wf__privacy-link:hover {
+  text-decoration: none;
 }
 .wf__cards {
   display: grid;
@@ -561,7 +724,8 @@ function lastRunOf(id: string) {
   .wf__head {
     flex-wrap: wrap;
   }
-  .wf__cards {
+  .wf__cards,
+  .wf__preset-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }

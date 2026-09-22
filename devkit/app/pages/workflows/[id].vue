@@ -1,8 +1,21 @@
 <script setup lang="ts">
-import { stepDef, stepLibrary, runStep, runWorkflow, normalizeSelection, type StepResult, type StepType } from '~/utils/workflow'
+import {
+  stepDef,
+  stepLibrary,
+  runStep,
+  runWorkflow,
+  normalizeSelection,
+  payloadKindLabel,
+  isSensitiveStep,
+  isCurrentConsent,
+  MISSING_SECRET_HINT,
+  type StepResult,
+  type StepType,
+  type WorkflowStep
+} from '~/utils/workflow'
+import { CONSENT_NOTICE_VERSION } from '~/workflow/secrets'
 
 const route = useRoute()
-const router = useRouter()
 const store = useWorkflows()
 const toast = useToast()
 const transfer = useTransfer()
@@ -10,15 +23,28 @@ const clipboard = useClipboard()
 
 const id = computed(() => route.params.id as string)
 const wf = computed(() => store.get(id.value))
-if (!wf.value) {
-  throw createError({ statusCode: 404, statusMessage: '处理流程不存在', fatal: true })
-}
+/**
+ * 流程现在保存在本机浏览器，SSR 阶段读不到任何数据：
+ * 这里不能直接 404，否则刷新页面时真正的流程也会被判定为不存在。
+ */
+const notFound = computed(() => store.hydrated.value && !wf.value)
+/** 模板里要判断「还没读完本地数据」，所以解构成顶层 ref 让模板自动解包 */
+const hydrated = store.hydrated
 
 useSeo({
   title: computed(() => `${wf.value?.name ?? '处理流程'} - 在线编排与运行 · DevKit`),
   description: computed(
     () => `在线编排并逐步运行「${wf.value?.name ?? '处理流程'}」：每一步的输入输出都在浏览器内存中传递，不落盘、不上传。`
   )
+})
+
+const { open: consentOpen, request: requestConsent, accept: acceptConsent, cancel: cancelConsent } = useSecretConsent()
+
+/** 确认记录只在 request 返回 true 之后才构造，保证「没弹窗就没确认」 */
+const currentConsent = () => ({
+  accepted: true as const,
+  acceptedAt: Date.now(),
+  noticeVersion: CONSENT_NOTICE_VERSION
 })
 
 const search = ref('')
@@ -29,6 +55,15 @@ const stopOnError = ref(true)
 const clearAfterRun = ref(false)
 const lastRunAt = ref(0)
 const busy = ref(false)
+
+/** 本地存储错误横幅：记住被关掉的那条文案，出现新错误时还能再提示一次 */
+const dismissedStorageError = ref('')
+const storageErrorText = computed(() =>
+  store.storageError.value && store.storageError.value !== dismissedStorageError.value ? store.storageError.value : ''
+)
+function dismissStorageError() {
+  dismissedStorageError.value = store.storageError.value
+}
 
 const steps = computed(() => wf.value?.steps ?? [])
 
@@ -44,14 +79,23 @@ const addedTypes = computed(() => new Set(steps.value.map((s) => s.type)))
  * 接收跨工具传递：以流程 id 作为消费方，只有带本流程 intent 的载荷才会追加步骤。
  * take 是一次性消费，回到列表再进来不会重复追加。
  */
-onMounted(() => {
+onMounted(async () => {
   const p = transfer.take(id.value)
   if (!p) return
+  // 内容先作为流程输入带入：即使后面拒绝添加步骤，这次传递也不算白费
   input.value = p.text
   const intent = p.intent
   if (intent?.workflowId === id.value) {
     if (intent.stepType) {
-      store.addStep(id.value, { type: intent.stepType, config: {} })
+      if (isSensitiveStep(intent.stepType) && !(await requestConsent())) {
+        toast.warning('已取消：未追加含密钥的步骤（内容已作为流程输入带入）')
+        return
+      }
+      const res = store.addStep(id.value, intent.stepType, { consent: currentConsent() })
+      if (!res.ok) {
+        toast.warning(res.error ?? '追加步骤失败')
+        return
+      }
       selected.value = steps.value.length - 1
       toast.success(`已把「${stepDef(intent.stepType).name}」追加为第 ${steps.value.length} 步`)
       return
@@ -66,13 +110,15 @@ function stepStatus(i: number): StepResult['status'] | 'pending' {
   return results.value[i]?.status ?? 'pending'
 }
 
-function inputOf(i: number): string {
+/** 上游的完整载荷优先：二进制结果必须把 bytes 传下去，只传 Hex 文本会让下一步解不出来 */
+function inputOf(i: number) {
   if (i === 0) return input.value
-  return results.value[i - 1]?.output ?? input.value
+  return results.value[i - 1]?.payload ?? input.value
 }
 
-function runAll() {
-  if (!wf.value) return
+async function runAll() {
+  const current = wf.value
+  if (!current) return
   if (!steps.value.length) {
     toast.warning('这条流程还没有步骤')
     return
@@ -82,40 +128,50 @@ function runAll() {
     return
   }
   busy.value = true
-  const res = runWorkflow(wf.value, input.value, { stopOnError: stopOnError.value })
-  results.value = res.results
-  // 运行完成后选中「第一个失败步骤」，全部成功则停在最后一步（不落到流程输出，避免误以为还能单步运行）
-  const failedAt = res.results.findIndex((r) => r.status === 'fail')
-  selected.value = failedAt >= 0 ? failedAt : Math.max(0, steps.value.length - 1)
-  lastRunAt.value = Date.now()
-  store.addRun({
-    workflowId: id.value,
-    name: wf.value.name,
-    summary: steps.value.map((s) => stepDef(s.type).name).join(' → '),
-    status: res.status,
-    ms: res.ms
-  })
-  if (res.status === 'ok') toast.success(`全部 ${res.results.length} 步运行完成，耗时 ${res.ms} ms`)
-  else toast.warning(`已中断：${res.results.find((r) => r.status === 'fail')?.note ?? '步骤失败'}`)
-  if (clearAfterRun.value) input.value = ''
-  busy.value = false
+  try {
+    const res = await runWorkflow(current, input.value, {
+      stopOnError: stopOnError.value,
+      secretOf: (s) => store.stepSecrets(id.value, s.id)
+    })
+    results.value = res.results
+    // 运行完成后选中「第一个失败步骤」，全部成功则停在最后一步（不落到流程输出，避免误以为还能单步运行）
+    const failedAt = res.results.findIndex((r) => r.status === 'fail')
+    selected.value = failedAt >= 0 ? failedAt : Math.max(0, steps.value.length - 1)
+    lastRunAt.value = Date.now()
+    store.addRun({
+      workflowId: id.value,
+      name: current.name,
+      summary: steps.value.map((s) => stepDef(s.type).name).join(' → '),
+      status: res.status,
+      ms: res.ms
+    })
+    if (res.status === 'ok') toast.success(`全部 ${res.results.length} 步运行完成，耗时 ${res.ms} ms`)
+    else toast.warning(`已中断：${res.results.find((r) => r.status === 'fail')?.note ?? '步骤失败'}`)
+    if (clearAfterRun.value) input.value = ''
+  } finally {
+    // 执行器抛异常时也要复位，否则按钮会一直转
+    busy.value = false
+  }
 }
 
-function runOne(i: number) {
+async function runOne(i: number) {
   const step = steps.value[i]
   if (!step) {
     toast.warning('该位置没有步骤可运行')
     return
   }
   busy.value = true
-  const res = runStep(step, inputOf(i), i)
-  const list = [...results.value]
-  list[i] = res
-  results.value = list
-  selected.value = i
-  if (res.status === 'ok') toast.success(`第 ${i + 1} 步完成：${res.note}`)
-  else toast.warning(`第 ${i + 1} 步失败：${res.note}`)
-  busy.value = false
+  try {
+    const res = await runStep(step, inputOf(i), i, { secrets: store.stepSecrets(id.value, step.id) })
+    const list = [...results.value]
+    list[i] = res
+    results.value = list
+    selected.value = i
+    if (res.status === 'ok') toast.success(`第 ${i + 1} 步完成：${res.note}`)
+    else toast.warning(`第 ${i + 1} 步失败：${res.note}`)
+  } finally {
+    busy.value = false
+  }
 }
 
 function runSelected() {
@@ -136,15 +192,60 @@ function clearInput() {
   toast.success('已清空流程输入与本次中间结果')
 }
 
-function add(type: StepType) {
-  store.addStep(id.value, { type, config: {} })
+/** 添加步骤的唯一入口：敏感步骤先拿到风险确认，被拒就什么都不做 */
+async function addWithConsent(type: StepType) {
+  if (isSensitiveStep(type) && !(await requestConsent())) {
+    toast.warning('已取消：未添加含密钥的步骤')
+    return
+  }
+  const res = store.addStep(id.value, type, { consent: currentConsent() })
+  if (!res.ok) {
+    toast.warning(res.error ?? '添加步骤失败')
+    return
+  }
   selected.value = steps.value.length - 1
+}
+
+async function duplicateStep(i: number) {
+  const step = steps.value[i]
+  if (!step) return
+  if (isSensitiveStep(step.type) && !(await requestConsent())) {
+    toast.warning('已取消：未复制该步骤')
+    return
+  }
+  const res = store.duplicateStep(id.value, i, { consent: currentConsent() })
+  if (!res.ok) {
+    toast.warning(res.error ?? '复制步骤失败')
+    return
+  }
+  selected.value = i + 1
+  toast.success(`已复制「${stepDef(step.type).name}」为第 ${i + 2} 步（密钥不复制，需要重新填写）`)
 }
 
 function removeStep(i: number) {
   store.removeStep(id.value, i)
   results.value = results.value.filter((_, idx) => idx !== i)
   if (selected.value >= i) selected.value = Math.max(-1, selected.value - 1)
+}
+
+/** 密钥值只经这里写进本地存储，绝不回显、绝不写进 config */
+function onSecretInput(step: WorkflowStep, key: string, value: string) {
+  const res = store.setStepSecret(id.value, step.id, key, value)
+  if (!res.ok) {
+    toast.warning(res.error ?? '密钥未保存')
+    return
+  }
+  toast.success('密钥已保存到本机浏览器')
+}
+
+async function reconfirmStep(step: WorkflowStep) {
+  if (!(await requestConsent())) return
+  const res = store.confirmStep(id.value, step.id)
+  if (!res.ok) {
+    toast.warning(res.error ?? '风险确认未保存')
+    return
+  }
+  toast.success('风险确认已更新，现在可以填写密钥了')
 }
 
 /** 选中项可以是流程输入（-1）、某一步（0..n-1）或流程输出（n 及以上），越界不再直接取 steps[i] */
@@ -166,6 +267,14 @@ const currentDef = computed(() => (currentStep.value ? stepDef(currentStep.value
 const currentResult = computed(() => (currentStepIndex.value >= 0 ? (results.value[currentStepIndex.value] ?? null) : null))
 
 const currentLogs = computed(() => currentResult.value?.logs ?? [])
+
+/** 当前步骤缺哪些必填密钥（只给 label，不给值） */
+const currentMissingSecrets = computed(() =>
+  currentStep.value ? store.missingSecretsOf(id.value, currentStep.value) : []
+)
+
+/** 确认记录可能是旧文案版本或压根没有，两种情况都要求重新确认 */
+const currentConsentOk = computed(() => isCurrentConsent(currentStep.value?.consent))
 
 /** 流程输出：最后一步成功时才有可用输出 */
 const finalOutput = computed(() => {
@@ -200,14 +309,25 @@ function sizeText(text: string): string {
 }
 
 function exportJson() {
-  if (!wf.value) return
-  const payload = JSON.stringify({ name: wf.value.name, desc: wf.value.desc, steps: wf.value.steps }, null, 2)
-  downloadText(`${wf.value.name || 'workflow'}.json`, payload, 'application/json')
+  const current = wf.value
+  if (!current) return
+  // 走 store 的导出：密钥、私钥、IV、AAD 一律不落进文件
+  downloadText(`${current.name || 'workflow'}.json`, store.exportText(id.value), 'application/json')
 }
 </script>
 
 <template>
   <div v-if="wf" class="wfe">
+    <div v-if="storageErrorText" class="wfe__alert">
+      <DkIcon name="alert-triangle" :size="14" />
+      <span>{{ storageErrorText }}</span>
+      <span class="tertiary">可在偏好设置里清空本地数据</span>
+      <span class="grow"></span>
+      <button class="wfe__alert-close" title="关闭提示" aria-label="关闭提示" @click="dismissStorageError">
+        <DkIcon name="x" :size="12" />
+      </button>
+    </div>
+
     <header class="wfe__head">
       <span class="wfe__head-icon">
         <DkIcon name="workflow" :size="17" />
@@ -229,10 +349,15 @@ function exportJson() {
 
     <div class="wfe__note">
       <DkIcon name="shield-check" :size="14" />
-      <span>数据仅在本次页面内存中传递，离开即清除</span>
-      <span class="tertiary">不写入磁盘 · 不发送到服务器</span>
+      <span>运行输入与中间结果仅在本次页面内存中传递，离开即清除</span>
+      <span class="tertiary">流程配置会保存到本机浏览器；加解密步骤中的密钥仅在你确认风险后保存到 localStorage</span>
       <span class="grow"></span>
-      <DkButton size="sm" variant="ghost" @click="exportJson">
+      <DkButton
+        size="sm"
+        variant="ghost"
+        title="导出的步骤只保留算法、方向、编码等参数，密钥、私钥、IV、AAD 不会导出"
+        @click="exportJson"
+      >
         <DkIcon name="download" :size="12" />导出流程 JSON
       </DkButton>
     </div>
@@ -287,7 +412,7 @@ function exportJson() {
           </label>
         </div>
         <div class="wfe__lib-list">
-          <button v-for="s in filtered" :key="s.type" class="wfe__lib-item" @click="add(s.type)">
+          <button v-for="s in filtered" :key="s.type" class="wfe__lib-item" @click="addWithConsent(s.type)">
             <span class="wfe__lib-icon">
               <DkIcon :name="s.type === 'download' ? 'download' : 'sparkles'" :size="14" />
             </span>
@@ -367,6 +492,13 @@ function exportJson() {
                 </span>
               </span>
               <span class="wfe__node-marks">
+                <span v-if="isSensitiveStep(s.type)" class="wfe__badge wfe__badge--mini">含密钥</span>
+                <span
+                  v-if="store.missingSecretsOf(id, s).length"
+                  class="wfe__badge wfe__badge--warn wfe__badge--mini"
+                >
+                  缺少密钥
+                </span>
                 <span v-if="results[i]" class="wfe__badge wfe__badge--mini">
                   输出 {{ sizeText(results[i]!.output) }}
                 </span>
@@ -379,6 +511,9 @@ function exportJson() {
                 @click.stop="runOne(i)"
               >
                 <DkIcon name="play" :size="12" />
+              </button>
+              <button class="wfe__node-act" title="复制该步骤（不复制密钥）" @click.stop="duplicateStep(i)">
+                <DkIcon name="copy" :size="12" />
               </button>
               <button class="wfe__node-act" title="上移" :disabled="i === 0" @click.stop="store.moveStep(id, i, -1)">
                 <DkIcon name="chevron-up" :size="12" />
@@ -420,7 +555,7 @@ function exportJson() {
           <p v-if="!steps.length" class="wfe__empty">步骤链是空的：从左侧「步骤库」点一个步骤开始。</p>
         </div>
         <div class="wfe__chain-foot">
-          <span class="tertiary">节点之间的数据只存在于内存，不落盘</span>
+          <span class="tertiary">节点之间的数据只存在于内存，不发送到服务器</span>
           <span class="grow"></span>
           <DkButton size="sm" variant="ghost" @click="selected = steps.length - 1">
             <DkIcon name="arrow-down" :size="12" />定位到最后一步
@@ -441,16 +576,79 @@ function exportJson() {
             <span class="wfe__field-label">步骤类型</span>
             <input class="wfe__field-input" :value="currentDef.name" readonly aria-label="步骤类型" />
           </label>
-          <label v-for="f in currentDef.fields" :key="f.key" class="wfe__field">
-            <span class="wfe__field-label">{{ f.label }}</span>
-            <input
-              class="wfe__field-input mono"
-              :value="currentStep.config[f.key] ?? ''"
+
+          <div v-if="isSensitiveStep(currentStep.type)" class="wfe__risk">
+            <div class="wfe__risk-head">
+              <span class="wfe__badge wfe__badge--mini">
+                <DkIcon name="key" :size="11" />含本地持久化密钥
+              </span>
+            </div>
+            <p class="wfe__risk-text">
+              密钥以明文保存在本机浏览器 localStorage，不会发送到服务器；localStorage 不是密钥保险箱。
+            </p>
+            <div v-if="!currentConsentOk" class="wfe__risk-act">
+              <span class="wfe__risk-warn">风险确认已失效</span>
+              <DkButton size="sm" @click="reconfirmStep(currentStep)">重新确认风险</DkButton>
+            </div>
+            <p v-if="currentMissingSecrets.length" class="wfe__risk-missing">
+              缺少密钥：{{ currentMissingSecrets.join('、') }}（填写后自动保存；设置页可单独清空已保存密钥）
+            </p>
+            <p v-if="currentMissingSecrets.length" class="wfe__risk-hint">{{ MISSING_SECRET_HINT }}</p>
+          </div>
+
+          <template v-for="f in currentDef.fields" :key="f.key">
+            <DkSecretField
+              v-if="f.control === 'secret'"
+              :label="f.label"
+              :model-value="store.stepSecrets(id, currentStep.id)[f.key] ?? ''"
+              :help="f.help"
               :placeholder="f.placeholder"
-              :aria-label="f.label"
-              @input="store.updateStepConfig(id, currentStepIndex, f.key, ($event.target as HTMLInputElement).value)"
+              :updated-at="store.secretUpdatedAt(id, currentStep.id)"
+              @update:model-value="onSecretInput(currentStep, f.key, $event)"
             />
-          </label>
+            <label v-else-if="f.control === 'switch'" class="wfe__switch">
+              <DkSwitch
+                :on="!!currentStep.config[f.key]"
+                :label="f.label"
+                @toggle="store.updateStepConfig(id, currentStepIndex, f.key, !currentStep.config[f.key])"
+              />
+              <span>{{ f.label }}</span>
+            </label>
+            <label v-else-if="f.control === 'select'" class="wfe__field">
+              <span class="wfe__field-label">{{ f.label }}</span>
+              <DkSelect
+                :model-value="String(currentStep.config[f.key] ?? f.default ?? '')"
+                :options="f.options ?? []"
+                :aria-label="f.label"
+                @update:model-value="store.updateStepConfig(id, currentStepIndex, f.key, $event)"
+              />
+              <span v-if="f.help" class="wfe__field-help">{{ f.help }}</span>
+            </label>
+            <label v-else-if="f.control === 'textarea'" class="wfe__field">
+              <span class="wfe__field-label">{{ f.label }}</span>
+              <textarea
+                class="wfe__field-input mono wfe__field-area"
+                :value="String(currentStep.config[f.key] ?? '')"
+                :placeholder="f.placeholder"
+                :aria-label="f.label"
+                rows="4"
+                @input="store.updateStepConfig(id, currentStepIndex, f.key, ($event.target as HTMLTextAreaElement).value)"
+              ></textarea>
+              <span v-if="f.help" class="wfe__field-help">{{ f.help }}</span>
+            </label>
+            <label v-else class="wfe__field">
+              <span class="wfe__field-label">{{ f.label }}</span>
+              <input
+                class="wfe__field-input mono"
+                :value="String(currentStep.config[f.key] ?? '')"
+                :placeholder="f.placeholder"
+                :aria-label="f.label"
+                @input="store.updateStepConfig(id, currentStepIndex, f.key, ($event.target as HTMLInputElement).value)"
+              />
+              <span v-if="f.help" class="wfe__field-help">{{ f.help }}</span>
+            </label>
+          </template>
+
           <label class="wfe__switch">
             <DkSwitch :on="stopOnError" label="失败时中断流程" @toggle="stopOnError = !stopOnError" />
             <span>失败时中断流程</span>
@@ -486,6 +684,13 @@ function exportJson() {
           <span class="wfe__card-title">实时输出</span>
           <span class="tertiary">仅本次页面内存</span>
           <span class="grow"></span>
+          <span
+            v-if="currentResult?.outputKind === 'bytes'"
+            class="wfe__badge wfe__badge--mini"
+            :title="payloadKindLabel.bytes"
+          >
+            二进制结果（界面按 Hex 展示）
+          </span>
           <span
             v-if="currentResult"
             class="wfe__badge"
@@ -534,6 +739,24 @@ function exportJson() {
       </section>
     </div>
   </div>
+
+  <div v-else class="wfe__missing">
+    <DkIcon name="workflow" :size="22" />
+    <template v-if="notFound">
+      <p class="wfe__missing-text">找不到这条流程：它可能已被删除，或保存在另一个浏览器配置里。</p>
+      <NuxtLink to="/workflows" class="wfe__back">
+        <DkIcon name="chevron-left" :size="13" />返回流程列表
+      </NuxtLink>
+    </template>
+    <p v-else class="wfe__missing-text">正在读取本机保存的流程…</p>
+  </div>
+
+  <DkRiskConsent
+    :open="consentOpen"
+    title="添加含密钥的步骤"
+    @confirm="acceptConsent"
+    @cancel="cancelConsent"
+  />
 </template>
 
 <style scoped>
@@ -983,6 +1206,108 @@ function exportJson() {
 .tfe-muted {
   font-size: 11px;
   color: var(--text-tertiary);
+}
+.wfe__alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  background: var(--warn-soft);
+  color: var(--text-primary);
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.wfe__alert-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+.wfe__alert-close:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+.wfe__badge--warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.wfe__risk {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  background: var(--warn-soft);
+}
+.wfe__risk-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.wfe__risk-text {
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+.wfe__risk-act {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.wfe__risk-warn {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--error);
+}
+.wfe__risk-missing {
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--error);
+}
+.wfe__risk-hint {
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--text-tertiary);
+}
+.wfe__field-help {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-tertiary);
+}
+/* textarea 沿用输入框的边框与配色，只把固定高度改成可伸展 */
+.wfe__field-area {
+  height: auto;
+  min-height: 64px;
+  padding: 7px 10px;
+  line-height: 1.7;
+  resize: vertical;
+}
+.wfe__missing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 320px;
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text-tertiary);
+  text-align: center;
+}
+.wfe__missing-text {
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--text-secondary);
 }
 @media (max-width: 1240px) {
   .wfe__cols {

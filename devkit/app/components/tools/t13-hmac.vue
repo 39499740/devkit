@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
+import { byteLength, bytesToBase64, bytesToHex, hexToBytes, textToBytes } from '~/utils/bytes'
+import { computeHmac } from '~/utils/crypto/hmac'
 
 defineProps<{ tool: ToolMeta }>()
 
@@ -45,7 +47,7 @@ const matchState = computed<'match' | 'mismatch' | null>(() => {
   return result.value.hex === expectedNorm.value ? 'match' : 'mismatch'
 })
 
-/** 真实计算：WebCrypto HMAC（importKey + sign），仅在点击回调中执行 */
+/** 真实计算：统一走共享实现 ~/utils/crypto/hmac（WebCrypto importKey + sign），仅在点击回调中执行 */
 async function execute() {
   if (busy.value) return
   if (keyErr.value) {
@@ -61,15 +63,7 @@ async function execute() {
   }
   busy.value = true
   try {
-    const cryptoKey = await crypto.subtle.importKey(
-      'raw',
-      keyBytes as unknown as BufferSource,
-      { name: 'HMAC', hash: algo.value },
-      false,
-      ['sign']
-    )
-    const sigBuf = await crypto.subtle.sign('HMAC', cryptoKey, textToBytes(message.value) as unknown as BufferSource)
-    const d = new Uint8Array(sigBuf)
+    const d = await computeHmac(algo.value, keyBytes, textToBytes(message.value))
     result.value = { hex: bytesToHex(d), b64: bytesToBase64(d) }
     const cmp =
       matchState.value === 'match' ? '；期望值对照：一致' : matchState.value === 'mismatch' ? '；期望值对照：不一致（见下方红色标识）' : ''

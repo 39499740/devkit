@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
-import smCrypto from 'sm-crypto'
-
-const { sm3 } = smCrypto
+import { bytesToBase64, formatBytes, hexToBytes, textToBytes } from '~/utils/bytes'
+import { computeSm3 } from '~/utils/crypto/sm3'
 
 defineProps<{ tool: ToolMeta }>()
 
@@ -43,7 +42,7 @@ const matchState = computed<'match' | 'mismatch' | null>(() => {
   return result.value.hex === expectedNorm.value ? 'match' : 'mismatch'
 })
 
-/** 真实计算：sm-crypto SM3（纯 JS，本地执行，无密钥） */
+/** 真实计算：走共享实现 ~/utils/crypto/sm3（sm-crypto 纯 JS，本地执行，无密钥） */
 function execute() {
   if (busy.value) return
   let bytes: Uint8Array
@@ -72,7 +71,7 @@ function execute() {
     bytes = fileBytes.value
   }
   try {
-    const hex = sm3(Array.from(bytes))
+    const hex = computeSm3(bytes)
     result.value = { hex, b64: bytesToBase64(hexToBytes(hex).bytes), bytes: bytes.length }
     run.markOk(
       (matchState.value === 'match'

@@ -1,10 +1,17 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
-import smCrypto from 'sm-crypto'
-import sm2utils from 'sm-crypto/src/sm2/utils'
-import { BigInteger } from 'jsbn'
-
-const { sm2 } = smCrypto
+import { base64ToBytes, byteLength, bytesToBase64, bytesToHex, hexToBytes } from '~/utils/bytes'
+import {
+  cleanHex,
+  generateSm2KeyPair,
+  sm2C3FailureMessage,
+  sm2Decrypt,
+  sm2Encrypt,
+  sm2PrivateKeyError,
+  sm2PublicKeyError,
+  sm2Sign,
+  sm2Verify
+} from '~/utils/crypto/sm2'
 
 defineProps<{ tool: ToolMeta }>()
 
@@ -44,41 +51,10 @@ const sig = () =>
   JSON.stringify([ws.value, cOp.value, sOp.value, pubKey.value, privKey.value, cipherMode.value, cipherEnc.value, userId.value, sigFormat.value, cInput.value, sMsg.value, sigInput.value])
 const run = useToolRun(sig)
 
-const cleanHex = (s: string) => s.replace(/\s+/g, '').toLowerCase()
-
-const leftPad = (s: string, n: number) => (s.length >= n ? s : '0'.repeat(n - s.length) + s)
-
-/** 独立复核空明文（C2 为 0 字节）密文的 C3 = SM3(x2 || y2)，区分「C3 校验失败」与「明文为空」 */
-function emptyPlaintextC3Valid(ctHex: string, privHex: string, mode: number): boolean {
-  const c1 = sm2utils.getGlobalCurve().decodePointHex('04' + ctHex.slice(0, 128))
-  if (!c1) return false
-  const p = c1.multiply(new BigInteger(privHex, 16))
-  const x2 = leftPad(p.getX().toBigInteger().toString(16), 64)
-  const y2 = leftPad(p.getY().toBigInteger().toString(16), 64)
-  const bytes: number[] = []
-  for (let i = 0; i < x2.length; i += 2) bytes.push(parseInt(x2.substr(i, 2), 16))
-  for (let i = 0; i < y2.length; i += 2) bytes.push(parseInt(y2.substr(i, 2), 16))
-  const expectedC3 = smCrypto.sm3(bytes)
-  const actualC3 = mode === 0 ? ctHex.slice(ctHex.length - 64) : ctHex.slice(128, 192)
-  return expectedC3 === actualC3.toLowerCase()
-}
-
-/** 公钥格式校验：04 开头非压缩 130 位，或 02/03 开头压缩 66 位 */
+/** 公钥格式校验：04 开头非压缩 130 位，或 02/03 开头压缩 66 位（校验实现与流程步骤共用） */
 const pubErr = computed(() => {
   if (!pubKey.value.trim()) return ''
-  const k = cleanHex(pubKey.value)
-  if (!/^[0-9a-f]+$/.test(k)) return '公钥 Hex 非法：包含非十六进制字符'
-  if (k.startsWith('04')) {
-    if (k.length !== 130) return `公钥为 04 开头的非压缩格式，应为 130 位 Hex，当前 ${k.length} 位`
-  } else if (k.startsWith('02') || k.startsWith('03')) {
-    if (k.length !== 66) return `公钥为 ${k.slice(0, 2)} 开头的压缩格式，应为 66 位 Hex，当前 ${k.length} 位`
-  } else {
-    return '公钥应以 04 开头（非压缩，130 位 Hex）或 02/03 开头（压缩，66 位 Hex）'
-  }
-  if (!sm2.verifyPublicKey(k)) {
-    return '公钥不是有效的 SM2 曲线点：不满足 y² = x³ + ax + b (mod p)，无法用于加密或验签，请检查公钥是否完整或属于 SM2 曲线'
-  }
-  return ''
+  return sm2PublicKeyError(pubKey.value)
 })
 
 const pubHelp = computed(() =>
@@ -89,13 +65,10 @@ const pubHelp = computed(() =>
       : '04 开头非压缩 130 位，或 02/03 开头压缩 66 位（Hex），且必须位于 SM2 曲线上'
 )
 
-/** 私钥格式校验：64 位 Hex（32 字节），不带 04 前缀 */
+/** 私钥格式校验：64 位 Hex（32 字节），不带 04 前缀（校验实现与流程步骤共用） */
 const privErr = computed(() => {
   if (!privKey.value.trim()) return ''
-  const k = cleanHex(privKey.value)
-  if (!/^[0-9a-f]+$/.test(k)) return '私钥 Hex 非法：包含非十六进制字符'
-  if (k.length !== 64) return `私钥应为 64 位 Hex（32 字节），当前 ${k.length} 位`
-  return ''
+  return sm2PrivateKeyError(privKey.value)
 })
 
 /** 解密输入解码（Hex 或 Base64 → Hex 字符串给 sm-crypto） */
@@ -121,17 +94,17 @@ const sigHexErr = computed(() => {
 })
 
 function genKeyPair() {
-  const kp = sm2.generateKeyPairHex()
+  const kp = generateSm2KeyPair()
   pubKey.value = kp.publicKey
   privKey.value = kp.privateKey
   toast.success('已生成新密钥对（公钥 04 非压缩格式）')
 }
 
-/** 真实计算：sm-crypto（纯 JS，本地执行） */
+/** 真实计算：走共享实现 ~/utils/crypto/sm2（sm-crypto 纯 JS，本地执行） */
 function execute() {
   if (busy.value) return
   verifyResult.value = null
-  const mode = Number(cipherMode.value)
+  const mode = cipherMode.value === '1' ? 1 : 0
 
   if (ws.value === 'cipher') {
     if (cOp.value === 'enc') {
@@ -154,7 +127,7 @@ function execute() {
         return
       }
       try {
-        const hex = sm2.doEncrypt(cInput.value, cleanHex(pubKey.value), mode)
+        const hex = sm2Encrypt(cInput.value, pubKey.value, mode)
         encResult.value = { hex, b64: bytesToBase64(hexToBytes(hex).bytes) }
         decResult.value = null
         run.markOk(
@@ -197,33 +170,21 @@ function execute() {
         return
       }
       try {
-        const out = sm2.doDecrypt(hex, cleanHex(privKey.value), mode)
-        if (out === '' && hex.length === 192) {
-          if (emptyPlaintextC3Valid(hex, cleanHex(privKey.value), mode)) {
-            decResult.value = { text: '（空字符串）', bytes: 0 }
-            encResult.value = null
-            run.markOk('SM2 解密成功：明文为空字符串（C2 为 0 字节），C3 校验通过')
-          } else {
-            decResult.value = null
-            encResult.value = null
-            run.markFail(
-              `解密失败：C3 校验未通过。常见原因：私钥与密文不匹配、密文被修改，或 cipherMode（当前 ${cipherMode.value === '1' ? 'C1C3C2' : 'C1C2C3'}）与加密时不一致`
-            )
-          }
-        } else if (out === '') {
-          decResult.value = null
-          encResult.value = null
-          run.markFail(
-            `解密失败：C3 校验未通过。常见原因：私钥与密文不匹配、密文被修改，或 cipherMode（当前 ${cipherMode.value === '1' ? 'C1C3C2' : 'C1C2C3'}）与加密时不一致`
-          )
+        const out = sm2Decrypt(hex, privKey.value, mode)
+        encResult.value = null
+        if (out.empty) {
+          decResult.value = { text: '（空字符串）', bytes: 0 }
+          run.markOk('SM2 解密成功：明文为空字符串（C2 为 0 字节），C3 校验通过')
         } else {
-          decResult.value = { text: out, bytes: byteLength(out) }
-          encResult.value = null
-          run.markOk(`SM2 解密成功（${cipherMode.value === '1' ? 'C1C3C2' : 'C1C2C3'}，C3 校验通过，明文 ${byteLength(out)} 字节）`)
+          decResult.value = { text: out.text, bytes: byteLength(out.text) }
+          run.markOk(`SM2 解密成功（${cipherMode.value === '1' ? 'C1C3C2' : 'C1C2C3'}，C3 校验通过，明文 ${byteLength(out.text)} 字节）`)
         }
       } catch (e) {
         decResult.value = null
-        run.markFail(`SM2 解密失败：${errMessage(e)}`)
+        encResult.value = null
+        // 共享实现只把 C3 校验失败当作业务结论抛出（文案自带「解密失败：」前缀），其它异常仍按执行失败提示
+        const msg = errMessage(e)
+        run.markFail(msg === sm2C3FailureMessage(mode) ? msg : `SM2 解密失败：${msg}`)
       }
     }
     return
@@ -254,7 +215,7 @@ function execute() {
     }
     try {
       const der = sigFormat.value === 'der'
-      const out = sm2.doSignature(sMsg.value, cleanHex(privKey.value), { hash: true, userId: userId.value, der })
+      const out = sm2Sign(sMsg.value, privKey.value, { userId: userId.value, der })
       signResult.value = { sig: out, format: der ? 'DER（ASN.1）' : 'raw（r||s）' }
       sigInput.value = out // 自动填入验签输入，便于接着验签
       run.markOk(`SM2 签名成功（SM3 摘要 + userId「${userId.value}」，${der ? 'DER' : 'raw r||s'} 编码，已自动填入验签输入）`)
@@ -280,8 +241,7 @@ function execute() {
     }
     try {
       const der = sigFormat.value === 'der'
-      const pass = sm2.doVerifySignature(sMsg.value, cleanHex(sigInput.value), cleanHex(pubKey.value), {
-        hash: true,
+      const pass = sm2Verify(sMsg.value, sigInput.value, pubKey.value, {
         userId: userId.value,
         der
       })

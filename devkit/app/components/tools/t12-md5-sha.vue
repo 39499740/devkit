@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
-import SparkMD5 from 'spark-md5'
+import { bytesToBase64, bytesToHex, formatBytes, hexToBytes, textToBytes } from '~/utils/bytes'
+import { computeDigest, type DigestAlgo } from '~/utils/crypto/digest'
 
 defineProps<{ tool: ToolMeta }>()
 
@@ -34,7 +35,7 @@ const toast = useToast()
 const clipboard = useClipboard()
 
 const selectedAlgos = computed(() => {
-  const list: string[] = []
+  const list: DigestAlgo[] = []
   if (algoMd5.value) list.push('MD5')
   if (algo256.value) list.push('SHA-256')
   if (algo512.value) list.push('SHA-512')
@@ -54,7 +55,7 @@ function matchOf(r: DigestRow): boolean | null {
   return r.hex === expectedNorm.value
 }
 
-/** 真实计算（浏览器本地）：MD5 用 spark-md5，SHA 用 WebCrypto crypto.subtle.digest */
+/** 真实计算（浏览器本地）：统一走共享实现 ~/utils/crypto/digest（MD5 用 spark-md5，SHA 用 WebCrypto） */
 async function execute() {
   if (busy.value) return
   if (!selectedAlgos.value.length) {
@@ -94,16 +95,8 @@ async function execute() {
   try {
     const out: DigestRow[] = []
     for (const algo of selectedAlgos.value) {
-      if (algo === 'MD5') {
-        const spark = new SparkMD5.ArrayBuffer()
-        spark.append(bytes as unknown as ArrayBuffer)
-        const hex = spark.end(false) // end() 会重置状态，只能调用一次
-        out.push({ algo, hex, b64: bytesToBase64(hexToBytes(hex).bytes) })
-      } else {
-        const buf = await crypto.subtle.digest(algo, bytes as unknown as BufferSource)
-        const d = new Uint8Array(buf)
-        out.push({ algo, hex: bytesToHex(d), b64: bytesToBase64(d) })
-      }
+      const d = await computeDigest(algo, bytes)
+      out.push({ algo, hex: bytesToHex(d), b64: bytesToBase64(d) })
     }
     results.value = out
     const matched = out.filter((r) => matchOf(r) === true).length

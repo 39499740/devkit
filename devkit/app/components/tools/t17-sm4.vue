@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
-import smCrypto from 'sm-crypto'
-
-const { sm4 } = smCrypto
+import { base64ToBytes, bytesToBase64, bytesToHex, bytesToText, hexToBytes, textToBytes } from '~/utils/bytes'
+import { sm4Decrypt, sm4Encrypt } from '~/utils/crypto/sm4'
 
 defineProps<{ tool: ToolMeta }>()
 
@@ -107,7 +106,7 @@ const inputDecoded = computed<{ bytes: Uint8Array; error?: string }>(() => {
   return r.error ? { bytes: r.bytes, error: `密文 ${ctEnc.value === 'hex' ? 'Hex' : 'Base64'} 非法：${r.error}` } : r
 })
 
-/** 真实计算：sm-crypto sm4（纯 JS，本地执行） */
+/** 真实计算：走共享实现 ~/utils/crypto/sm4（sm-crypto 纯 JS，本地执行） */
 function execute() {
   if (busy.value) return
   if (keyErr.value) {
@@ -144,21 +143,14 @@ function execute() {
     return
   }
 
-  const opts: { padding: string; mode: string; iv?: string; output: 'array' } = {
-    padding: padding.value,
+  const opts = {
     mode: mode.value,
-    output: 'array'
+    padding: padding.value,
+    ivHex: mode.value === 'cbc' ? bytesToHex(ivDecoded.value.bytes) : undefined
   }
-  if (mode.value === 'cbc') opts.iv = bytesToHex(ivDecoded.value.bytes)
 
   try {
-    let outBytes: number[]
-    if (op.value === 'enc') {
-      outBytes = sm4.encrypt(Array.from(bytes), keyHex.value.hex, opts) as number[]
-    } else {
-      outBytes = sm4.decrypt(Array.from(bytes), keyHex.value.hex, opts) as number[]
-    }
-    const u8 = new Uint8Array(outBytes)
+    const u8 = op.value === 'enc' ? sm4Encrypt(bytes, keyHex.value.hex, opts) : sm4Decrypt(bytes, keyHex.value.hex, opts)
     const hex = bytesToHex(u8)
     if (op.value === 'enc') {
       result.value = {

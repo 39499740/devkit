@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
+import { base64ToBytes, bytesToBase64, bytesToHex, bytesToText, hexToBytes, textToBytes } from '~/utils/bytes'
+import { aesGcmDecrypt, aesGcmEncrypt, isAesGcmAuthFailure, splitCombined, type AesTagBits } from '~/utils/crypto/aesgcm'
 
 defineProps<{ tool: ToolMeta }>()
 
@@ -97,7 +99,7 @@ function randomIv() {
   toast.success('已生成 12 字节随机 IV')
 }
 
-/** 真实计算：WebCrypto AES-GCM，仅在点击回调中执行 */
+/** 真实计算：统一走共享实现 ~/utils/crypto/aesgcm（WebCrypto AES-GCM），仅在点击回调中执行 */
 async function execute() {
   if (busy.value) return
   if (keyErr.value) {
@@ -123,23 +125,16 @@ async function execute() {
   const aadBytes = textToBytes(aad.value)
   busy.value = true
   try {
-    const cryptoKey = await crypto.subtle.importKey('raw', keyBytes as unknown as BufferSource, { name: 'AES-GCM' }, false, [
-      ws.value === 'enc' ? 'encrypt' : 'decrypt'
-    ])
-    const algo = {
-      name: 'AES-GCM',
-      iv: ivBytes as unknown as BufferSource,
-      additionalData: aadBytes as unknown as BufferSource,
-      tagLength: parseInt(tagLen.value, 10)
-    }
+    const tagLength = parseInt(tagLen.value, 10) as AesTagBits
+    const aesOpts = { key: keyBytes, iv: ivBytes, aad: aadBytes, tagLength }
     if (ws.value === 'enc') {
-      const out = new Uint8Array(await crypto.subtle.encrypt(algo, cryptoKey, textToBytes(input.value) as unknown as BufferSource))
-      const tb = tagBytes.value
+      const out = await aesGcmEncrypt(textToBytes(input.value), aesOpts)
+      const { ciphertext, tag } = splitCombined(out, tagLength)
       encResult.value = {
         combined: encOutEnc.value === 'hex' ? bytesToHex(out) : bytesToBase64(out),
         ivHex: bytesToHex(ivBytes),
-        ctHex: bytesToHex(out.subarray(0, out.length - tb)),
-        tagHex: bytesToHex(out.subarray(out.length - tb))
+        ctHex: bytesToHex(ciphertext),
+        tagHex: bytesToHex(tag)
       }
       decResult.value = null
       run.markOk(
@@ -160,7 +155,7 @@ async function execute() {
         return
       }
       try {
-        const out = new Uint8Array(await crypto.subtle.decrypt(algo, cryptoKey, r.bytes as unknown as BufferSource))
+        const out = await aesGcmDecrypt(r.bytes, aesOpts)
         const hex = bytesToHex(out)
         const t = bytesToText(out)
         decResult.value = t.error
@@ -176,7 +171,7 @@ async function execute() {
         // 与参数格式错误区分：认证失败专指 GCM 标签校验不通过
         encResult.value = null
         decResult.value = null
-        if (e instanceof DOMException && e.name === 'OperationError') {
+        if (isAesGcmAuthFailure(e)) {
           run.markFail('认证失败：密钥错误、密文被修改或 AAD 不一致（IV 与认证标签长度也须与加密时相同）')
         } else {
           run.markFail(`解密失败：${errMessage(e)}`)

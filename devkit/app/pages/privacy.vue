@@ -46,14 +46,27 @@ const saved = [
   { icon: 'sliders', tone: 'accent', name: '界面偏好', desc: '主题、代码字号、缩进、自动换行' },
   { icon: 'clock', tone: 'time', name: '最近使用记录', desc: '仅工具名称与访问时间' },
   { icon: 'star', tone: 'star', name: '收藏', desc: '工具标识与收藏时间，不含输入' },
+  { icon: 'key', tone: 'warn', name: '流程密钥', desc: '明文保存在 localStorage，可在偏好设置清空' },
   { icon: 'info', tone: 'tertiary', name: '可关闭项', desc: '以上均可在偏好设置中清空' }
 ]
 
 const unsaved = [
   { name: '输入正文', desc: '不含编辑器内容' },
-  { name: '密钥与 IV', desc: '不写入本地存储' },
+  { name: '流程输入与中间结果', desc: '只在页面内存中，刷新即消失' },
   { name: 'Token 与认证头', desc: '不记录、不入 URL' },
   { name: '原始文件', desc: '留在本机，不上传' }
+]
+
+/** 处理流程的三类本地数据：流程与非敏感参数、密钥字段、运行摘要 */
+const wfSaved = [
+  { name: '流程名称、说明与步骤顺序', desc: '纯文本，只描述编排结构' },
+  { name: '非敏感参数', desc: '缩进、算法、方向、编码等' },
+  { name: '密钥字段', desc: '密钥、私钥、IV、AAD，明文保存在 localStorage' }
+]
+
+const wfUnsaved = [
+  { name: '流程输入与每步输出', desc: '只在页面内存中，刷新即消失' },
+  { name: '中间结果与任何上传', desc: '相邻步骤直接传值，服务端收不到' }
 ]
 
 const triggers = [
@@ -180,6 +193,45 @@ const statsName = computed(() => (runtime.public.analytics.provider === 'cnzz' ?
           </div>
         </section>
       </div>
+
+      <section class="card--soft">
+        <div class="card__head">
+          <DkIcon name="key" :size="14" style="color: var(--warn)" />
+          <h2 class="card__title">处理流程的数据边界</h2>
+          <span class="grow"></span>
+          <span class="badge badge--warn">localStorage 不是密钥保险箱</span>
+        </div>
+        <p class="card__body">
+          运行输入和中间结果仅在本次页面内存中传递，不发送到服务器。<br />
+          流程配置会保存到本机浏览器；加解密步骤中的密钥仅在你确认风险后保存到 localStorage。
+        </p>
+        <div class="scope">
+          <section class="scope__col">
+            <h3 class="scope__title">会保存</h3>
+            <div v-for="s in wfSaved" :key="s.name" class="scope__row">
+              <DkIcon name="key" :size="14" style="color: var(--warn)" />
+              <span class="scope__name">{{ s.name }}</span>
+              <span class="grow"></span>
+              <span class="scope__desc">{{ s.desc }}</span>
+            </div>
+          </section>
+          <section class="scope__col">
+            <h3 class="scope__title">不会保存</h3>
+            <div v-for="u in wfUnsaved" :key="u.name" class="scope__row">
+              <DkIcon name="x" :size="14" style="color: var(--error)" />
+              <span class="scope__name">{{ u.name }}</span>
+              <span class="grow"></span>
+              <span class="scope__desc">{{ u.desc }}</span>
+            </div>
+          </section>
+        </div>
+        <p class="card__body">
+          密钥以明文写入 localStorage：同源页面脚本（XSS）、浏览器扩展、共享的浏览器配置与调试工具都可能读到它。「仅本地存储」不等于「安全存储」，这些密钥不受系统钥匙串保护。运行记录只保存状态、耗时与步骤摘要，不含输入与输出。
+        </p>
+        <p class="card__body">
+          清空入口在 <NuxtLink to="/settings">偏好设置</NuxtLink>：可以一次性清空全部密钥，也可以清空全部流程与运行记录；删除某个步骤或整条流程时，对应密钥会同步删除。
+        </p>
+      </section>
 
       <div class="duo">
         <article v-for="t in triggers" :key="t.title" class="card card--soft">
@@ -354,6 +406,13 @@ const statsName = computed(() => (runtime.public.analytics.provider === 'cnzz' ?
 .badge--ok {
   background: var(--ok-soft);
   color: var(--ok);
+}
+.badge--warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.card--soft .scope {
+  margin-top: 12px;
 }
 .principles,
 .duo {

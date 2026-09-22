@@ -16,7 +16,11 @@ const analyticsOn = computed(
 )
 
 const clearOpen = ref(false)
+const secretClearOpen = ref(false)
+const wfClearOpen = ref(false)
 const scope = reactive({ prefs: true, favorites: true, recent: true })
+
+const workflowStore = useWorkflows()
 
 const scopeCount = computed(
   () => Number(scope.prefs) + Number(scope.favorites) + Number(scope.recent)
@@ -59,6 +63,21 @@ function doReset() {
   reset()
   toast.success('偏好设置已恢复为默认值')
 }
+
+/** 只清密钥：步骤保留，重新填写即可继续跑 */
+function doClearSecrets() {
+  const res = workflowStore.clearSecrets()
+  secretClearOpen.value = false
+  if (res.ok) toast.success('已清空本机保存的密钥；相关步骤会显示「缺少密钥」，重新填写即可')
+  else toast.warning(res.error ?? '清空已保存密钥失败')
+}
+
+function doClearWorkflows() {
+  const res = workflowStore.clearAll()
+  wfClearOpen.value = false
+  if (res.ok) toast.success('已清空本机保存的流程与运行记录')
+  else toast.warning(res.error ?? '清空流程与运行记录失败')
+}
 </script>
 
 <template>
@@ -68,7 +87,7 @@ function doReset() {
         <span class="settings__icon"><DkIcon name="sliders" :size="17" /></span>
         <div>
           <h1 class="settings__name">偏好设置</h1>
-          <p class="settings__desc">偏好只保存在当前浏览器本地；输入内容、密钥与 Token 不会被保存。</p>
+          <p class="settings__desc">偏好只保存在当前浏览器本地；工具输入与 Token 不会被保存，处理流程的密钥仅在确认风险后明文保存到本机浏览器。</p>
         </div>
       </div>
       <NuxtLink to="/privacy" class="settings__local" title="了解本地处理与隐私">
@@ -208,12 +227,68 @@ function doReset() {
             <div class="row">
               <div class="row__info">
                 <span class="row__title">清除本地数据</span>
-                <span class="row__desc">可选择清除偏好、收藏与访问记录；输入内容与密钥从不保存，不在清除范围内。</span>
+                <span class="row__desc">可选择清除偏好、收藏与访问记录；输入内容从不保存，处理流程数据见下方「处理流程数据」。</span>
               </div>
               <DkButton size="sm" title="选择清除范围" @click="openClear">
                 <DkIcon name="alert-triangle" :size="13" style="color: var(--error)" />
                 <span style="color: var(--error)">选择清除范围…</span>
               </DkButton>
+            </div>
+          </section>
+
+          <section class="group">
+            <div class="group__head"><DkIcon name="workflow" :size="14" /><span>处理流程数据</span></div>
+            <div class="row">
+              <div class="row__info">
+                <span class="row__title mono">devkit-workflows-v2</span>
+                <span class="row__desc">处理流程：名称、说明、步骤顺序与非敏感参数（缩进、算法、方向、编码）。</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row__info">
+                <span class="row__title mono">devkit-workflow-secrets-v1</span>
+                <span class="row__desc">
+                  加解密步骤的密钥、私钥、IV 与 AAD，明文保存；localStorage 不是密钥保险箱，同源脚本、浏览器扩展与调试工具都可能读到。
+                </span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row__info">
+                <span class="row__title mono">devkit-workflow-runs-v1</span>
+                <span class="row__desc">运行记录：状态、耗时与步骤摘要，不含输入与输出。</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row__info">
+                <span class="row__title">流程输入与中间结果</span>
+                <span class="row__desc">从未写入本地存储，无需清理。</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row__info">
+                <span class="row__title">清空已保存密钥</span>
+                <span class="row__desc">删除本机保存的全部流程密钥；步骤会保留，但需要重新填写密钥。</span>
+              </div>
+              <DkButton size="sm" title="清空已保存密钥" @click="secretClearOpen = true">
+                <DkIcon name="key" :size="13" style="color: var(--error)" />
+                <span style="color: var(--error)">清空密钥…</span>
+              </DkButton>
+            </div>
+            <div class="row">
+              <div class="row__info">
+                <span class="row__title">清空全部流程与运行记录</span>
+                <span class="row__desc">删除本机保存的全部处理流程、它们对应的密钥与运行记录，清除后无法恢复。</span>
+              </div>
+              <DkButton size="sm" title="清空全部流程与运行记录" @click="wfClearOpen = true">
+                <DkIcon name="trash" :size="13" style="color: var(--error)" />
+                <span style="color: var(--error)">清空全部…</span>
+              </DkButton>
+            </div>
+            <div v-if="workflowStore.storageError.value" class="row">
+              <div class="row__info">
+                <span class="row__title" style="color: var(--error)">本地存储异常</span>
+                <span class="row__desc">{{ workflowStore.storageError.value }}</span>
+              </div>
             </div>
           </section>
         </div>
@@ -253,7 +328,9 @@ function doReset() {
         </div>
         <div class="qa">
           <p class="qa__q">清除本地数据会删除输入内容吗？</p>
-          <p class="notes__text">不会，因为输入内容与密钥从不保存；清除范围只有偏好、收藏与访问记录。</p>
+          <p class="notes__text">
+            不会，因为输入内容从不保存；清除范围只有偏好、收藏与访问记录。处理流程的密钥可在下方「处理流程数据」里清空。
+          </p>
         </div>
       </section>
     </div>
@@ -290,13 +367,53 @@ function doReset() {
 
       <div class="clear__tip">
         <DkIcon name="alert-triangle" :size="14" style="color: var(--warn)" />
-        <span>输入内容、密钥与 Token 从不保存，因此不在清除范围内。</span>
+        <span>输入内容与 Token 从不保存，因此不在清除范围内；处理流程的密钥请在下方「处理流程数据」中清空。</span>
       </div>
 
       <template #footer>
         <DkButton size="sm" @click="clearOpen = false"><DkIcon name="x" :size="13" />取消</DkButton>
         <DkButton size="sm" variant="danger" :disabled="scopeCount === 0" @click="doClear">
           <DkIcon name="check" :size="13" />确认清除
+        </DkButton>
+      </template>
+    </DkModal>
+
+    <DkModal
+      :open="secretClearOpen"
+      title="清空已保存密钥"
+      :danger="true"
+      width="520px"
+      @close="secretClearOpen = false"
+    >
+      <p class="clear__lead">将删除本机保存的全部处理流程密钥（密钥、私钥、IV 与 AAD，均为明文），清除后无法恢复。</p>
+      <div class="clear__tip">
+        <DkIcon name="alert-triangle" :size="14" style="color: var(--warn)" />
+        <span>流程与步骤会保留，但需要重新填写密钥；相关步骤会显示「缺少密钥」。流程输入与中间结果从未写入本地存储，不受影响。</span>
+      </div>
+      <template #footer>
+        <DkButton size="sm" @click="secretClearOpen = false"><DkIcon name="x" :size="13" />取消</DkButton>
+        <DkButton size="sm" variant="danger" @click="doClearSecrets">
+          <DkIcon name="check" :size="13" />确认清空密钥
+        </DkButton>
+      </template>
+    </DkModal>
+
+    <DkModal
+      :open="wfClearOpen"
+      title="清空全部流程与运行记录"
+      :danger="true"
+      width="520px"
+      @close="wfClearOpen = false"
+    >
+      <p class="clear__lead">将删除本机保存的全部处理流程、它们对应的密钥与全部运行记录，清除后无法恢复。</p>
+      <div class="clear__tip">
+        <DkIcon name="alert-triangle" :size="14" style="color: var(--warn)" />
+        <span>删除后需要重新从「预设流程」或「新建处理流程」开始搭建；流程输入与中间结果从未写入本地存储，不受影响。</span>
+      </div>
+      <template #footer>
+        <DkButton size="sm" @click="wfClearOpen = false"><DkIcon name="x" :size="13" />取消</DkButton>
+        <DkButton size="sm" variant="danger" @click="doClearWorkflows">
+          <DkIcon name="check" :size="13" />确认清空
         </DkButton>
       </template>
     </DkModal>
