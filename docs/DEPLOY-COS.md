@@ -298,16 +298,39 @@ cp scripts/launchd/com.dsh.cos-usage.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.dsh.cos-usage.plist
 ```
 
-**治本步骤（顺序不能反）**：
+**治本步骤（顺序不能反；2026-09-22 已在本桶执行完毕）**：
 
-1. **先在 CDN 侧开回源鉴权**：CDN 控制台 → 域名管理 → `www.t502.fun` → 访问控制 → **回源鉴权**，
-   按控制台提示开启并保存（各账号版本入口名称略有差异）。
-2. **验证站点仍正常**：`python3 scripts/cos-set-acl.py --verify`（CDN 首页应 200），
+1. **先在 CDN 侧开「私有存储桶访问」**（腾讯云**不叫「回源鉴权」**，按这个词是搜不到的）：
+   `CDN 控制台 → 域名管理 → www.t502.fun → 管理 → 基础配置 → 源站信息 → 主源站 → 编辑`
+   → 勾选 **私有存储桶访问** → 点旁边的 **「添加授权服务」** → 弹窗里勾「我同意以上授权」→ 确定 → 保存。
+   该弹窗会把一次**只读**授权写进**桶策略（Bucket Policy）**：
+
+   ```json
+   {"Effect":"Allow",
+    "Principal":{"qcs":["qcs::cam::uin/<主账号UIN>:service/cdn"]},
+    "Action":["name/cos:GetObject","name/cos:HeadObject","name/cos:OptionsObject"],
+    "Resource":["qcs::cos:ap-beijing:uid/1252844153:devkit-1252844153/*"]}
+   ```
+
+   保存后用 API 复核：`Origin.CosPrivateAccess` 应为 `on`，域名状态先 `processing`、约 3 分钟后回到 `online`。
+2. **等状态回到 `online` 再动权限**：`processing` 期间切私有读，回源可能被拒。
+3. **验证站点仍正常**：`python3 scripts/cos-set-acl.py --verify`（CDN 首页应 200），
    再在浏览器打开首页与任意工具页确认。
-3. **把桶切成私有读**：`python3 scripts/cos-set-acl.py --private --yes`
-4. **复验**：源站 `https://devkit-1252844153.cos.ap-beijing.myqcloud.com/index.html` 应变成 **403**，
-   CDN 仍是 200；隔天看 `node scripts/cos-usage-report.mjs --days 3`，直连下载应掉到 0。
-5. **回滚**：`python3 scripts/cos-set-acl.py --public-read --yes`
+4. **把桶切成私有读**：`python3 scripts/cos-set-acl.py --private --yes`
+5. **复验（三条都要过）**：
+   - 源站匿名访问应 **403**：`curl -o /dev/null -w '%{http_code}' https://devkit-1252844153.cos.ap-beijing.myqcloud.com/index.html`
+   - CDN 首页 200，且**冷路径**（随便造一个 `/__authcheck-<随机数>`）应 404 —— 返回 403/5xx 说明回源被拒；
+   - 强刷一个文件逼回源：`node scripts/cdn-purge.mjs https://www.t502.fun/sw.js`，等 20 秒取该文件应 200。
+6. **回滚**：`python3 scripts/cos-set-acl.py --public-read --yes`（瞬时恢复，站点即刻可用）。
 
-> ⚠️ 顺序反了会全站 403（CDN 回源被私有读拒掉）。切私有读后，COS 控制台的「预览/复制链接」、
-> `coscli cp` 下载、数据万象预览都需要签名 —— 这是预期的，那些正是直连流量的来源。
+> ⚠️ **两个实测坑（2026-09-22）**：
+> ① COS v5 签名的 `PUT /?acl` **只能签 `host`** —— 把 `x-cos-acl` 也放进 `q-header-list` 会被判
+> `SignatureDoesNotMatch`（`scripts/cos-set-acl.py` 的 `put_acl` 已按此修正）。
+> ② 切私有读后源站**不是立刻**变 403，有几秒传播延迟，别据此判定失败。
+>
+> ⚠️ **同样挂了 CDN 的裸域 `t502.fun`**：它的 `CosPrivateAccess` **仍是 off**。该域当前没有 DNS 记录、
+> 不承载访问，所以暂无影响；**但以后一旦给它加解析，回源会因私有读被拒（403）** —— 要么同样开一次
+> 「私有存储桶访问」，要么删掉这个 CDN 域名。
+>
+> 切私有读后，COS 控制台的「预览/复制链接」、`coscli cp` 下载、数据万象预览都需要签名 ——
+> 这是预期的，那些正是直连流量的来源。

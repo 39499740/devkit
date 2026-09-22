@@ -68,7 +68,9 @@ def get_acl(sid, skey, host):
 
 def put_acl(sid, skey, host, acl):
     params = {"acl": ""}
-    headers = {"host": host, "x-cos-acl": acl}
+    # 实测（2026-09-22）：v5 签名这里只能签 host —— 把 x-cos-acl 也写进 q-header-list 会被判
+    # SignatureDoesNotMatch；而把这个头发出去（不参与签名）是生效的。
+    headers = {"host": host}
     req = urllib.request.Request("https://" + host + "/?acl", data=b"", method="PUT")
     req.add_header("Authorization", sign(sid, skey, "PUT", "/", params, headers))
     req.add_header("x-cos-acl", acl)
