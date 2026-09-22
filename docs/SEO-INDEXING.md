@@ -95,8 +95,9 @@
 ```bash
 COS_BUCKET=devkit-1252844153 scripts/deploy-cos.sh   # 构建 + 同步
 node scripts/cdn-purge.mjs                            # 刷新 CDN（必须，见 DEPLOY-COS.md 第 7 节）
-node scripts/check-indexing-files.mjs                 # 核对线上 robots/sitemap.xml/sitemap.txt 与本地一致
+node scripts/check-indexing-files.mjs                 # 核对线上 robots/sitemap.xml/sitemap.txt/favicon 与本地一致
 BAIDU_PUSH_TOKEN=xxx node scripts/baidu-push.mjs      # 把 sitemap 推给百度
+node scripts/indexnow-push.mjs                        # 把 sitemap 推给 Bing / Yandex / Seznam / Naver（见第 8 节）
 ```
 
 不刷 CDN 的后果：百度抓到的是旧 HTML（旧 canonical、旧描述），收录结果会滞后甚至错误。
@@ -138,6 +139,7 @@ BAIDU_PUSH_TOKEN=xxx node scripts/baidu-push.mjs      # 把 sitemap 推给百度
 - **资源平台 sitemap 报「无法读取此站点地图」**：先跑 `node scripts/check-indexing-files.mjs` 证明服务端无问题，再按 2.5 节用「抓取诊断」取证 + 换 `sitemap.txt`
 - **GSC 报「DNS 错误」**：`t502.fun` 裸域在 DNSPod **没有任何 A/AAAA/CNAME 记录**（DoH 复核为 NODATA，只有 SOA），Googlebot 因此解析不到；不要在 Search Console 里为裸域另建资源，只提交 `https://www.t502.fun`。**判断 DNS 是否真有问题必须走 DoH**（`https://dns.google/resolve?name=…&type=A`）——本机 `dig` 会被代理 fake-ip 劫持到 `198.18.x.x`，据此 `curl` 得到的 SSL 报错是假象，不是裸域真的配了服务
 - **favicon 不能只留 PNG**：浏览器与部分爬虫会默认探测 `/favicon.ico`，缺失就是白拿一条 404。现由 `devkit/public/favicon.ico`（48/32/16 三尺寸 ICO）+ 首页 `rel="icon"` 声明提供，`scripts/check-indexing-files.mjs` 第 5 项会守住它
+- **IndexNow key 文件不能删**：`devkit/public/<key>.txt` 是 Bing / Yandex / Seznam / Naver 校验站点归属的凭据（文件名即 key、内容也是 key）。删掉或改内容，`scripts/indexnow-push.mjs` 会在自检阶段直接报 403 并退出
 
 ---
 
@@ -176,3 +178,41 @@ Google 不读百度资源平台的任何设置，需要单独做一次，步骤�
 2. **删除后重新提交**：Sitemap → 删掉 `sitemap.xml`、`sitemap.txt` 两条记录 → 重新提交 `sitemap.xml`。GSC 的失败状态不会自动回填，必须触发一次新读取。
 3. **确认提交归属**：sitemap 要提交在已验证的 `https://www.t502.fun`（网址前缀）或网域资源下，且与 `robots.txt` 中声明的地址一致。
 4. **不要空等**：收录不依赖 sitemap —— 抓取统计里页面已有 77% 的 200。
+
+---
+
+## 8. IndexNow（Bing / Yandex / Seznam / Naver，不需要账号）
+
+百度与 Google 之外的引擎里，Bing、Yandex、Seznam、Naver 都参与 **IndexNow** 协议：站点放一个校验 key 文件，POST 一次 URL 列表即可，双方都不需要注册账号。这是免账号通道里见效最快的一条。
+
+### 8.1 一次性准备（已由仓库完成）
+
+| 项 | 值 |
+|---|---|
+| key 文件 | `devkit/public/b4fd0b63a852e6bbe42a73720f6174c0.txt`（**文件名 = key，内容 = key**） |
+| 线上地址 | `https://www.t502.fun/b4fd0b63a852e6bbe42a73720f6174c0.txt` |
+| 推送脚本 | `scripts/indexnow-push.mjs`（读 sitemap → 自检 key → 分批提交，可复跑） |
+
+> key 文件必须留在 `devkit/public/` 并随每次发版同步；`.txt` 不在 PWA 预缓存 glob（`js/css/html/png/svg/ico/webmanifest`）里，所以新增它不会改变 `sw.js`。
+
+### 8.2 每次发版后跑一次
+
+```bash
+node scripts/indexnow-push.mjs            # 推送线上 sitemap.xml 的全部 URL
+node scripts/indexnow-push.mjs --dry-run  # 先看要提交什么，不发请求
+```
+
+状态码对照：`200` 全部接受 / `202` 已接受（key 校验待完成）都算成功；`400` 格式错；`403` key 校验失败（key 文件访问不到或内容不符）；`422` URL 不属于该 host；`429` 提交过于频繁。
+
+> 协议要求**同一 URL 每天不要重复提交**，发版后跑一次即可，别放进高频定时任务。排障时可用 `INDEXNOW_ENDPOINT=https://www.bing.com/indexnow` 只打 Bing。
+
+### 8.3 怎么确认这些引擎收没收录
+
+`site:` 在 Bing 上经常被忽略并回退到无关结果（2026-09-22 实测 `site:www.t502.fun` 返回的是美股新闻），别只看 site:。用「站点独有文案 + 引号」配合 RSS 通道更可靠：
+
+```bash
+curl -s "https://cn.bing.com/search?q=%22在线开发者工具箱%22&format=rss" | grep -o '<title>[^<]*</title>'
+# 出现自己的标题才算收录；出现无关结果即未收录
+```
+
+360 是唯一直接给收录数的引擎：打开 `https://www.so.com/s?q=site%3Awww.t502.fun`，结果页头部的站点信息卡会写「该网站约 N 个网页被360搜索收录」。
