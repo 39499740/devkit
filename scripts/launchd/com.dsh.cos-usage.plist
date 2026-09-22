@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  COS/CDN 用量体检 · 每日定时任务（每天 09:30 检查有多少流量绕过 CDN 直连源站）
+  安装（在仓库根执行）：
+    cp scripts/launchd/com.dsh.cos-usage.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.dsh.cos-usage.plist
+  查看：launchctl list | grep cos-usage ；日志在 .tools/logs/cos-usage-<日期>.log
+  卸载：launchctl unload ~/Library/LaunchAgents/com.dsh.cos-usage.plist && rm ~/Library/LaunchAgents/com.dsh.cos-usage.plist
+  说明：plist 里必须是绝对路径（launchd 不展开 ~）；机器休眠时错过的时间点会在唤醒后补跑；
+        触发阈值时脚本退出码为 1，launchctl 会把它记为一次非 0 退出（这是有意的告警信号）。
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.dsh.cos-usage</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/hao/WebstormProjects/web_tools/scripts/cos-usage-daily.sh</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>9</integer>
+    <key>Minute</key>
+    <integer>30</integer>
+  </dict>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>StandardOutPath</key>
+  <string>/Users/hao/WebstormProjects/web_tools/.tools/logs/launchd-cos-usage.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/hao/WebstormProjects/web_tools/.tools/logs/launchd-cos-usage.err.log</string>
+</dict>
+</plist>

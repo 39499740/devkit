@@ -228,9 +228,11 @@ COS_BUCKET=devkit-1250000000 scripts/deploy-cos.sh          # 构建 + 同步
 SKIP_BUILD=1 COS_BUCKET=devkit-1250000000 scripts/deploy-cos.sh   # 只同步已有产物
 ```
 
-脚本会重新 `npm run generate` 并同步（含 `-r --delete --force`）。因为 `sw.js` 是 300 秒短缓存、`_nuxt/` 文件名带 hash 长缓存，发版后用户最多 5 分钟就会拿到新版本。
+脚本会重新 `npm run generate` 并同步（含 `-r --delete --force`），**并在最后自动刷新 CDN 缓存**（`PURGE=0` 可跳过）。
+缓存策略：`_nuxt/` 文件名带 hash → 1 年 `immutable`；入口文件（html / sw.js / manifest / robots / sitemap）→ 1 小时。
+HTML 从 300 秒提到 1 小时是为了少回源（回源流量也计费），代价是发版必须刷新缓存，所以第 3 步默认自动执行。
 
-如果中间挂了 CDN，还需要**刷新 CDN 缓存**：CDN 控制台 → 缓存刷新 → 提交 `/`（目录刷新）与 `/_nuxt/`，或全量刷新。
+如果中间挂了 CDN，也可以手动刷新：CDN 控制台 → 缓存刷新 → 提交 `/`（目录刷新）与 `/_nuxt/`，或全量刷新。
 
 > **实测告警（2026-09-20）**：本站在 CDN 后面的 HTML 并不跟随源站的 `max-age=300`——发版后实测根路径仍返回 `x-cache-lookup: Cache Hit`、`age=6518` 的旧 `index.html`，而 `_nuxt/` 已被 `--delete` 同步删掉旧分片，旧 HTML 会引用到不存在的资源。**每次发版后必须刷新缓存**，或把 CDN 规则里的 HTML 缓存改成「遵循源站」。
 >
@@ -248,9 +250,10 @@ SKIP_BUILD=1 COS_BUCKET=devkit-1250000000 scripts/deploy-cos.sh   # 只同步已
 
 ## 8. 可选增强
 
-- **CDN 加速**：自定义域名换成 CDN 域名，回源到 COS 静态网站源站。缓存规则同上（`_nuxt/*` 长缓存、html/sw.js 短缓存）。国内 CDN 同样要求域名已备案。
-- **访问日志**：COS 桶 → 日志管理，可投递到另一个桶，便于看流量来源。
-- **成本告警**：费用中心 → 预算与告警，设一个每月 20 元的阈值提醒，防止被刷流量。
+- **CDN 加速**：自定义域名换成 CDN 域名，回源到 COS 静态网站源站。缓存规则同上（`_nuxt/*` 长缓存、html/sw.js 1 小时）。
+- **访问日志**：COS 桶 → 日志管理，可投递到另一个桶，便于看流量来源（当前未开启，`GET ?logging` 为空）。
+- **成本告警**：先跑 `node scripts/cos-usage-report.mjs --days 7`，把「直连源站」的量级摸清，再按第 10 节把直连掐掉；
+  费用中心 → 预算与告警可另设每月阈值提醒，防止被刷流量。
 - **自动化**：把 `COS_BUCKET` 与密钥放进 CI（GitHub Actions Secrets），push main 自动发布；密钥建议用最小权限的子账号（仅该桶的读写）。
 
 ---
@@ -263,5 +266,48 @@ SKIP_BUILD=1 COS_BUCKET=devkit-1250000000 scripts/deploy-cos.sh   # 只同步已
 | 工具页能开但刷新变 404 | 错误文档未配或响应码不是 200 | 按第 4 步改 |
 | 页面样式全丢 | `_nuxt/` 没传全 | 重新整目录同步 |
 | 换域名后打不开 | 域名未备案 / CNAME 未生效 / 证书没绑 | 检查解析与证书 |
-| 发版后还是旧页面 | `index.html` 被长缓存 | 用脚本同步（300 秒短缓存）或刷新 CDN |
+| 发版后还是旧页面 | `index.html` 现在缓存 1 小时 | `scripts/deploy-cos.sh` 已自动刷新 CDN；手动补刷用 `node scripts/cdn-purge.mjs` |
+| 账单里出现「COS 外网下行流量」 | 有人绕过 CDN 直连源站域名 | `node scripts/cos-usage-report.mjs --days 7` 确认，按第 10 节收紧读权限 |
+| 统计报表里混进源站域名的 PV | 埋点按站点 ID 归属、与访问域名无关 | 已用 `DEVKIT_ANALYTICS_HOSTS` 限制在 `www.t502.fun`，见 docs/ANALYTICS.md |
 | 字体加载慢或闪烁 | 404 个 woff2 分片按需加载，首次访问才会缓存 | 正常现象；后续访问走 `devkit-fonts` 缓存 |
+
+---
+
+## 10. 源站域名防直连（省 COS 外网下行流量）
+
+**问题**：桶是**公有读**（`python3 scripts/cos-set-acl.py --check` 会打印 `AllUsers READ`），
+任何人都能直接访问 `devkit-1252844153.cos.ap-beijing.myqcloud.com/...` 绕过 CDN 下载。
+腾讯云口径里，这种「直接用浏览器通过 COS 域名访问资源」的流量走 **COS 外网下行流量** 计费项，
+单价高于 CDN 流量，而且完全不受 CDN 缓存与防盗链约束。
+
+**2026-09-22 实测**（`node scripts/cos-usage-report.mjs --days 7 --hourly`）：
+
+| 日期 | 直连下载 | COS 请求 | CDN 回源请求 | 直连占比 | CDN 命中率 |
+|---|---|---|---|---|---|
+| 2026-09-20 | 185 MB | 12,137 | 189 | 98.4% | 57.0% |
+| 2026-09-21 | 110 MB | 20,734 | 3,579 | 82.7% | 48.2% |
+
+**判据**：`COS 收到的请求数 ≫ CDN 回源请求数` ⇒ 多出来的就是绕过 CDN 的直连请求；
+逐小时曲线的峰点与百度统计里的机器访问时刻一致（01/02/03/05/06/07 点）。
+
+**每天自动体检**：`scripts/cos-usage-daily.sh` + `scripts/launchd/com.dsh.cos-usage.plist`（每天 09:30），
+超阈值时退出码 1、日志落在 `.tools/logs/cos-usage-<日期>.log`。
+
+```bash
+cp scripts/launchd/com.dsh.cos-usage.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.dsh.cos-usage.plist
+```
+
+**治本步骤（顺序不能反）**：
+
+1. **先在 CDN 侧开回源鉴权**：CDN 控制台 → 域名管理 → `www.t502.fun` → 访问控制 → **回源鉴权**，
+   按控制台提示开启并保存（各账号版本入口名称略有差异）。
+2. **验证站点仍正常**：`python3 scripts/cos-set-acl.py --verify`（CDN 首页应 200），
+   再在浏览器打开首页与任意工具页确认。
+3. **把桶切成私有读**：`python3 scripts/cos-set-acl.py --private --yes`
+4. **复验**：源站 `https://devkit-1252844153.cos.ap-beijing.myqcloud.com/index.html` 应变成 **403**，
+   CDN 仍是 200；隔天看 `node scripts/cos-usage-report.mjs --days 3`，直连下载应掉到 0。
+5. **回滚**：`python3 scripts/cos-set-acl.py --public-read --yes`
+
+> ⚠️ 顺序反了会全站 403（CDN 回源被私有读拒掉）。切私有读后，COS 控制台的「预览/复制链接」、
+> `coscli cp` 下载、数据万象预览都需要签名 —— 这是预期的，那些正是直连流量的来源。

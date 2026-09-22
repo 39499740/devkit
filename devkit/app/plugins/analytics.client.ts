@@ -2,12 +2,19 @@
  * 站长统计：只在浏览器端注入第三方统计脚本，未配置 provider / siteId 时完全不加载。
  * - 单页路由切换手动补报 PV（第三方脚本自身只统计进入页面时的第一次）；
  * - 只上报路径，不带 query / hash，避免把任何输入带出去；
+ * - 只在本站域名（`analytics.hosts` 白名单）下上报：统计服务按埋点 ID 归属站点、
+ *   与访问域名无关，COS 默认域名 / 数据万象签名预览链接渲染同一份 HTML 时会把那次访问
+ *   计进来污染报表（2026-09-22 事故），这里从源头上掐掉；
  * - 尊重 DNT / GPC，开发环境不上报；
  * - 偏好设置关闭「匿名访问统计」后不再加载脚本，已加载的也不再补报。
  */
+import { isAnalyticsHostAllowed, parseAnalyticsHosts } from '~/utils/analytics-host'
+
 interface AnalyticsConfig {
   provider: string
   siteId: string
+  /** 允许上报的域名白名单，逗号分隔（构建期由 DEVKIT_ANALYTICS_HOSTS 注入） */
+  hosts?: string
 }
 
 interface AnalyticsAdapter {
@@ -52,6 +59,9 @@ export default defineNuxtPlugin((nuxtApp) => {
   const cfg = useRuntimeConfig().public.analytics as AnalyticsConfig
   const adapter = cfg.provider ? ADAPTERS[cfg.provider] : undefined
   if (!adapter || import.meta.dev) return
+
+  // 域名闸门：源站域名（*.cos.<region>.myqcloud.com）、签名预览链接、镜像站一律不上报
+  if (!isAnalyticsHostAllowed(window.location.hostname, parseAnalyticsHosts(cfg.hosts))) return
 
   const { queue, trackPageview } = adapter
   const src = adapter.src(cfg)

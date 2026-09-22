@@ -10,8 +10,9 @@
 
 | 位置 | 作用 |
 |---|---|
-| `devkit/app/plugins/analytics.client.ts` | 只在浏览器端注入第三方脚本；默认不配置就不加载 |
-| `devkit/nuxt.config.ts` | 构建开关：`DEVKIT_ANALYTICS`（provider）+ `DEVKIT_ANALYTICS_ID`（站点 ID） |
+| `devkit/app/plugins/analytics.client.ts` | 只在浏览器端注入第三方脚本；默认不配置就不加载；**只在本站域名下上报** |
+| `devkit/app/utils/analytics-host.ts` | 域名白名单的解析与匹配（纯函数，有单测） |
+| `devkit/nuxt.config.ts` | 构建开关：`DEVKIT_ANALYTICS`（provider）+ `DEVKIT_ANALYTICS_ID`（站点 ID）+ `DEVKIT_ANALYTICS_HOSTS`（域名白名单） |
 | `devkit/app/composables/usePrefs.ts` | 访客偏好 `analytics`（默认开），写入 `devkit.prefs.v1` |
 | `devkit/app/pages/settings.vue` | 「偏好设置 → 动效与记录 → 匿名访问统计」开关（未配置统计时不显示） |
 | `devkit/app/pages/privacy.vue` | 「访问统计」小节：说明采集范围、可关闭路径 |
@@ -21,6 +22,10 @@
 - **单页路由切换补报 PV**：第三方脚本（百度/CNZZ）只统计首次进入的那一次，
   本站在 `router.afterEach` 里手动补报 `/tools/xxx` 这类客户端跳转，避免「PV 只有首页」。
 - **只上报 path**：不带 query 与 hash，也不碰输入框内容、密钥、Token、文件。
+- **只在白名单域名下上报**：`DEVKIT_ANALYTICS_HOSTS`（默认 `www.t502.fun,t502.fun`）。
+  统计服务按埋点 ID 归属站点、**不看访问域名**，于是同一份 HTML 在别的域名下被渲染
+  （COS 桶默认域名 `*.cos.<region>.myqcloud.com`、数据万象签名预览链接、镜像站）也会计进本站报表。
+  2026-09-22 就出现过：报表里混进 17 条源站地址的 PV。现在这些域名下既不注入脚本也不上报。
 - **不重复计数**：进入页面时由第三方脚本自动统计一次，插件记下该 path，路由变化时才补报。
 - **尊重用户**：`DNT` / `GPC` 直接退出；开发环境（`npm run dev`）不上报；
   访客在设置里关掉后，不再加载脚本、已加载的也不再补报。
@@ -36,6 +41,8 @@
    ```
 
    注意这是**构建期**变量：改完必须重新 `npm run generate` + 重新上传，只改文件不改产物不会生效。
+   同期变量 `DEVKIT_ANALYTICS_HOSTS` 控制「哪些域名下才上报」，默认 `www.t502.fun,t502.fun`；
+   想临时用别的域名（例如 `dev.example.com`）预览统计效果时，把它加进去即可，留空表示不限制。
 3. **看数据**：部署后打开站点 → 统计后台「实时访客」应能看到自己；再点几个工具页，
    等 10 分钟左右看「页面分析 → 页面访问量（PV）」是否逐页出现。
 
@@ -53,6 +60,7 @@
 ```bash
 cd devkit
 npm run typecheck
+npm test                                       # 含 tests/analytics-host.test.mjs（域名白名单用例）
 DEVKIT_ANALYTICS=baidu DEVKIT_ANALYTICS_ID=test-id npm run generate
 ```
 
@@ -61,7 +69,9 @@ DEVKIT_ANALYTICS=baidu DEVKIT_ANALYTICS_ID=test-id npm run generate
 - 静态产物 HTML 里**没有**统计 `<script>` 标签（脚本由客户端注入，保证关掉开关就不加载）；
 - 用 Playwright 打开产物，断言首屏不发统计请求之外，跳转到 `/tools/xxx` 后
   `window._hmt` 里出现 `['_trackPageview', '/tools/xxx']`；
-- 不带环境变量构建时，页面全程没有任何指向统计域名的请求。
+- 不带环境变量构建时，页面全程没有任何指向统计域名的请求；
+- 域名白名单（单测覆盖）：`www.t502.fun` / 子域放行；`devkit-1252844153.cos.ap-beijing.myqcloud.com`、
+  `t502.fun.evil.com`、`localhost` 一律拒绝；白名单留空 = 不限制。
 
 ## 5. 想换成别的统计服务
 
