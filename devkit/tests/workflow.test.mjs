@@ -232,10 +232,23 @@ export const run = async () => {
   eqj('含密钥的预设 4 条', secretPresets.map((p) => p.key).sort(), ['aes-response', 'request-sign', 'sm-cipher', 'sm2-verify'])
   await rejects('缺风险确认时不允许构建含密钥预设', () => buildWorkflowFromPreset(findPreset('aes-response')), /必须先确认风险/)
   const consent = makeConsent(1700000000000)
-  const aesPreset = buildWorkflowFromPreset(findPreset('aes-response'), { consent, now: 1700000000000 })
+  const aesPreset = buildWorkflowFromPreset(findPreset('aes-response'), { consent })
   ok(
     '预设的敏感步骤带上确认记录与 secretRef',
     aesPreset.steps[1].consent?.accepted === true && aesPreset.steps[1].secretRef === aesPreset.steps[1].id
+  )
+  // 回归：同一含密钥预设允许重复添加，两个实例不能共用流程 ID / 步骤 ID，
+  // 否则密钥按 (workflowId, stepId) 存储时会互相覆盖
+  const aesPresetTwin = buildWorkflowFromPreset(findPreset('aes-response'), { consent })
+  ok('重复添加同一预设：流程 ID 不同', aesPreset.id !== aesPresetTwin.id, `${aesPreset.id} / ${aesPresetTwin.id}`)
+  ok(
+    '重复添加同一预设：步骤 ID 不重复',
+    aesPreset.steps.every((s, i) => s.id !== aesPresetTwin.steps[i].id),
+    aesPreset.steps.map((s) => s.id).join(',')
+  )
+  ok(
+    '重复添加同一预设：secretRef 指向自己的步骤',
+    aesPresetTwin.steps.every((s) => !s.secretRef || s.secretRef === s.id)
   )
 
   const jsonText = JSON.stringify({ order: { id: 'o-1', total: 199.5 } })

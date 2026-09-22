@@ -144,8 +144,17 @@ export function clearSecrets(kv: KvStore | null): PersistResult {
   }
 }
 
+/**
+ * 密钥记录一律按 (workflowId, stepId) 定位。
+ * 不同流程出现相同 stepId 是正常情况（重复添加同一预设、重复导入同一份文件），
+ * 只按 stepId 匹配会让后写入的流程删掉前一条流程的密钥记录。
+ */
+function isSameSecret(s: StoredSecret, workflowId: string, stepId: string): boolean {
+  return s.stepId === stepId && s.workflowId === workflowId
+}
+
 export function secretOf(file: SecretsFile, workflowId: string, stepId: string): StoredSecret | undefined {
-  return file.items.find((s) => s.stepId === stepId && s.workflowId === workflowId)
+  return file.items.find((s) => isSameSecret(s, workflowId, stepId))
 }
 
 export function secretFields(file: SecretsFile, workflowId: string, stepId: string): Record<string, string> {
@@ -166,11 +175,11 @@ export function upsertSecret(
   args: { workflowId: string; stepId: string; fields: Record<string, string>; now: number }
 ): SecretsFile {
   const fields = compact(args.fields)
-  const items = file.items.filter((s) => s.stepId !== args.stepId)
+  const items = file.items.filter((s) => !isSameSecret(s, args.workflowId, args.stepId))
   if (!Object.keys(fields).length) return { ...file, items }
-  const prev = file.items.find((s) => s.stepId === args.stepId)
+  const prev = file.items.find((s) => isSameSecret(s, args.workflowId, args.stepId))
   items.push({
-    id: prev?.id ?? `sec-${args.stepId}`,
+    id: prev?.id ?? `sec-${args.workflowId}-${args.stepId}`,
     workflowId: args.workflowId,
     stepId: args.stepId,
     fields,
@@ -180,18 +189,18 @@ export function upsertSecret(
   return { ...file, items }
 }
 
-export function removeSecretOfStep(file: SecretsFile, stepId: string): SecretsFile {
-  return { ...file, items: file.items.filter((s) => s.stepId !== stepId) }
+export function removeSecretOfStep(file: SecretsFile, workflowId: string, stepId: string): SecretsFile {
+  return { ...file, items: file.items.filter((s) => !isSameSecret(s, workflowId, stepId)) }
 }
 
 export function removeSecretsOfWorkflow(file: SecretsFile, workflowId: string): SecretsFile {
   return { ...file, items: file.items.filter((s) => s.workflowId !== workflowId) }
 }
 
-/** 删除步骤/流程时同步清理，避免密钥记录变成孤儿 */
-export function removeSecretsOfSteps(file: SecretsFile, stepIds: string[]): SecretsFile {
+/** 删除步骤/流程时同步清理，避免密钥记录变成孤儿；只清理该流程下的步骤 */
+export function removeSecretsOfSteps(file: SecretsFile, workflowId: string, stepIds: string[]): SecretsFile {
   const drop = new Set(stepIds)
-  return { ...file, items: file.items.filter((s) => !drop.has(s.stepId)) }
+  return { ...file, items: file.items.filter((s) => !(s.workflowId === workflowId && drop.has(s.stepId))) }
 }
 
 /** 必填敏感字段（如 HMAC 密钥、AES 密钥）缺失时给出字段定义，便于提示「缺少密钥」 */

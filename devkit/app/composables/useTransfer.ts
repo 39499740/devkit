@@ -6,8 +6,6 @@ import { stashPayload, takePayload, type TransferIntent, type TransferPayload } 
 import { isSensitiveStep, stepDef } from '~/utils/workflow'
 import type { StepType } from '~/utils/workflow'
 
-export type { TransferPayload }
-
 export interface TransferTarget {
   slug: string
   name: string

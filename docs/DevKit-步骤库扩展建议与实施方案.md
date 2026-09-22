@@ -483,4 +483,4 @@ const executors: Record<StepType, StepExecutor> = {
 - 线上状态：`www.t502.fun` 的 `/privacy/` 无本次新增文案（「处理流程的数据边界」「localStorage 不是密钥保险箱」），`/workflows/index.html` 与本地 `.output/public` 的 sha256 不一致 → 线上仍是 `03a6e63` 的 8 步版本。
 - 交付文件计数订正：本轮为 **19 个已跟踪文件改动 + 29 个新代码/测试/脚本文件**（另有 1 个未跟踪的方案文档即本文件），不是「12 个新文件」。
 - 既有测试断言 `stepLibrary.length === 24` 与字段 `control` 白名单，新增步骤时 catalog / executors 任一遗漏都会被这条用例挡住。
-
+- 复审修复（同日）：密钥记录原先只按 `stepId` 单键定位，重复添加同一含密钥预设（或重复导入同一份文件）时，后一条流程写密钥会删掉前一条的记录，表现为「返回第一条流程密钥与 IV 变空、提示缺少密钥」。现改为**一律按 `(workflowId, stepId)` 定位**（`upsertSecret` / `removeSecretOfStep` / `removeSecretsOfSteps`），预设实例改为生成独立流程 ID 与步骤 ID，并补 11 条回归用例（重复预设密钥隔离、删除与清空按流程隔离、实例 ID 不重复）与一条可复跑的 ego-browser e2e（`npm run generate && npm run test:e2e` → `tests/e2e/preset-secret-isolation.mjs`，在真实页面上重复添加同一预设、分别填密钥、删除其中一条，断言两条流程互不影响）。

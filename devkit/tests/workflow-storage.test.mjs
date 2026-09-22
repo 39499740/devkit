@@ -89,10 +89,26 @@ export const run = async () => {
   file = upsertSecret(file, { workflowId: 'wf-1', stepId: 's2', fields: { key: 'k3' }, now: 3000 })
   eqj('另一流程的密钥按 stepId 隔离', secretFields(removeSecretsOfWorkflow(file, 'wf-1'), 'wf-1', 's1').key, undefined)
   ok('按流程删除只影响该流程', removeSecretsOfWorkflow(file, 'wf-1').items.length === 0)
-  ok('按步骤批量删除', removeSecretsOfSteps(file, ['s1']).items.every((s) => s.stepId !== 's1'))
-  ok('单步删除', removeSecretOfStep(file, 's1').items.every((s) => s.stepId !== 's1'))
+  ok('按步骤批量删除', removeSecretsOfSteps(file, 'wf-1', ['s1']).items.every((s) => s.stepId !== 's1'))
+  ok('单步删除', removeSecretOfStep(file, 'wf-1', 's1').items.every((s) => s.stepId !== 's1'))
   const emptied = upsertSecret(file, { workflowId: 'wf-1', stepId: 's1', fields: { key: '' }, now: 4000 })
   ok('字段全空时删除记录，不留空壳', emptied.items.every((s) => s.stepId !== 's1'))
+
+  // ── 回归：不同流程出现相同 stepId（重复添加同一含密钥预设、重复导入同一文件）──
+  // 密钥记录必须按 (workflowId, stepId) 定位，否则后一条流程保存密钥会抹掉前一条的记录
+  const SAME_STEP = 'aes-response-s2'
+  let shared = upsertSecret(emptySecrets(), { workflowId: 'wf-a', stepId: SAME_STEP, fields: { key: 'KEY-A', iv: 'IV-A' }, now: 1000 })
+  shared = upsertSecret(shared, { workflowId: 'wf-b', stepId: SAME_STEP, fields: { key: 'KEY-B' }, now: 2000 })
+  eqj('重名步骤：两条流程各留一条密钥记录', shared.items.length, 2)
+  eqj('重名步骤：第一条流程的密钥不被覆盖', secretFields(shared, 'wf-a', SAME_STEP).key, 'KEY-A')
+  eqj('重名步骤：第一条流程的 IV 不被覆盖', secretFields(shared, 'wf-a', SAME_STEP).iv, 'IV-A')
+  eqj('重名步骤：第二条流程写入自己的密钥', secretFields(shared, 'wf-b', SAME_STEP).key, 'KEY-B')
+  const removedA = removeSecretOfStep(shared, 'wf-a', SAME_STEP)
+  eqj('重名步骤：删除一条流程的步骤不影响另一条', secretFields(removedA, 'wf-b', SAME_STEP).key, 'KEY-B')
+  eqj('重名步骤：删除只移除本流程的记录', removedA.items.length, 1)
+  eqj('重名步骤：批量删除同样按流程隔离', secretFields(removeSecretsOfSteps(shared, 'wf-a', [SAME_STEP]), 'wf-b', SAME_STEP).key, 'KEY-B')
+  const clearedA = upsertSecret(shared, { workflowId: 'wf-a', stepId: SAME_STEP, fields: { key: '' }, now: 3000 })
+  eqj('重名步骤：清空某流程的密钥不动另一条', secretFields(clearedA, 'wf-b', SAME_STEP).key, 'KEY-B')
 
   // ── 写入失败必须如实返回 ──
   const saveFail = persistSecrets(quotaKv(), file)

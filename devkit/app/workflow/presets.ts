@@ -7,6 +7,7 @@
  * 预设的每一步都必须能真实跑通（单测会端到端执行）。
  */
 import { createStep, defaultConfig, isSensitiveStep } from './catalog'
+import { uid } from './storage'
 import type { SecretConsent, StepConfig, StepType, Workflow, WorkflowStep } from './types'
 
 export interface PresetStep {
@@ -129,15 +130,16 @@ export function presetNeedsSecret(preset: WorkflowPreset): boolean {
 export interface BuildPresetOptions {
   /** 敏感步骤必须带上这个确认记录；缺失时抛错而不是伪造一个 */
   consent?: SecretConsent
-  now?: number
 }
 
-/** 用确定性 id 构建流程：同一预设每次构建结果一致，便于预渲染与测试比对 */
+/**
+ * 从预设构建流程：每次构建都生成独立的流程 ID 与步骤 ID。
+ * 同一预设允许被添加多次（例如两个接口各解密一次），实例之间不能共用步骤 ID——
+ * 密钥记录按 (workflowId, stepId) 定位，共用 ID 会让后添加的实例覆盖前一个的密钥。
+ */
 export function buildWorkflowFromPreset(preset: WorkflowPreset, opts: BuildPresetOptions = {}): Workflow {
-  const now = opts.now ?? Date.now()
-  const steps: WorkflowStep[] = preset.steps.map((s, i) => {
+  const steps: WorkflowStep[] = preset.steps.map((s) => {
     const step = createStep(s.type, { ...defaultConfig(s.type), ...(s.config ?? {}) })
-    step.id = `${preset.key}-s${i + 1}`
     if (isSensitiveStep(s.type)) {
       if (!opts.consent) throw new Error(`预设「${preset.name}」包含密钥步骤，必须先确认风险`)
       step.secretRef = step.id
@@ -145,7 +147,7 @@ export function buildWorkflowFromPreset(preset: WorkflowPreset, opts: BuildPrese
     }
     return step
   })
-  return { id: `wf-${preset.key}`, name: preset.name, desc: preset.desc, steps }
+  return { id: uid('wf'), name: preset.name, desc: preset.desc, steps }
 }
 
 /** 首次使用时的默认流程：三条都不含密钥，可直接运行 */

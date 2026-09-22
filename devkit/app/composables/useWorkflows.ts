@@ -206,7 +206,8 @@ export function useWorkflows() {
       w.id === id ? { ...w, steps: w.steps.filter((_, i) => i !== index) } : w
     )
     if (step && isSensitiveStep(step.type)) {
-      secrets.value = removeSecretOfStep(secrets.value, step.id)
+      // 密钥按 (workflowId, stepId) 定位：别的流程可能正好有同名步骤
+      secrets.value = removeSecretOfStep(secrets.value, id, step.id)
       persistSecretsState()
     }
     persistWorkflowsState()
@@ -346,8 +347,8 @@ export function useWorkflows() {
     if (presetSecretTypes(preset).length && !isCurrentConsent(opts.consent)) {
       throw new Error(`预设「${preset.name}」包含密钥步骤，需要先确认风险后才能添加`)
     }
-    const wf = buildWorkflowFromPreset(preset, { consent: opts.consent, now: Date.now() })
-    wf.id = uid('wf')
+    // 构建即产生独立流程 ID 与步骤 ID：同一预设可以重复添加，密钥互不覆盖
+    const wf = buildWorkflowFromPreset(preset, { consent: opts.consent })
     workflows.value = [...workflows.value, wf]
     persistWorkflowsState()
     toast.success(`已添加预设「${wf.name}」，共 ${wf.steps.length} 步`)

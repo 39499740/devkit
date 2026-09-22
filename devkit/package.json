@@ -12,6 +12,7 @@
     "typecheck": "node scripts/typecheck.mjs",
     "test": "node tests/run.mjs",
     "test:dom": "node tests/dom.mjs",
+    "test:e2e": "node tests/e2e/preset-secret-isolation.mjs",
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
