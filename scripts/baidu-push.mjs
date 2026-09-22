@@ -21,9 +21,16 @@ import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const args = process.argv.slice(2)
+const argValue = (name) => {
+  const i = args.indexOf(name)
+  return i >= 0 ? args[i + 1] : undefined
+}
 const dryRun = args.includes('--dry-run')
 const reset = args.includes('--reset')
-const source = args.find((a) => !a.startsWith('--')) || join(root, 'devkit/.output/public/sitemap.xml')
+const mark = Number(argValue('--mark') || 0)
+const source =
+  args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--mark') ||
+  join(root, 'devkit/.output/public/sitemap.xml')
 
 const site = process.env.BAIDU_PUSH_SITE || 'https://www.t502.fun'
 const token = process.env.BAIDU_PUSH_TOKEN
@@ -75,6 +82,22 @@ if (!batch.length) {
   console.log('没有待推 URL：全部推过了。要重推用 --reset 或 BAIDU_PUSH_FORCE=1')
   process.exit(0)
 }
+
+// 手工提交（资源平台「手动提交」）时用它记账：--mark N 把「接下来会推的 N 条」直接标为已提交，
+// 使它和 API 推送共用同一份游标，避免之后 API 推送重复消耗配额。
+if (mark > 0) {
+  const markBatch = pending.slice(0, mark)
+  const today = new Date().toISOString().slice(0, 10)
+  for (const u of markBatch) pushed[u] = today
+  await mkdir(dirname(STATE), { recursive: true })
+  await writeFile(STATE, JSON.stringify(pushed, null, 2) + '\n')
+  console.log(`已标记 ${markBatch.length} 条为已提交（${today}）：`)
+  markBatch.forEach((u, i) => console.log(`  ${i + 1}. ${u}`))
+  const leftAfterMark = all.filter((u) => !pushed[u]).length
+  console.log(`累计 ${all.length - leftAfterMark}/${all.length} 条｜剩余 ${leftAfterMark} 条`)
+  process.exit(0)
+}
+
 if (dryRun) {
   console.log(`[dry-run] 本次将推送 ${batch.length} 条：`)
   batch.forEach((u, i) => console.log(`  ${i + 1}. ${u}`))
