@@ -34,13 +34,34 @@ if [ ! -x "$NODE" ]; then
   exit 1
 fi
 
-out="$("$NODE" "$ROOT/scripts/baidu-push.mjs" 2>&1)"
-code=$?
-{ echo "---- $(date '+%F %T') exit=$code ----"; printf '%s\n' "$out"; } >>"$LOG"
+# 百度侧会出现瞬时错误（实测 2026-09-24 10:00 返回 505 please retry later），
+# 而配额「当天不用即作废」——只试一次等于把这一天的 10 条彻底丢掉，所以失败要退避重试。
+ATTEMPTS="${BAIDU_PUSH_ATTEMPTS:-3}"
+RETRY_DELAY="${BAIDU_PUSH_RETRY_DELAY:-60}"
 
-# 配额用尽是预期情况（次日 0 点重置），不算失败，免得日志里天天是错误
-if printf '%s' "$out" | grep -q "over quota"; then
-  log "配额用尽，跳过（次日自动重试）"
-  exit 0
-fi
-exit "$code"
+attempt=1
+while :; do
+  out="$("$NODE" "$ROOT/scripts/baidu-push.mjs" 2>&1)"
+  code=$?
+  { echo "---- $(date '+%F %T') attempt=$attempt/$ATTEMPTS exit=$code ----"; printf '%s\n' "$out"; } >>"$LOG"
+
+  # 配额用尽是预期情况（次日 0 点重置），不算失败，免得日志里天天是错误
+  if printf '%s' "$out" | grep -q "over quota"; then
+    log "配额用尽，跳过（次日自动重试）"
+    exit 0
+  fi
+
+  # 0 = 推送成功；「没有待推 URL」也是 0，都不再重试
+  if [ "$code" -eq 0 ]; then
+    log "推送完成（第 $attempt 次尝试）"
+    exit 0
+  fi
+
+  if [ "$attempt" -ge "$ATTEMPTS" ]; then
+    log "第 $attempt 次尝试仍失败（exit=$code），本次放弃：当天配额作废，等下一次定时触发或次日继续"
+    exit "$code"
+  fi
+  log "第 $attempt 次尝试失败（exit=$code），${RETRY_DELAY}s 后重试"
+  attempt=$((attempt + 1))
+  sleep "$RETRY_DELAY"
+done

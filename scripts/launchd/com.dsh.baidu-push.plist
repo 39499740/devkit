@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  百度主动推送 · 每日定时任务（每天 10:00 推 10 条未推过的 URL）
+  百度主动推送 · 每日定时任务（每天 10/13/16/19/22 点各触发一次，每次推 10 条未推过的 URL，推完自动停）
   安装（在仓库根执行）：
     cp scripts/launchd/com.dsh.baidu-push.plist ~/Library/LaunchAgents/
     launchctl load ~/Library/LaunchAgents/com.dsh.baidu-push.plist
@@ -18,13 +18,41 @@
     <string>/bin/bash</string>
     <string>/Users/hao/WebstormProjects/web_tools/scripts/baidu-daily-push.sh</string>
   </array>
+  <!-- 一天触发多次：当天配额只有 10 条且不用即作废，10:00 那次若撞上百度瞬时 5xx（实测 505 please retry later）
+       就会白丢一整天额度，后几次触发负责补推；额度已用尽时脚本读到 over quota 会安静跳过，不会重复消耗。 -->
   <key>StartCalendarInterval</key>
-  <dict>
-    <key>Hour</key>
-    <integer>10</integer>
-    <key>Minute</key>
-    <integer>0</integer>
-  </dict>
+  <array>
+    <dict>
+      <key>Hour</key>
+      <integer>10</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+    <dict>
+      <key>Hour</key>
+      <integer>13</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+    <dict>
+      <key>Hour</key>
+      <integer>16</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+    <dict>
+      <key>Hour</key>
+      <integer>19</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+    <dict>
+      <key>Hour</key>
+      <integer>22</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+  </array>
   <key>RunAtLoad</key>
   <false/>
   <key>StandardOutPath</key>

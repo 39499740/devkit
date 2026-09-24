@@ -41,7 +41,7 @@
    - ```bash
      BAIDU_PUSH_TOKEN=你的token node scripts/baidu-push.mjs
      ```
-   - 脚本会把 sitemap 里的 58 条 URL 一次性推给百度（token 只从环境变量读，不会写进仓库）
+   - 脚本会把 sitemap 里的全部 URL（当前 59 条）一次性推给百度（token 只从环境变量读，不会写进仓库）
    - **API 推送不依赖百度读取 sitemap**：即使资源平台的 sitemap 报错，这条路也能把 URL 送进百度队列，优先用它
 3. **手动提交**：普通收录 → 手动提交，把首页和最想被人搜到的工具页贴进去（每天有配额，优先这几个：
    `/tools/json-format/`、`/tools/base64/`、`/tools/timestamp/`、`/tools/md5/`、`/tools/aes/`）
@@ -52,12 +52,15 @@
 
 | 项 | 值 |
 |---|---|
-| 任务 | `scripts/baidu-daily-push.sh`（每天 10:00 推 10 条未推过的 URL，推完自动停） |
+| 任务 | `scripts/baidu-daily-push.sh`（每天 10/13/16/19/22 点各触发一次，成功推 10 条未推过的 URL 即停） |
 | 安装件 | `~/Library/LaunchAgents/com.dsh.baidu-push.plist`（仓库内模板 `scripts/launchd/com.dsh.baidu-push.plist`） |
 | token | 环境变量 `BAIDU_PUSH_TOKEN` → 回退 `.tools/baidu-token`（600 权限，`.tools/` 已被 .gitignore 忽略，与 `.tools/cos.yaml` 同一套本地密钥约定） |
 | 游标 | `.tools/baidu-pushed.json`：推过的不再重复推（手工提交与 API 推送共用） |
 | 日志 | `.tools/logs/baidu-push-<日期>.log` |
 | 配额用尽 | 记为「配额用尽，跳过（次日自动重试）」并 exit 0，不算失败 |
+| 瞬时失败重试 | 每次触发内部重试 3 次（间隔 60s，可用 `BAIDU_PUSH_ATTEMPTS` / `BAIDU_PUSH_RETRY_DELAY` 覆盖）；仍失败则等当天下一轮触发 |
+
+> **为什么一天触发 5 次**：百度给新站的配额是「每天 10 条、当天不用即作废」，而它偶尔会返回瞬时错误（实测 2026-09-24 10:00 返回 `505 please retry later`，当天那 10 条就白丢了）。配额已用完时再触发只会收到 `400 over quota`，脚本记一行「配额用尽」就退出，不会重复消耗额度。
 
 ```bash
 tail -20 .tools/logs/baidu-push-$(date +%F).log          # 看当天日志
@@ -66,7 +69,8 @@ launchctl kickstart -k gui/$(id -u)/com.dsh.baidu-push    # 立即触发一次�
 launchctl unload ~/Library/LaunchAgents/com.dsh.baidu-push.plist && rm ~/Library/LaunchAgents/com.dsh.baidu-push.plist   # 卸载
 ```
 
-> 机器休眠时错过 10:00 会在唤醒后补跑。换机器或换 node 版本时改 `scripts/baidu-daily-push.sh` 里的 `NODE` 默认值，或用 `NODE_BIN=/path/to/node` 覆盖。
+> 机器休眠时错过的时间点会在唤醒后补跑。换机器或换 node 版本时改 `scripts/baidu-daily-push.sh` 里的 `NODE` 默认值，或用 `NODE_BIN=/path/to/node` 覆盖。
+> 判断「今天到底推没推」只看游标里有没有今天的日期：`node -e "const s=require('./.tools/baidu-pushed.json');console.log(Object.values(s).filter(d=>d===new Date().toISOString().slice(0,10)).length+' 条（今日）')"`
 
 ### 2.3 抓取诊断（判断百度看到了什么）
 
