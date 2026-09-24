@@ -714,32 +714,51 @@ export function evalJmesPath(data: unknown, expr: string): JmesResult {
     return { matches: [], warnings }
   }
   const items = Array.isArray(value) ? value : [value]
+  // 一次性建立「对象引用 → 路径」索引，替代对每个结果都从根重扫文档的 O(n²) 反查。
+  // 投影 / 切片 / 扁平化都保留原对象引用，引用命中即可得到准确路径；
+  // hash / multiselect 新建的对象不在索引里，回退为下标路径（与旧行为一致）。
+  // 索引延迟到首个对象结果时才构建，纯标量结果（如 title 列表）完全不付出这份开销。
+  let index: Map<object, string> | null = null
   const matches = items.map((v, idx) => {
-    // 标量结果无法唯一反查位置，直接给根路径，不编造具体字段
-    const located = v && typeof v === 'object' ? locateValue(data, v) : null
-    const path = located ?? (Array.isArray(value) ? formatPath([idx]) : '$')
-    return { path, value: v }
+    let path: string | null = null
+    if (v && typeof v === 'object') {
+      if (!index) index = buildPathIndex(data)
+      path = index.get(v as object) ?? null
+    }
+    // 标量结果无法唯一反查位置，直接给根路径 / 下标，不编造具体字段
+    return { path: path ?? (Array.isArray(value) ? formatPath([idx]) : '$'), value: v }
   })
   return { matches, warnings }
 }
 
-/** 在文档中按引用相等或深度相等反查路径，用于「匹配路径」列 */
-function locateValue(root: unknown, target: unknown, path: (string | number)[] = []): string | null {
-  if (root === target) return formatPath(path)
-  if (Array.isArray(root)) {
-    for (let i = 0; i < root.length; i += 1) {
-      const r = locateValue(root[i], target, [...path, i])
-      if (r) return r
+/**
+ * 遍历文档一次，建立「对象/数组引用 → 规范化路径」映射。
+ * 用显式栈而非递归，避免深层文档触发栈溢出；引用相等即可定位，无需深度比较。
+ */
+function buildPathIndex(root: unknown): Map<object, string> {
+  const index = new Map<object, string>()
+  if (!root || typeof root !== 'object') return index
+  const stack: { v: object; path: (string | number)[] }[] = [{ v: root as object, path: [] }]
+  while (stack.length) {
+    const { v, path } = stack.pop()!
+    if (index.has(v)) continue
+    index.set(v, formatPath(path))
+    if (Array.isArray(v)) {
+      for (let i = v.length - 1; i >= 0; i -= 1) {
+        const child = v[i]
+        if (child && typeof child === 'object') stack.push({ v: child as object, path: [...path, i] })
+      }
+    } else {
+      const rec = v as Record<string, unknown>
+      const keys = Object.keys(rec)
+      for (let i = keys.length - 1; i >= 0; i -= 1) {
+        const k = keys[i]!
+        const child = rec[k]
+        if (child && typeof child === 'object') stack.push({ v: child as object, path: [...path, k] })
+      }
     }
-    return null
   }
-  if (root && typeof root === 'object') {
-    for (const [k, v] of Object.entries(root as Record<string, unknown>)) {
-      const r = locateValue(v, target, [...path, k])
-      if (r) return r
-    }
-  }
-  return null
+  return index
 }
 
 export const jmesPathSamples = [

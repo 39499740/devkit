@@ -381,102 +381,149 @@ export function localizeJsonMessage(msg: string): string {
 
 const RE_BOOL_KEY = /^(?:true|false|True|False|TRUE|FALSE)$/
 const RE_NULL_KEY = /^(?:~|null|Null|NULL)$/
-const RE_INT_KEY = /^[-+]?(?:[0-9][0-9_]*|0x[0-9a-fA-F_]+|0o[0-7_]+)$/
-const RE_FLOAT_KEY = /^[-+]?(?:[0-9][0-9_]*\.[0-9_]*(?:[eE][-+]?[0-9]+)?|\.[0-9_]+(?:[eE][-+]?[0-9]+)?|[0-9][0-9_]*[eE][-+]?[0-9]+)$/
-const RE_INF_KEY = /^(?:[-+]?\.(?:inf|Inf|INF)|\.nan|\.NaN|\.NAN)$/
 
 const YAML_NUM_TEXT = /^[-+]?(?:\d+\.?\d*(?:[eE][-+]?\d+)?|\.\d+(?:[eE][-+]?\d+)?|0x[0-9a-fA-F]+|0o[0-7]+)$/
 const YAML_INF_NAN_TEXT = /^(?:[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$/
 const JSON_NUM_TEXT = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/
 
-interface KeyIssue {
-  line: number
+/** 非字符串键探针标记（含 NUL，正常字符串键不可能与之冲突） */
+const NON_STRING_KEY_MARK = '\u0000devkit-nonstring-key\u0000'
+
+/**
+ * 非字符串键探针：只在「键类型探测」这一趟解析里使用。
+ *
+ * js-yaml 构造映射键时会把非字符串键 String() 化（80 → "80"、true → "true"、对象 → "[object Object]"），
+ * 加载完成后已无法凭键的类型区分。这里用一份独立的 Schema 再解析一遍，把 null / 布尔 / 数字标量
+ * 构造成带唯一标记的探针对象：映射键经 String() 后会变成可识别的标记串，
+ * 从而精确判断「键原本是不是字符串、是什么类型」。探测结果只用于校验，绝不泄漏到返回值。
+ */
+class NonStringKeyProbe {
+  /** 标量所在行（0 基，-1 表示未知）；由探测解析的 listener 写入 */
+  line = -1
+  constructor(
+    public type: string,
+    public raw: string
+  ) {}
+  // 必须让 Object.prototype.toString.call(probe) !== "[object Object]"：
+  // 否则 js-yaml 的 storeMappingPair 会先把对象键替换成字面量 "[object Object]" 而不调用 toString。
+  get [Symbol.toStringTag](): string {
+    return 'DevkitNonStringKeyProbe'
+  }
+  toString(): string {
+    return NON_STRING_KEY_MARK + this.type + '\u0001' + this.line + '\u0001' + this.raw
+  }
+}
+
+function makeNonStringKeyProbeSchema(): yaml.Schema {
+  const probeType = (tag: string, type: string, resolve: (d: unknown) => boolean) =>
+    new yaml.Type(tag, {
+      kind: 'scalar',
+      resolve,
+      construct: (d: unknown) => new NonStringKeyProbe(type, String(d))
+    })
+  return yaml.JSON_SCHEMA.extend({
+    implicit: [
+      probeType('tag:yaml.org,2002:null', 'null', (d) => typeof d === 'string' && RE_NULL_KEY.test(d)),
+      probeType('tag:yaml.org,2002:bool', '布尔值', (d) => typeof d === 'string' && RE_BOOL_KEY.test(d)),
+      probeType(
+        'tag:yaml.org,2002:int',
+        '数字',
+        (d) => typeof d === 'string' && (YAML_NUM_TEXT.test(d) || YAML_INF_NAN_TEXT.test(d))
+      ),
+      probeType(
+        'tag:yaml.org,2002:float',
+        '数字',
+        (d) => typeof d === 'string' && (YAML_NUM_TEXT.test(d) || YAML_INF_NAN_TEXT.test(d))
+      ),
+      // 与正式解析一样支持 merge 键：否则重复的 << 在探测解析里会被误判成重复键
+      new yaml.Type('tag:yaml.org,2002:merge', { kind: 'scalar', resolve: (d) => d === '<<' || d === null })
+    ]
+  })
+}
+
+const NON_STRING_KEY_PROBE_SCHEMA = makeNonStringKeyProbeSchema()
+
+/** 探测解析的 listener：把标量行号写回探针，供错误信息使用 */
+function attachProbeLine(event: string, state: { result?: unknown; line?: number }): void {
+  if (event === 'close' && state.result instanceof NonStringKeyProbe && typeof state.line === 'number') {
+    state.result.line = state.line
+  }
+}
+
+interface NonStringKeyIssue {
+  path: string
   key: string
   type: string
+  line: number
 }
 
-function keyIssueType(k: string): string | null {
-  if (RE_NULL_KEY.test(k)) return 'null'
-  if (RE_BOOL_KEY.test(k)) return '布尔值'
-  if (RE_INT_KEY.test(k) || RE_FLOAT_KEY.test(k) || RE_INF_KEY.test(k)) return '数字'
-  return null
-}
-
-/** 去掉行内注释（引号内的 # 保留） */
-function stripComment(line: string): string {
-  let out = ''
-  let inS = false
-  let inD = false
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i]!
-    if (inS) {
-      out += c
-      if (c === "'") inS = false
-    } else if (inD) {
-      out += c
-      if (c === '\\') {
-        out += line[++i] ?? ''
-      } else if (c === '"') inD = false
-    } else if (c === "'") {
-      inS = true
-      out += c
-    } else if (c === '"') {
-      inD = true
-      out += c
-    } else if (c === '#') {
-      break
-    } else {
-      out += c
-    }
+/** 从探针标记串还原原始键的类型、行号与原文 */
+function decodeProbeKey(marked: string): { type: string; line: number; raw: string } {
+  const rest = marked.slice(NON_STRING_KEY_MARK.length)
+  const sep1 = rest.indexOf('\u0001')
+  const sep2 = rest.indexOf('\u0001', sep1 + 1)
+  return {
+    type: rest.slice(0, sep1),
+    line: Number(rest.slice(sep1 + 1, sep2)),
+    raw: rest.slice(sep2 + 1)
   }
-  return out
 }
 
 /**
- * 扫描 YAML 文本中的非字符串键（数字 / 布尔 / null）。
- * 覆盖常见的块式与流式写法；跳过块标量内容、引号键与带标签/锚点的键。
- * js-yaml 加载后对象键已被字符串化，无法事后区分，故在文本层检测。
+ * 深度遍历「探测解析」结果，收集所有非字符串键（load 之后的自有属性/类型检查）：
+ * - 键以探针标记开头 → 原本是 null / 布尔 / 数字（含带标签 !!int / 锚点 &k 的同类标量）；
+ * - 键是字面量 "[object Object]" → 原本是映射/序列等复杂键（js-yaml 无法字符串化）。
+ * WeakSet 去重，兼容别名共享节点与循环别名，整体为 O(不同节点数)。
  */
-export function scanNonStringKeys(text: string): KeyIssue[] {
-  const issues: KeyIssue[] = []
-  const lines = text.split('\n')
-  let blockIndent: number | null = null
-  const checkKeyText = (k: string, lineNo: number) => {
-    const type = keyIssueType(k)
-    if (type) issues.push({ line: lineNo, key: k, type })
+function findNonStringKey(v: unknown, path: string, seen: WeakSet<object>, out: NonStringKeyIssue[]): void {
+  if (v instanceof NonStringKeyProbe) return
+  if (Array.isArray(v)) {
+    for (let i = 0; i < v.length; i++) findNonStringKey(v[i], `${path}[${i}]`, seen, out)
+    return
   }
-  lines.forEach((rawLine, idx) => {
-    const lineNo = idx + 1
-    if (blockIndent !== null) {
-      if (rawLine.trim() === '') return
-      if (/^ */.exec(rawLine)![0]!.length > blockIndent) return
-      blockIndent = null
+  if (v === null || typeof v !== 'object') return
+  if (seen.has(v)) return
+  seen.add(v)
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    if (k.startsWith(NON_STRING_KEY_MARK)) {
+      const info = decodeProbeKey(k)
+      out.push({ path: path || '$', key: info.raw, type: info.type, line: info.line + 1 })
+      findNonStringKey(val, joinKey(path, info.raw), seen, out)
+    } else {
+      if (k === '[object Object]') out.push({ path: path || '$', key: k, type: '复杂键（映射或序列）', line: 0 })
+      findNonStringKey(val, joinKey(path, k), seen, out)
     }
-    const line = stripComment(rawLine)
-    if (!line.trim()) return
-    // 块标量头部（key: | / key: >- / - | 等）：其后更深缩进的行是纯文本，跳过
-    if (/:(?:\s|$)/.test(line) && /[|>][+-]?\d*\s*$/.test(line)) {
-      blockIndent = /^ */.exec(line)![0]!.length
-      return
-    }
-    if (/^ *(?:- +)+[|>][+-]?\d*\s*$/.test(line)) {
-      blockIndent = /^ */.exec(line)![0]!.length
-      return
-    }
-    // 块式键：行首（可带列表破折号前缀），冒号后必须有空格或行尾（YAML 规则）
-    const m = /^ *(?:- +)*(?:"(?:[^"\\]|\\.)*"|'(?:[^'])*'|([^:#{}[\],&*!?'%\s][^:]*?)) *:(?=\s|$)/.exec(line)
-    if (m && m[1]) checkKeyText(m[1].trim(), lineNo)
-    // 形如「: value」的空键在 YAML 中是 null 键
-    if (/^ *(?:- +)*:(?=\s|$)/.test(line)) checkKeyText('~', lineNo)
-    // 流式键：{80: x, true: y}
-    const flowRe = /(?:\{|,|&|\*) *("(?:[^"\\]|\\.)*"|'(?:[^'])*'|([^:{}[\],&*!?'%\s#][^:{}[\],]*?)) *:(?=[ \t}]|$)/g
-    let fm: RegExpExecArray | null
-    while ((fm = flowRe.exec(line)) !== null) {
-      const k = (fm[2] ?? '').trim()
-      if (k) checkKeyText(k, lineNo)
-    }
-  })
-  return issues
+  }
+}
+
+/** 兜底：正式解析结果里被字符串化成 "[object Object]" 的键（仅在探测解析意外失败时使用） */
+function findObjectObjectKey(v: unknown, path: string, seen: WeakSet<object>, out: NonStringKeyIssue[]): void {
+  if (v instanceof RawNumber) return
+  if (Array.isArray(v)) {
+    for (let i = 0; i < v.length; i++) findObjectObjectKey(v[i], `${path}[${i}]`, seen, out)
+    return
+  }
+  if (v === null || typeof v !== 'object') return
+  if (seen.has(v)) return
+  seen.add(v)
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    if (k === '[object Object]') out.push({ path: path || '$', key: k, type: '非字符串键', line: 0 })
+    findObjectObjectKey(val, joinKey(path, k), seen, out)
+  }
+}
+
+/** 把非字符串键问题整理成清晰的中文错误信息 */
+function describeNonStringKeyIssues(issues: NonStringKeyIssue[]): string {
+  const first = issues[0]!
+  const display = first.key || '（空键）'
+  if (first.type.startsWith('复杂键')) {
+    return `无法静默转换：存在非字符串键（${display}，${first.type}），JSON 对象的键必须是字符串。请改用字符串作为键`
+  }
+  const where = first.line > 0 ? `第 ${first.line} 行的键` : '键'
+  return (
+    `无法静默转换：${where} ${JSON.stringify(display)} 是 ${first.type}，` +
+    `JSON 对象的键必须是字符串（共 ${issues.length} 处）。请为键加引号，如 "${display}": …`
+  )
 }
 
 /**
@@ -528,8 +575,11 @@ const YAML_MAX_EXPANDED_CHARS = 8_000_000
  * 就会展开成指数级文本。这里不真正展开：对每个对象只计算一次「自身子树的规模」
  * （WeakMap 记忆化），被多处引用时按引用次数累加，整体复杂度为 O(不同节点数)。
  * 遇到自引用（循环别名）时真实展开为无限大，直接按超限处理。
+ *
+ * 导出供各工具页 / 执行器在 yaml.load 之后、任何展平 / 遍历之前复用，
+ * 保证别名放大在膨胀前就被中文报错拦截（阈值与 loadYamlPreservingNumbers 完全一致）。
  */
-function assertYamlExpansionWithinBudget(value: unknown): void {
+export function assertYamlExpansionWithinBudget(value: unknown): void {
   const sizeCache = new WeakMap<object, { nodes: number; chars: number }>()
   const computing = new WeakSet<object>()
   let overflow = false
@@ -580,34 +630,6 @@ function assertYamlExpansionWithinBudget(value: unknown): void {
   if (overflow || total.nodes > YAML_MAX_EXPANDED_NODES || total.chars > YAML_MAX_EXPANDED_CHARS) {
     throw new Error('YAML 别名展开后数据过大（疑似别名放大），已拒绝处理；请避免深层嵌套的 * 别名')
   }
-}
-
-/**
- * 深度查找 yaml.load 之后残留的非字符串键。
- *
- * js-yaml 在构造映射键时会把非字符串键强制转成字符串：带标签/锚点的数字键（!!int 1: / &k 1: a）
- * 经自定义 Type 构造成 RawNumber 对象后，作为键会被 String() 成 "[object Object]"。
- * 此时文本层的 scanNonStringKeys 因首字符是 & / ! 已被跳过，加载后再也拿不到原始键，
- * 只能据此拒绝，避免把数据静默损坏成 "[object Object]"。
- */
-function findNonStringKey(v: unknown, path: string, seen: WeakSet<object>): string | null {
-  if (Array.isArray(v)) {
-    for (let i = 0; i < v.length; i++) {
-      const r = findNonStringKey(v[i], `${path}[${i}]`, seen)
-      if (r) return r
-    }
-    return null
-  }
-  if (v === null || typeof v !== 'object' || v instanceof RawNumber) return null
-  if (seen.has(v)) return null
-  seen.add(v)
-  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
-    // Object.entries 的键静态上恒为 string，但 "[object Object]" 是非字符串键被强转后的残留标记
-    if (typeof k !== 'string' || k === '[object Object]') return path || '$'
-    const r = findNonStringKey(val, joinKey(path, k), seen)
-    if (r) return r
-  }
-  return null
 }
 
 /**
@@ -697,21 +719,17 @@ export function loadYamlPreservingNumbers(text: string): { value: unknown; notes
   }
   // 别名放大防护：共享节点（anchor/alias）本身很小，但展开成树会指数级膨胀，必须尽早拒绝
   assertYamlExpansionWithinBudget(value)
-  const keyIssues = scanNonStringKeys(text)
-  if (keyIssues.length) {
-    const first = keyIssues[0]!
-    throw new Error(
-      `无法静默转换：第 ${first.line} 行的键 ${JSON.stringify(first.key || '（空键）')} 是 ${first.type}，` +
-        `JSON 对象的键必须是字符串（共 ${keyIssues.length} 处）。请为键加引号，如 "${first.key || '键名'}": …`
-    )
+  // 非字符串键检测：用探针 Schema 再解析一遍（见 NonStringKeyProbe 注释），完全依赖 load 之后的类型判定。
+  // 不再做文本层逐行正则扫描，既消除「一行大量 "- "」时的二次回溯，也避免把多行引号标量里的 "1: x" 误判为键。
+  const keyIssues: NonStringKeyIssue[] = []
+  try {
+    const probeValue = yaml.load(text, { schema: NON_STRING_KEY_PROBE_SCHEMA, listener: attachProbeLine })
+    findNonStringKey(probeValue, '$', new WeakSet(), keyIssues)
+  } catch {
+    // 探测解析与正式解析同语法，理论上不会失败；万一失败则退回 "[object Object]" 兜底检查
+    findObjectObjectKey(value, '$', new WeakSet(), keyIssues)
   }
-  // 文本层扫不到、但加载后已损坏成 "[object Object]" 的非字符串键（标签/锚点导致）兜底
-  const badKeyPath = findNonStringKey(value, '$', new WeakSet())
-  if (badKeyPath) {
-    throw new Error(
-      `YAML 的键必须是字符串：存在非字符串键（可能是标签/锚点导致），无法无损转为 JSON（位置 ${badKeyPath}）`
-    )
-  }
+  if (keyIssues.length) throw new Error(describeNonStringKeyIssues(keyIssues))
   const nf = findNonFinite(value, '$')
   if (nf) {
     throw new Error(`无法静默转换：${nf.path} 的值是 ${nf.kind}，JSON 数字不支持无穷或 NaN。请改为字符串或有限数值`)

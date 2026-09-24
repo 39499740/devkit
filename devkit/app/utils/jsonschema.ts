@@ -370,7 +370,7 @@ export function validateInstance(
         return
       }
       walk(inst, target, pointer, `${spath}/$ref`, depth + 1)
-      return
+      // 2020-12 中 $ref 只是普通关键字：解析并校验目标后继续处理同级关键字，不 return 丢弃
     }
 
     // 组合关键字：每个分支在隔离收集器里试算，只有确定失败的才上报
@@ -409,15 +409,17 @@ export function validateInstance(
         }
       }
     }
-    if (s.not) {
+    // 布尔子 schema 是合法 schema（false 恒不通过、true 恒通过），
+    // 必须用 hasOwn 区分「未声明」与布尔值，不能用真值短路漏掉 false。
+    if (hasOwn(s, 'not')) {
       const notErrors = isolate(() => walk(inst, s.not, pointer, `${spath}/not`, depth + 1))
       if (!notErrors.length) push(pointer, spath, 'not', '命中了 not 排除的 schema')
     }
-    if (s.if) {
+    if (hasOwn(s, 'if')) {
       const condErrors = isolate(() => walk(inst, s.if, pointer, `${spath}/if`, depth + 1))
       if (!condErrors.length) {
-        if (s.then) walk(inst, s.then, pointer, `${spath}/then`, depth + 1)
-      } else if (s.else) {
+        if (hasOwn(s, 'then')) walk(inst, s.then, pointer, `${spath}/then`, depth + 1)
+      } else if (hasOwn(s, 'else')) {
         walk(inst, s.else, pointer, `${spath}/else`, depth + 1)
       }
     }
@@ -445,13 +447,16 @@ export function validateInstance(
     }
 
     if (typeof inst === 'string') {
+      // minLength/maxLength 按 Unicode 码点计数（JSON Schema 定义），不能用 UTF-16 码元的 inst.length，
+      // 否则代理对（如 emoji）会被算成 2。
+      const codePointLen = Array.from(inst).length
       const minLen = countValue(s.minLength)
-      if (minLen !== null && inst.length < minLen) {
-        push(pointer, `${spath}/minLength`, 'minLength', `长度至少 ${minLen}，当前 ${inst.length}`)
+      if (minLen !== null && codePointLen < minLen) {
+        push(pointer, `${spath}/minLength`, 'minLength', `长度至少 ${minLen}，当前 ${codePointLen}`)
       }
       const maxLen = countValue(s.maxLength)
-      if (maxLen !== null && inst.length > maxLen) {
-        push(pointer, `${spath}/maxLength`, 'maxLength', `长度至多 ${maxLen}，当前 ${inst.length}`)
+      if (maxLen !== null && codePointLen > maxLen) {
+        push(pointer, `${spath}/maxLength`, 'maxLength', `长度至多 ${maxLen}，当前 ${codePointLen}`)
       }
       if (typeof s.pattern === 'string') {
         // 不做静态风险硬门禁：schema.pattern 由调用方在 Worker 中执行并带超时保护，
@@ -519,15 +524,19 @@ export function validateInstance(
           if (i < inst.length) walk(inst[i], sub, `${pointer}/${i}`, `${spath}/prefixItems/${i}`, depth + 1)
         })
       }
-      const items = s.items
-      if (items && typeof items === 'object' && !Array.isArray(items)) {
-        inst.forEach((v, i) => walk(v, items, `${pointer}/${i}`, `${spath}/items`, depth + 1))
-      } else if (Array.isArray(items)) {
-        items.forEach((sub, i) => {
-          if (i < inst.length) walk(inst[i], sub, `${pointer}/${i}`, `${spath}/items/${i}`, depth + 1)
-        })
+      if (hasOwn(s, 'items')) {
+        const items = s.items
+        if (Array.isArray(items)) {
+          // draft-07 的元组写法：逐个前缀匹配
+          items.forEach((sub, i) => {
+            if (i < inst.length) walk(inst[i], sub, `${pointer}/${i}`, `${spath}/items/${i}`, depth + 1)
+          })
+        } else if (items !== undefined) {
+          // 布尔 schema（true 恒通过、false 每个元素都不通过）与普通对象 schema 都交给 walk
+          inst.forEach((v, i) => walk(v, items, `${pointer}/${i}`, `${spath}/items`, depth + 1))
+        }
       }
-      if (s.contains) {
+      if (hasOwn(s, 'contains')) {
         const any = inst.some(
           (v) => isolate(() => walk(v, s.contains, pointer, `${spath}/contains`, depth + 1)).length === 0
         )
@@ -576,7 +585,7 @@ export function validateInstance(
             handled = true
           }
         }
-        if (s.propertyNames) walk(key, s.propertyNames, childPointer, `${spath}/propertyNames`, depth + 1)
+        if (hasOwn(s, 'propertyNames')) walk(key, s.propertyNames, childPointer, `${spath}/propertyNames`, depth + 1)
         if (!handled) {
           const ap = s.additionalProperties
           if (ap === false) {

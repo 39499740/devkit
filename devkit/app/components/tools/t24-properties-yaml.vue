@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
 import yaml from 'js-yaml'
-import { localizeYamlMessage } from '~/utils/json'
+import { assertYamlExpansionWithinBudget, localizeYamlMessage } from '~/utils/json'
 
 const props = defineProps<{ tool: ToolMeta }>()
 
@@ -320,6 +320,8 @@ function emitArr(node: Extract<PNode, { kind: 'arr' }>, indent: number): string[
 
 /* ---------------- YAML -> Properties ---------------- */
 
+interface FlatEntry { key: string; value: string; bare: boolean }
+
 function escapePropKey(k: string): string {
   return k.replace(/[\\=: #!]/g, (c) => '\\' + c)
 }
@@ -332,25 +334,64 @@ function escapePropValue(v: string): string {
   return s
 }
 
+/**
+ * 把「相对某节点的输出片段」按外部前缀拼成完整键后追加到 out：
+ * - 数组节点的相对键形如 [0] / [0].x，直接用前缀拼接；
+ * - 映射节点的相对键形如 k / k.x，前缀非空时用点号连接。
+ */
+function appendWithPrefix(rel: FlatEntry[], prefix: string, isArr: boolean, out: FlatEntry[]): void {
+  for (const e of rel) {
+    const key = isArr ? prefix + e.key : prefix ? `${prefix}.${e.key}` : e.key
+    out.push({ key, value: e.value, bare: e.bare })
+  }
+}
+
+/** 计算某节点在「前缀为空」时的输出片段（供 WeakMap 记忆化复用） */
+function buildRelative(value: object, memo: WeakMap<object, FlatEntry[]>, active: WeakSet<object>): FlatEntry[] {
+  const rel: FlatEntry[] = []
+  if (Array.isArray(value)) {
+    value.forEach((item, i) => flattenYaml(item, `[${i}]`, rel, memo, active))
+  } else {
+    for (const [k, v] of Object.entries(value)) {
+      const literal = !!literalKeys.value[k]
+      const seg = literal ? k : escapePropKey(k)
+      flattenYaml(v, seg, rel, memo, active)
+    }
+  }
+  return rel
+}
+
+/**
+ * 拍平 YAML：
+ * - `memo`（WeakMap）以节点为键缓存「相对该节点的输出片段」，共享别名节点（DAG）只遍历一次，
+ *   再按引用逐份重放，既避免展开后重复遍历膨胀，又保证普通别名每处引用都照常输出；
+ * - `active`（WeakSet）记录当前递归路径上的节点，兜底拦截自引用循环（预算检查已会先拒绝）。
+ */
 function flattenYaml(
   value: unknown,
   prefix: string,
-  out: { key: string; value: string; bare: boolean }[],
+  out: FlatEntry[],
+  memo: WeakMap<object, FlatEntry[]> = new WeakMap(),
+  active: WeakSet<object> = new WeakSet(),
 ): void {
   if (value === null || value === undefined) {
     out.push({ key: prefix, value: '', bare: false })
     return
   }
-  if (Array.isArray(value)) {
-    value.forEach((item, i) => flattenYaml(item, `${prefix}[${i}]`, out))
-    return
-  }
   if (typeof value === 'object') {
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      const literal = !!literalKeys.value[k]
-      const seg = literal ? k : escapePropKey(k)
-      flattenYaml(v, prefix ? `${prefix}.${seg}` : seg, out)
+    const cached = memo.get(value)
+    if (cached) {
+      appendWithPrefix(cached, prefix, Array.isArray(value), out)
+      return
     }
+    if (active.has(value)) {
+      throw new Error('YAML 别名自引用导致展开过大，已拒绝处理')
+    }
+    active.add(value)
+    const rel = buildRelative(value, memo, active)
+    active.delete(value)
+    memo.set(value, rel)
+    appendWithPrefix(rel, prefix, Array.isArray(value), out)
     return
   }
   if (typeof value === 'number' || typeof value === 'boolean') {
@@ -360,12 +401,40 @@ function flattenYaml(
   out.push({ key: prefix, value: escapePropValue(String(value)), bare: false })
 }
 
-function collectDottedKeys(value: unknown, out: string[]): void {
+/**
+ * 收集含点的键：共享别名节点（DAG）用 WeakMap 记忆化其子树的含点键，避免重复向下遍历。
+ * 首次访问时构建缓存，之后每次引用只重放缓存，最终调用方按 Set 去重，语义不变。
+ */
+function collectDottedKeys(
+  value: unknown,
+  out: string[],
+  memo: WeakMap<object, string[]> = new WeakMap(),
+  active: WeakSet<object> = new WeakSet(),
+): void {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return
-  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-    if (k.includes('.')) out.push(k)
-    collectDottedKeys(v, out)
+  const cached = memo.get(value)
+  if (cached) {
+    for (const k of cached) out.push(k)
+    return
   }
+  if (active.has(value)) return
+  active.add(value)
+  const local: string[] = []
+  for (const [k, v] of Object.entries(value)) {
+    if (k.includes('.')) local.push(k)
+    collectDottedKeys(v, local, memo, active)
+  }
+  active.delete(value)
+  memo.set(value, local)
+  for (const k of local) out.push(k)
+}
+
+/** YAML 处理异常中文化：已有中文（含别名预算）原样保留，英文栈溢出 / 未知错误统一中文兜底，不回显原文 */
+function localizeProcessError(e: unknown, what: string): string {
+  const msg = errMessage(e)
+  if (/[\u4e00-\u9fa5]/.test(msg)) return msg
+  if (/Maximum call stack/i.test(msg)) return '嵌套层级过深，已中止处理'
+  return `${what} 处理失败，请检查输入内容`
 }
 
 /* ---------------- 执行 ---------------- */
@@ -459,6 +528,15 @@ function execute() {
         run.markFail(errDetail.value)
         return
       }
+      // 别名放大防护：共享节点（anchor/alias）本身很小，但展平 / 收集时会被重复遍历而指数膨胀。
+      // 必须在任何 flatten / dotted 遍历之前拦截，超限时给出中文错误（含「别名」「过大」字样）。
+      try {
+        assertYamlExpansionWithinBudget(doc)
+      } catch (e) {
+        errDetail.value = localizeProcessError(e, 'YAML')
+        run.markFail(errDetail.value)
+        return
+      }
       const dotted: string[] = []
       collectDottedKeys(doc, dotted)
       dottedCandidates.value = [...new Set(dotted)]
@@ -470,14 +548,14 @@ function execute() {
             : `检测到 ${dottedCandidates.value.length} 个含点键（默认按点路径拆分为嵌套 Properties 键，可在下方改为字面键）`,
         )
       }
-      const out: { key: string; value: string; bare: boolean }[] = []
+      const out: FlatEntry[] = []
       flattenYaml(doc, '', out)
       if (escapeUnicodeOut.value) notes.value.push('已开启中文转 \\uXXXX 输出')
       output.value = out.map((l) => `${l.key}=${l.value}`).join('\n') + '\n'
       run.markOk('数字 / 布尔按原样裸输出：Properties 本身无类型，回读时一律是字符串；null 输出为空值')
     }
   } catch (e) {
-    errDetail.value = errMessage(e)
+    errDetail.value = localizeProcessError(e, dir.value === 'p2y' ? 'Properties' : 'YAML')
     run.markFail(errDetail.value)
   }
 }

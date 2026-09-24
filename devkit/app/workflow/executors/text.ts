@@ -261,14 +261,18 @@ const jsonpath: StepExecutor = async (input, config) => {
   }
 }
 
-const jmespath: StepExecutor = (input, config) => {
+const jmespath: StepExecutor = async (input, config) => {
   const text = requireText(input, 'JMESPath 提取')
   const expr = configText(config, 'expr').trim()
   if (!expr) throw new Error('JMESPath 表达式为空：请在步骤参数里填写表达式')
   const { value } = parseJsonLocalized(text)
+  // 有 Worker 时把原始 JSON 文本交给 Worker 求值（与 t44 工具页同一份实现）；无 Worker 时用同步回退
   let res: { matches: { value: unknown }[]; warnings: string[] }
   try {
-    res = evalJmesPath(toPlainJson(value), expr)
+    res = await runComputation<{ matches: { value: unknown }[]; warnings: string[] }>(
+      { fn: 'jmespath', dataText: text, expr },
+      () => evalJmesPath(toPlainJson(value), expr)
+    )
   } catch (e) {
     // 深层嵌套会抛 RangeError（Maximum call stack…）；已有中文错误保留，其它英文错误兜底中文
     throw localizeEvalError(e)
@@ -500,6 +504,22 @@ function sanitizeJavaIdent(name: string, prefix: string): string {
   return out
 }
 
+/**
+ * 校验顶层类名（用户可配置）：合法返回空串，非法返回中文原因。
+ * 与 t22 工具页的 validateClassName 同规则：字母 / _ / $ 开头，只含字母、数字、_、$，且不能是 Java 关键字。
+ */
+function validateJavaClassName(name: string): string {
+  const s = name.trim()
+  if (!s) return ''
+  if (/^[0-9]/.test(s)) return `类名 "${s}" 以数字开头，Java 类名必须以字母 / _ / $ 开头`
+  if (JAVA_KEYWORDS.has(s)) return `类名 "${s}" 是 Java 关键字，请换一个名称`
+  if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(s)) {
+    const bad = [...s].filter((c) => !/[A-Za-z0-9_$]/.test(c)).join(' ')
+    return `类名 "${s}" 含非法字符（${bad}），只允许字母、数字、_ 与 $`
+  }
+  return ''
+}
+
 function javaName(key: string): string {
   const parts = key.split(/[^A-Za-z0-9]+/).filter(Boolean)
   if (!parts.length) return 'field'
@@ -584,7 +604,11 @@ function javaFromJson(value: unknown, className: string, warnings: string[] = []
 const json2java: StepExecutor = (input, config) => {
   const text = requireText(input, 'JSON 转 Java')
   const { value } = parseJsonLocalized(text)
-  const cls = configText(config, 'className', 'Order').trim() || 'Order'
+  const rawCls = configText(config, 'className', 'Order').trim()
+  // 空值仍按历史默认 Order；非空则必须是合法 Java 类名，否则给出中文原因，不产出无法编译的源码
+  const clsErr = validateJavaClassName(rawCls)
+  if (clsErr) throw new Error(clsErr)
+  const cls = rawCls || 'Order'
   const warnings: string[] = []
   const code = javaFromJson(value, cls, warnings)
   const warn = warnings.length ? `；${warnings.slice(0, 2).join('；')}` : ''

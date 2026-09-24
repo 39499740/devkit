@@ -7,12 +7,14 @@
  * 协议：
  *   请求 { fn:'validate', instanceText, schemaText, strict } → { ok:true, result: ValidateResult }
  *   请求 { fn:'path', dataText, expr }                        → { ok:true, result: { matches, warnings } }
+ *   请求 { fn:'jmespath', dataText, expr }                    → { ok:true, result: { matches, warnings } }
  *   失败一律回 { ok:false, error: 中文原因 }
  *
  * 注意：实例与 schema 都按原始 JSON 文本传入并交给 parseJson，保留大整数 RawNumber 语义
  * （schema 的 minimum / multipleOf / const / enum 等数值关键字据此做精确比较，不再降级为字符串）。
  */
 import { parseJson, toPlainJson } from '~/utils/json'
+import { evalJmesPath } from '~/utils/jmespath'
 import { validateInstance } from '~/utils/jsonschema'
 import { evalJsonPath } from '~/utils/jsonpath'
 
@@ -27,6 +29,7 @@ const ctx = self as unknown as WorkerCtx
 type ComputeRequest =
   | { fn: 'validate'; instanceText: string; schemaText: string; strict: boolean }
   | { fn: 'path'; dataText: string; expr: string }
+  | { fn: 'jmespath'; dataText: string; expr: string }
 
 ctx.onmessage = (e: MessageEvent) => {
   const data = e.data as ComputeRequest | null
@@ -41,6 +44,12 @@ ctx.onmessage = (e: MessageEvent) => {
     if (data && data.fn === 'path') {
       const value = toPlainJson(parseJson(data.dataText).value)
       const result = evalJsonPath(value, data.expr)
+      ctx.postMessage({ ok: true, result })
+      return
+    }
+    if (data && data.fn === 'jmespath') {
+      const value = toPlainJson(parseJson(data.dataText).value)
+      const result = evalJmesPath(value, data.expr)
       ctx.postMessage({ ok: true, result })
       return
     }

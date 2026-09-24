@@ -99,6 +99,9 @@ function parseTag(rawTag: string): { name: string; attrs: string[]; selfClosed: 
 function formatHtml(src: string, unit: string, opts: FmtOpts): string {
   const out: string[] = []
   const stack: { name: string; line: number }[] = []
+  // 小写化只做一次：循环内每个标签都 src.toLowerCase() 会让整段扫描退化成 O(n·m)。
+  // 开标签名已统一小写（parseTag），闭标签检索用小写副本即可保持大小写不敏感。
+  const lowerSrc = src.toLowerCase()
   let depth = 0
   let i = 0
   let line = 1
@@ -180,7 +183,7 @@ function formatHtml(src: string, unit: string, opts: FmtOpts): string {
       for (const l of openTag(tagText, name, attrs, selfClosed)) out.push(l)
       continue
     }
-    const closeIdx = src.toLowerCase().indexOf(`</${name}`, i)
+    const closeIdx = lowerSrc.indexOf(`</${name}`, i)
     const inner = closeIdx < 0 ? null : src.slice(i, closeIdx)
     if (
       inner !== null &&

@@ -234,14 +234,28 @@ export function elementToJson(el: Element): unknown {
   return obj
 }
 
-/** JSON → XML */
+/**
+ * JSON → XML。
+ * 顶层是数组时必须额外套一层根元素，否则每个元素会各自生成一个同名根元素，
+ * 产出「多个根元素」的非法 XML。这里统一用 rootName 作为外层根、数组元素用 <item>，
+ * 与下方 warning 文案保持一致；对象 / 标量输入的既有行为不变。
+ */
 export function jsonToXml(value: unknown, rootName = 'root'): XmlResult {
   const warnings: string[] = []
-  if (Array.isArray(value)) {
-    warnings.push('顶层是数组，已用 <root> 包裹，每个元素生成一个 <item>')
-  }
   const out: string[] = []
-  writeJson(rootName, value, 0, out)
+  if (Array.isArray(value)) {
+    const wrapper = /^[A-Za-z_][\w.-]*$/.test(rootName) ? rootName : 'root'
+    warnings.push(`顶层是数组，已用 <${wrapper}> 包裹，每个元素生成一个 <item>`)
+    if (!value.length) {
+      out.push(`<${wrapper}/>`)
+    } else {
+      out.push(`<${wrapper}>`)
+      for (const v of value) writeJson('item', v, 1, out)
+      out.push(`</${wrapper}>`)
+    }
+  } else {
+    writeJson(rootName, value, 0, out)
+  }
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n${out.join('\n')}`
   return { xml, warnings, nodes: out.length, lines: out.length, chars: xml.length }
 }

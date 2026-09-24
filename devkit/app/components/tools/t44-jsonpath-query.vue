@@ -133,8 +133,8 @@ async function execute() {
   busy.value = true
   const t0 = performance.now()
   try {
-    // JSONPath 走 Worker + 超时，隔离 =~ 正则的灾难性回溯；
-    // JMESPath 暂无 Worker 分支（其语法不含用户可控正则），保持同步求值。
+    // JSONPath 与 JMESPath 都走 Worker + 超时：隔离 =~ 正则的灾难性回溯，
+    // 同时把 JMESPath 的大结果路径反查从主线程移出；无 Worker 时自动同步回退。
     const res =
       langSnapshot === 'jsonpath'
         ? await runComputation(
@@ -142,7 +142,11 @@ async function execute() {
             () => evalJsonPath(data, query),
             2000
           )
-        : evalJmesPath(data, query)
+        : await runComputation(
+            { fn: 'jmespath', dataText, expr: query },
+            () => evalJmesPath(data, query),
+            2000
+          )
     if (token !== runToken) return
     matches.value = res.matches
     warnings.value = res.warnings
