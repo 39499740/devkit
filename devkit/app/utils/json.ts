@@ -123,13 +123,14 @@ export interface JsonParseResult {
   duplicateKeys: string[]
 }
 
-/** 解析 JSON：保留数字原始文本，检测重复键 */
+/** 解析 JSON：保留数字原始文本，检测重复键（前导 BOM 会被剥离，避免 JSON.parse 直接失败） */
 export function parseJson(text: string): JsonParseResult {
-  JSON.parse(text)
-  const duplicateKeys = detectDuplicateKeys(text)
+  const src = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text
+  JSON.parse(src)
+  const duplicateKeys = detectDuplicateKeys(src)
   const prefix = makeRawPrefix()
   const value = JSON.parse(
-    wrapNumbers(text, prefix),
+    wrapNumbers(src, prefix),
     makeUnwrap(prefix) as (this: unknown, k: string, v: unknown) => unknown
   )
   return { value, duplicateKeys }
@@ -390,6 +391,57 @@ const JSON_NUM_TEXT = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/
 const NON_STRING_KEY_MARK = '\u0000devkit-nonstring-key\u0000'
 
 /**
+ * 探针层「复杂键」标记（映射/序列键）。带随机后缀，正常字符串键不可能与之冲突。
+ * 不能再用字面量 "[object Object]" 判定复杂键——那会把合法的字符串键 `"[object Object]": 1` 误拒。
+ */
+const COMPLEX_KEY_MARK = '\u0000devkit-complex-key\u0000'
+
+interface ComplexKeyMarks {
+  /** 解析期间临时挂到 Object.prototype[Symbol.toStringTag] 的随机标记 */
+  objectTag: string
+  /** 解析期间临时替换 Array.prototype.toString 返回的随机标记 */
+  arrayMark: string
+}
+
+/**
+ * 生成一组随机复杂键标记。
+ *
+ * js-yaml 的 storeMappingPair 会把「普通对象键」直接替换成字面量 "[object Object]"（不调用 toString），
+ * 且「序列键」最终也只是一个普通字符串（如 "1,2"），因此仅凭 load 之后的键值无法区分
+ * 「复杂键」与「恰好叫 "[object Object]" / "1,2" 的合法字符串键」。
+ * 这里在探测解析期间临时：
+ * - 把 Object.prototype[Symbol.toStringTag] 设为随机标记 → 普通对象键 String() 出 `[object <标记>]`；
+ * - 把 Array.prototype.toString 替换为返回随机标记 → 序列键 String() 出该标记。
+ * 解析完成（含异常）立即还原，探测结果只用于校验，绝不泄漏到返回值或全局。
+ */
+function makeComplexKeyMarks(): ComplexKeyMarks {
+  const rand = Math.random().toString(36).slice(2) + Date.now().toString(36)
+  return { objectTag: `${COMPLEX_KEY_MARK}map-${rand}`, arrayMark: `${COMPLEX_KEY_MARK}seq-${rand}` }
+}
+
+/** 在临时复杂键标记的作用域内执行探测解析，结束后（含异常）还原原型 */
+function withComplexKeyMarks<T>(marks: ComplexKeyMarks, run: () => T): T {
+  const prevTagDesc = Object.getOwnPropertyDescriptor(Object.prototype, Symbol.toStringTag)
+  const prevArrayToString = Array.prototype.toString
+  Object.defineProperty(Object.prototype, Symbol.toStringTag, {
+    value: marks.objectTag,
+    configurable: true,
+    writable: true,
+    enumerable: false
+  })
+  Array.prototype.toString = function complexKeyArrayToString(): string {
+    return marks.arrayMark
+  }
+  try {
+    return run()
+  } finally {
+    if (prevTagDesc) Object.defineProperty(Object.prototype, Symbol.toStringTag, prevTagDesc)
+    else Reflect.deleteProperty(Object.prototype, Symbol.toStringTag)
+    Array.prototype.toString = prevArrayToString
+  }
+}
+
+/**
  * 非字符串键探针：只在「键类型探测」这一趟解析里使用。
  *
  * js-yaml 构造映射键时会把非字符串键 String() 化（80 → "80"、true → "true"、对象 → "[object Object]"），
@@ -455,6 +507,8 @@ interface NonStringKeyIssue {
   key: string
   type: string
   line: number
+  /** 是否为映射/序列这类复杂键（由探针层 COMPLEX_KEY_MARK 标记识别） */
+  complex?: boolean
 }
 
 /** 从探针标记串还原原始键的类型、行号与原文 */
@@ -471,54 +525,48 @@ function decodeProbeKey(marked: string): { type: string; line: number; raw: stri
 
 /**
  * 深度遍历「探测解析」结果，收集所有非字符串键（load 之后的自有属性/类型检查）：
- * - 键以探针标记开头 → 原本是 null / 布尔 / 数字（含带标签 !!int / 锚点 &k 的同类标量）；
- * - 键是字面量 "[object Object]" → 原本是映射/序列等复杂键（js-yaml 无法字符串化）。
+ * - 键以 NON_STRING_KEY_MARK 开头 → 原本是 null / 布尔 / 数字（含带标签 !!int / 锚点 &k 的同类标量）；
+ * - 键与探针层生成的随机复杂键标记（marks.arrayMark / `[object <objectTag>]`）完全相同
+ *   → 原本是映射/序列等复杂键。不再用字面量 "[object Object]" 判定，合法字符串键 "[object Object]" 因此可通过。
  * WeakSet 去重，兼容别名共享节点与循环别名，整体为 O(不同节点数)。
  */
-function findNonStringKey(v: unknown, path: string, seen: WeakSet<object>, out: NonStringKeyIssue[]): void {
+function findNonStringKey(
+  v: unknown,
+  path: string,
+  seen: WeakSet<object>,
+  out: NonStringKeyIssue[],
+  marks: ComplexKeyMarks
+): void {
   if (v instanceof NonStringKeyProbe) return
   if (Array.isArray(v)) {
-    for (let i = 0; i < v.length; i++) findNonStringKey(v[i], `${path}[${i}]`, seen, out)
+    for (let i = 0; i < v.length; i++) findNonStringKey(v[i], `${path}[${i}]`, seen, out, marks)
     return
   }
   if (v === null || typeof v !== 'object') return
   if (seen.has(v)) return
   seen.add(v)
+  const mappingKey = '[object ' + marks.objectTag + ']'
   for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
     if (k.startsWith(NON_STRING_KEY_MARK)) {
       const info = decodeProbeKey(k)
       out.push({ path: path || '$', key: info.raw, type: info.type, line: info.line + 1 })
-      findNonStringKey(val, joinKey(path, info.raw), seen, out)
+      findNonStringKey(val, joinKey(path, info.raw), seen, out, marks)
+    } else if (k === marks.arrayMark || k === mappingKey) {
+      out.push({ path: path || '$', key: '', type: '映射或序列键', line: 0, complex: true })
+      findNonStringKey(val, path ? `${path}{映射或序列}` : '{映射或序列}', seen, out, marks)
     } else {
-      if (k === '[object Object]') out.push({ path: path || '$', key: k, type: '复杂键（映射或序列）', line: 0 })
-      findNonStringKey(val, joinKey(path, k), seen, out)
+      findNonStringKey(val, joinKey(path, k), seen, out, marks)
     }
-  }
-}
-
-/** 兜底：正式解析结果里被字符串化成 "[object Object]" 的键（仅在探测解析意外失败时使用） */
-function findObjectObjectKey(v: unknown, path: string, seen: WeakSet<object>, out: NonStringKeyIssue[]): void {
-  if (v instanceof RawNumber) return
-  if (Array.isArray(v)) {
-    for (let i = 0; i < v.length; i++) findObjectObjectKey(v[i], `${path}[${i}]`, seen, out)
-    return
-  }
-  if (v === null || typeof v !== 'object') return
-  if (seen.has(v)) return
-  seen.add(v)
-  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
-    if (k === '[object Object]') out.push({ path: path || '$', key: k, type: '非字符串键', line: 0 })
-    findObjectObjectKey(val, joinKey(path, k), seen, out)
   }
 }
 
 /** 把非字符串键问题整理成清晰的中文错误信息 */
 function describeNonStringKeyIssues(issues: NonStringKeyIssue[]): string {
   const first = issues[0]!
-  const display = first.key || '（空键）'
-  if (first.type.startsWith('复杂键')) {
-    return `无法静默转换：存在非字符串键（${display}，${first.type}），JSON 对象的键必须是字符串。请改用字符串作为键`
+  if (first.complex) {
+    return '无法静默转换：存在非字符串键（映射或序列），JSON 对象的键必须是字符串。请改用字符串作为键'
   }
+  const display = first.key || '（空键）'
   const where = first.line > 0 ? `第 ${first.line} 行的键` : '键'
   return (
     `无法静默转换：${where} ${JSON.stringify(display)} 是 ${first.type}，` +
@@ -563,26 +611,73 @@ export function findNonFinite(
 
 /** YAML 输入文本长度上限：超过直接拒绝，避免超大文本进入解析 */
 const YAML_MAX_TEXT_LENGTH = 2_000_000
-/** 别名展开成树后的节点数上限 */
-const YAML_MAX_EXPANDED_NODES = 200_000
-/** 别名展开成树后的近似字符数上限 */
+/**
+ * 展开成树后的绝对节点数硬上限：与别名无关，纯粹防御「没有别名但条目极多」的输入把内存打爆。
+ * 21 万节点的扁平数组（约 1.36MB 文本）远低于此值，不再被误拒。
+ */
+const YAML_MAX_EXPANDED_NODES = 20_000_000
+/** 展开成树后的绝对字符数硬上限（同样与别名无关） */
 const YAML_MAX_EXPANDED_CHARS = 8_000_000
+/** 放大判定倍数：展开节点数超过「DAG 去重节点数」的这么多倍才算别名放大 */
+const YAML_AMPLIFICATION_FACTOR = 10
+/**
+ * 放大判定余量：小结构里的少量别名（如前几层 * 展开到十几万节点）不算危险，
+ * 只有超过 `unique * 10 + 余量` 才判为放大。
+ * 取 20 万是为了让 `bomb(5,10)`（约 12 万节点，既有回归要求可用）继续通过，
+ * 同时把 `bomb(6,9)`（约 60 万节点）拦下。
+ */
+const YAML_AMPLIFICATION_SLACK = 200_000
+
+const YAML_ALIAS_AMPLIFIED_MESSAGE =
+  'YAML 别名展开后数据过大（疑似别名放大），已拒绝处理；请避免深层嵌套的 * 别名'
+const YAML_TOO_LARGE_MESSAGE = 'YAML 输入规模过大，请减少条目或嵌套后重试'
+
+/**
+ * 统计 DAG 去重后的节点数：每个不同的对象只计一次；标量按出现次数计
+ * （js-yaml 用原始值表示标量，无法按引用去重）。
+ * 别名共享的对象在这里只算一个节点，因此 `expandedNodes / uniqueNodes` 能反映「别名放大倍数」。
+ */
+function countUniqueYamlNodes(value: unknown): number {
+  const seen = new WeakSet<object>()
+  let count = 0
+  const walk = (v: unknown): void => {
+    if (v === null || typeof v !== 'object' || v instanceof RawNumber) {
+      count++
+      return
+    }
+    if (seen.has(v)) return
+    seen.add(v)
+    count++
+    if (Array.isArray(v)) {
+      for (const item of v) walk(item)
+    } else {
+      for (const val of Object.values(v as Record<string, unknown>)) walk(val)
+    }
+  }
+  walk(value)
+  return count
+}
 
 /**
  * 校验 YAML 值「展开成树」后的规模，拦截别名放大（billion laughs）。
  *
- * 别名在 js-yaml 里共享同一对象引用（DAG），本身占用很小，但一旦被序列化 / 深度遍历
- * 就会展开成指数级文本。这里不真正展开：对每个对象只计算一次「自身子树的规模」
- * （WeakMap 记忆化），被多处引用时按引用次数累加，整体复杂度为 O(不同节点数)。
- * 遇到自引用（循环别名）时真实展开为无限大，直接按超限处理。
+ * 判定口径（P2-1 修正后，按「放大程度」而非绝对展开量判定）：
+ * 1. 计算 `uniqueNodes`（DAG 去重节点数）与 `expandedNodes`（展开成树的近似节点数）；
+ * 2. 只有 `expandedNodes` 相对 `uniqueNodes` 显著放大（> unique*10 + 20 万）才判为「别名放大」——
+ *    这样 21 万节点的合法扁平大数组（ratio≈1）不会被误拒；
+ * 3. 另设绝对硬上限 `expandedNodes > 2000 万` 或字符数 > 800 万，防止无别名的超大数据 OOM；
+ * 4. 自引用（循环别名）展开没有终点，直接按放大处理。
+ *
+ * 不真正展开：对每个对象只计算一次「自身子树的规模」（WeakMap 记忆化），
+ * 被多处引用时按引用次数累加，整体复杂度为 O(不同节点数)。
  *
  * 导出供各工具页 / 执行器在 yaml.load 之后、任何展平 / 遍历之前复用，
- * 保证别名放大在膨胀前就被中文报错拦截（阈值与 loadYamlPreservingNumbers 完全一致）。
+ * 保证别名放大在膨胀前就被中文报错拦截。
  */
 export function assertYamlExpansionWithinBudget(value: unknown): void {
   const sizeCache = new WeakMap<object, { nodes: number; chars: number }>()
   const computing = new WeakSet<object>()
-  let overflow = false
+  let cyclic = false
 
   const measure = (v: unknown): { nodes: number; chars: number } => {
     if (v === null || typeof v !== 'object' || v instanceof RawNumber) {
@@ -593,7 +688,7 @@ export function assertYamlExpansionWithinBudget(value: unknown): void {
     if (cached) return cached
     if (computing.has(v)) {
       // 循环别名：展开没有终点
-      overflow = true
+      cyclic = true
       return { nodes: Infinity, chars: Infinity }
     }
     computing.add(v)
@@ -604,20 +699,12 @@ export function assertYamlExpansionWithinBudget(value: unknown): void {
         const s = measure(item)
         nodes += s.nodes
         chars += s.chars
-        if (nodes > YAML_MAX_EXPANDED_NODES || chars > YAML_MAX_EXPANDED_CHARS) {
-          overflow = true
-          break
-        }
       }
     } else {
       for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
         const s = measure(val)
         nodes += s.nodes
         chars += s.chars + k.length + 4
-        if (nodes > YAML_MAX_EXPANDED_NODES || chars > YAML_MAX_EXPANDED_CHARS) {
-          overflow = true
-          break
-        }
       }
     }
     computing.delete(v)
@@ -626,9 +713,21 @@ export function assertYamlExpansionWithinBudget(value: unknown): void {
     return own
   }
 
-  const total = measure(value)
-  if (overflow || total.nodes > YAML_MAX_EXPANDED_NODES || total.chars > YAML_MAX_EXPANDED_CHARS) {
-    throw new Error('YAML 别名展开后数据过大（疑似别名放大），已拒绝处理；请避免深层嵌套的 * 别名')
+  const uniqueNodes = countUniqueYamlNodes(value)
+  const { nodes: expandedNodes, chars: expandedChars } = measure(value)
+
+  // 1) 别名放大：相对放大倍数超过阈值（含循环别名与指数级溢出到 Infinity 的情况）
+  if (
+    cyclic ||
+    !Number.isFinite(expandedNodes) ||
+    !Number.isFinite(expandedChars) ||
+    expandedNodes > uniqueNodes * YAML_AMPLIFICATION_FACTOR + YAML_AMPLIFICATION_SLACK
+  ) {
+    throw new Error(YAML_ALIAS_AMPLIFIED_MESSAGE)
+  }
+  // 2) 绝对规模硬上限：与别名无关，防止超大数据把内存打爆
+  if (expandedNodes > YAML_MAX_EXPANDED_NODES || expandedChars > YAML_MAX_EXPANDED_CHARS) {
+    throw new Error(YAML_TOO_LARGE_MESSAGE)
   }
 }
 
@@ -678,9 +777,7 @@ function mapYamlReason(reason: string): string {
  */
 export function loadYamlPreservingNumbers(text: string): { value: unknown; notes: string[] } {
   if (text.length > YAML_MAX_TEXT_LENGTH) {
-    throw new Error(
-      `YAML 文本过长（${text.length} 字符，超过 ${YAML_MAX_TEXT_LENGTH} 上限），已拒绝处理；请先拆分或精简输入`
-    )
+    throw new Error(`YAML 文本过长（${text.length} 字符，超过 ${YAML_MAX_TEXT_LENGTH} 上限），${YAML_TOO_LARGE_MESSAGE}`)
   }
   const stringKept: string[] = []
   const rawKept: string[] = []
@@ -721,13 +818,18 @@ export function loadYamlPreservingNumbers(text: string): { value: unknown; notes
   assertYamlExpansionWithinBudget(value)
   // 非字符串键检测：用探针 Schema 再解析一遍（见 NonStringKeyProbe 注释），完全依赖 load 之后的类型判定。
   // 不再做文本层逐行正则扫描，既消除「一行大量 "- "」时的二次回溯，也避免把多行引号标量里的 "1: x" 误判为键。
+  // 复杂键（映射/序列）只有探测解析能识别：解析期间临时给 Object.prototype / Array.prototype 打随机标记，
+  // 使 storeMappingPair 对复杂键 String() 出带标记的串（详见 withComplexKeyMarks）。
   const keyIssues: NonStringKeyIssue[] = []
   try {
-    const probeValue = yaml.load(text, { schema: NON_STRING_KEY_PROBE_SCHEMA, listener: attachProbeLine })
-    findNonStringKey(probeValue, '$', new WeakSet(), keyIssues)
+    const marks = makeComplexKeyMarks()
+    const probeValue = withComplexKeyMarks(marks, () =>
+      yaml.load(text, { schema: NON_STRING_KEY_PROBE_SCHEMA, listener: attachProbeLine })
+    )
+    findNonStringKey(probeValue, '$', new WeakSet(), keyIssues, marks)
   } catch {
-    // 探测解析与正式解析同语法，理论上不会失败；万一失败则退回 "[object Object]" 兜底检查
-    findObjectObjectKey(value, '$', new WeakSet(), keyIssues)
+    // 探测解析与正式解析同语法，理论上不会失败；万一失败也不再用字面量 "[object Object]" 判定复杂键
+    // （会误伤合法字符串键），此处仅放弃键类型校验。
   }
   if (keyIssues.length) throw new Error(describeNonStringKeyIssues(keyIssues))
   const nf = findNonFinite(value, '$')

@@ -179,9 +179,12 @@ async function validate() {
   const t0 = performance.now()
   try {
     // 走 Worker + 超时，隔离用户 schema 里 pattern 的灾难性回溯；无 Worker 时同步回退。
+    // 同步回退直接使用 parseJson 的结果（含 RawNumber），与 Worker 分支语义一致：
+    // 若在此 toPlainJson，大整数会降级为字符串，type:integer / minimum 等数值关键字被整条跳过，
+    // 导致同一输入在「有 Worker / 无 Worker」两种路径下结论不同。
     const res = await runComputation(
       { fn: 'validate', instanceText, schemaText: currentSchema, strict: useStrict },
-      () => validateInstance(toPlainJson(instance), toPlainJson(schema), { strict: useStrict }),
+      () => validateInstance(instance, schema, { strict: useStrict }),
       2000
     )
     if (token !== runToken) return

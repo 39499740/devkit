@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
-import yaml from 'js-yaml'
-import { assertYamlExpansionWithinBudget, localizeYamlMessage } from '~/utils/json'
+import { RawNumber, assertYamlExpansionWithinBudget, loadYamlPreservingNumbers } from '~/utils/json'
 
 const props = defineProps<{ tool: ToolMeta }>()
 
@@ -378,6 +377,12 @@ function flattenYaml(
     out.push({ key: prefix, value: '', bare: false })
     return
   }
+  // RawNumber（超出 JS 安全范围的数值，由 loadYamlPreservingNumbers 产生）：按原文裸输出，保留精度。
+  // typeof 守卫：该函数会被测试抽取到不含 RawNumber 的环境执行，避免 ReferenceError。
+  if (typeof RawNumber !== 'undefined' && value instanceof RawNumber) {
+    out.push({ key: prefix, value: Object(value).raw, bare: true })
+    return
+  }
   if (typeof value === 'object') {
     const cached = memo.get(value)
     if (cached) {
@@ -511,10 +516,15 @@ function execute() {
       run.markOk('YAML 中所有值都加了引号：按 Properties 语义一律视为字符串（"8080" 不会变成数字）')
     } else {
       let doc: unknown
+      const loadNotes: string[] = []
       try {
-        doc = yaml.load(input.value, { schema: yaml.JSON_SCHEMA })
+        // 与 t03 / 流程执行器共用保真链路：JSON_SCHEMA + 数字原文保留（RawNumber），
+        // 大整数 / 高精度小数不再被静默改写；异常均为中文（含「YAML 解析失败」前缀）。
+        const loaded = loadYamlPreservingNumbers(input.value)
+        doc = loaded.value
+        loadNotes.push(...loaded.notes)
       } catch (e) {
-        errDetail.value = `YAML 解析失败：${localizeYamlMessage(e)}`
+        errDetail.value = localizeProcessError(e, 'YAML')
         run.markFail(errDetail.value)
         return
       }
@@ -548,11 +558,14 @@ function execute() {
             : `检测到 ${dottedCandidates.value.length} 个含点键（默认按点路径拆分为嵌套 Properties 键，可在下方改为字面键）`,
         )
       }
+      notes.value.push(...loadNotes)
       const out: FlatEntry[] = []
       flattenYaml(doc, '', out)
       if (escapeUnicodeOut.value) notes.value.push('已开启中文转 \\uXXXX 输出')
       output.value = out.map((l) => `${l.key}=${l.value}`).join('\n') + '\n'
-      run.markOk('数字 / 布尔按原样裸输出：Properties 本身无类型，回读时一律是字符串；null 输出为空值')
+      run.markOk(
+        '数字 / 布尔按原样裸输出：Properties 本身无类型，回读时一律是字符串；null 输出为空值；超出 JS 安全范围的大整数按原文保留精度',
+      )
     }
   } catch (e) {
     errDetail.value = localizeProcessError(e, dir.value === 'p2y' ? 'Properties' : 'YAML')
@@ -618,7 +631,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
     <DkStatusBar
       :status="run.status.value"
       :message="run.status.value === 'error' ? errDetail : run.staleNote.value"
-      :meta="[dir === 'p2y' ? '自写 Properties 解析' : 'js-yaml · JSON_SCHEMA']"
+      :meta="[dir === 'p2y' ? '自写 Properties 解析' : 'js-yaml · 数值保真']"
       :retry="execute"
     />
 
@@ -669,7 +682,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         <li>Properties 解析遵循 <code>java.util.Properties</code> 规则：<code>=</code> 与 <code>:</code> 分隔（也支持空白分隔）、<code>#</code> / <code>!</code> 注释、行尾 <code>\</code> 续行；键两侧空白 trim，值只去除分隔符后的前导空白，尾部空白按 <code>java.util.Properties</code> 保留；<code>\uXXXX</code> 解码可关闭。</li>
         <li>Properties → YAML：点路径自动嵌套（server.port → server: {port:}），a.b[0] / a.b[1] 可选转数组或保留下标键；所有值一律加引号，保持字符串语义（"8080" 回读仍是字符串，注明不改变语义）。</li>
         <li>父子键冲突（a=1 与 a.b=2 共存）会直接报错并列出冲突键，禁止静默覆盖。</li>
-        <li>YAML → Properties：使用 js-yaml（JSON_SCHEMA，日期保持字符串）拍平为点路径；数字 / 布尔裸输出并注明类型语义变化（Properties 无类型，回读均为字符串，且 <code>1.0</code> 这类数字字面会按解析值输出为 <code>1</code>）；中文默认不转义，可开启 <code>\uXXXX</code> 输出。</li>
+        <li>YAML → Properties：使用与 JSON ↔ YAML 工具一致的保真解析（JSON_SCHEMA + 数字原文保留，日期保持字符串）拍平为点路径；数字 / 布尔裸输出并注明类型语义变化（Properties 无类型，回读均为字符串，数字按原文输出，如 <code>1.0</code> 仍为 <code>1.0</code>）；超出 JS 安全范围的大整数（如 <code>9007199254740993</code>）按原文保留精度，不再被静默改写；<code>.inf</code>/<code>.nan</code> 与非字符串键会明确报错；中文默认不转义，可开启 <code>\uXXXX</code> 输出。</li>
         <li>含点的键（如 my.app.version 整体是键名）无法与点路径自动区分，请在「含点字面键确认」中逐键指定；字面键在 YAML 输出中加引号，在 Properties 输出中保持原样。</li>
       </ul>
     </DkCollapse>

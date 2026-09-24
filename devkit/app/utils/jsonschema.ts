@@ -519,6 +519,9 @@ export function validateInstance(
         if (seen.size !== inst.length) push(pointer, `${spath}/uniqueItems`, 'uniqueItems', '数组元素存在重复')
       }
       const prefix = Array.isArray(s.prefixItems) ? (s.prefixItems as unknown[]) : null
+      // 2020-12：prefixItems 逐元素校验前 N 项，items 只作用于其后的剩余元素（起点 N）。
+      // 未声明 prefixItems 时 N=0，items 仍覆盖全部元素（既有行为）。
+      const prefixLen = prefix ? prefix.length : 0
       if (prefix) {
         prefix.forEach((sub, i) => {
           if (i < inst.length) walk(inst[i], sub, `${pointer}/${i}`, `${spath}/prefixItems/${i}`, depth + 1)
@@ -527,13 +530,33 @@ export function validateInstance(
       if (hasOwn(s, 'items')) {
         const items = s.items
         if (Array.isArray(items)) {
-          // draft-07 的元组写法：逐个前缀匹配
+          // draft-07 的元组写法：逐个前缀匹配（2020-12 已由 prefixItems 取代，故不叠加 prefixLen）
           items.forEach((sub, i) => {
             if (i < inst.length) walk(inst[i], sub, `${pointer}/${i}`, `${spath}/items/${i}`, depth + 1)
           })
+          // additionalItems 仅在 items 为数组（draft-07 元组）时生效，作用于元组越界的剩余元素
+          if (inst.length > items.length) {
+            const extra = s.additionalItems
+            if (extra === false) {
+              for (let i = items.length; i < inst.length; i += 1) {
+                push(
+                  `${pointer}/${i}`,
+                  `${spath}/additionalItems`,
+                  'additionalItems',
+                  'additionalItems:false 不允许 items 元组之外的额外元素'
+                )
+              }
+            } else if (extra !== undefined && extra !== true) {
+              for (let i = items.length; i < inst.length; i += 1) {
+                walk(inst[i], extra, `${pointer}/${i}`, `${spath}/additionalItems`, depth + 1)
+              }
+            }
+          }
         } else if (items !== undefined) {
-          // 布尔 schema（true 恒通过、false 每个元素都不通过）与普通对象 schema 都交给 walk
-          inst.forEach((v, i) => walk(v, items, `${pointer}/${i}`, `${spath}/items`, depth + 1))
+          // 布尔 schema（true 恒通过、false 剩余元素逐个报错）与普通对象 schema 都交给 walk
+          for (let i = prefixLen; i < inst.length; i += 1) {
+            walk(inst[i], items, `${pointer}/${i}`, `${spath}/items`, depth + 1)
+          }
         }
       }
       if (hasOwn(s, 'contains')) {

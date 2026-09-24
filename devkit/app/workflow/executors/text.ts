@@ -358,9 +358,20 @@ const jsonSchemaGen: StepExecutor = (input, config) => {
   }
 }
 
+/**
+ * CSV 分隔符校验：必须是长度恰为 1 的字符串。
+ * catalog 下拉只提供 , ; 与制表符（\t 本身即单字符），但手改 / 导入的流程 JSON 可能塞进
+ * 空串或 '||' 这类多字符串；不拦截时 parseCsv / jsonToCsv 会把整行当一个字段静默退化。
+ */
+function requireCsvSeparator(separator: string): string {
+  if (separator.length === 1) return separator
+  const shown = separator === '' ? '空' : `「${separator}」`
+  throw new Error(`CSV 分隔符必须是单个字符，当前为${shown}；请使用「,」「;」或制表符（Tab）`)
+}
+
 const csvJson: StepExecutor = (input, config) => {
   const text = requireText(input, 'CSV / JSON 转换')
-  const separator = configText(config, 'separator', ',')
+  const separator = requireCsvSeparator(configText(config, 'separator', ','))
   const header = configBool(config, 'header', true)
   if (configText(config, 'direction', 'csv2json') === 'json2csv') {
     const res = jsonToCsv(text, { separator, header })
