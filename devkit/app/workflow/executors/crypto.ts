@@ -71,7 +71,9 @@ const digest: StepExecutor = async (input, config) => {
 const hmac: StepExecutor = async (input, config, secrets) => {
   const algo = configText(config, 'algo', 'SHA-256') as HmacAlgo
   if (algo !== 'SHA-256' && algo !== 'SHA-512') throw new Error(`不支持的 HMAC 算法：${algo}`)
-  const keyEnc = configText(config, 'keyEncoding', 'utf8') === 'hex' ? 'hex' : 'utf8'
+  const keyEnc = configText(config, 'keyEncoding', 'utf8')
+  // 非法密钥编码必须报错：否则 decodeInput 会静默按 UTF-8 解码，密钥字节与配置不符
+  if (keyEnc !== 'utf8' && keyEnc !== 'hex') throw new Error(`不支持的哈希密钥编码：${keyEnc}`)
   const keyBytes = decodeInput(secrets.key ?? '', keyEnc, '密钥')
   if (!keyBytes.length) throw new Error('密钥为空：请填写密钥（HMAC 密钥至少需要 1 字节）')
   const bytes = payloadBytes(input, inputEncoding(config))
@@ -171,11 +173,17 @@ function sm4ErrorText(e: unknown): string {
 
 const sm4: StepExecutor = (input, config, secrets) => {
   const operation = configText(config, 'operation', 'encrypt')
+  // 非法操作必须报错：否则会静默走 decrypt 分支，用户以为在加密
+  if (operation !== 'encrypt' && operation !== 'decrypt') throw new Error(`不支持的操作：${operation}`)
   const mode = configText(config, 'mode', 'cbc') as Sm4Mode
   if (mode !== 'cbc' && mode !== 'ecb') throw new Error(`不支持的 SM4 模式：${mode}`)
-  const padding = configText(config, 'padding', 'pkcs#7') === 'none' ? 'none' : ('pkcs#7' as Sm4Padding)
+  const padding = configText(config, 'padding', 'pkcs#7')
+  // 非法填充方式必须报错：否则会静默按 PKCS#7 处理，与配置不符
+  if (padding !== 'pkcs#7' && padding !== 'none') throw new Error(`不支持的 SM4 填充方式：${padding}`)
   const keyEnc = configText(config, 'keyEncoding', 'utf8')
-  const keyBytes = decodeInput(secrets.key ?? '', keyEnc === 'hex' ? 'hex' : 'utf8', '密钥')
+  // 非法密钥编码必须报错：否则会静默按 UTF-8 解码，密钥字节与配置不符
+  if (keyEnc !== 'utf8' && keyEnc !== 'hex') throw new Error(`不支持的 SM4 密钥编码：${keyEnc}`)
+  const keyBytes = decodeInput(secrets.key ?? '', keyEnc, '密钥')
   if (keyBytes.length !== 16) {
     throw new Error(
       keyEnc === 'hex'
@@ -186,8 +194,11 @@ const sm4: StepExecutor = (input, config, secrets) => {
   const ivHex = cleanHex(secrets.iv ?? '')
   if (mode === 'cbc' && !ivHex) throw new Error('IV 为空：CBC 模式需要 16 字节 IV（32 个 Hex 字符）')
   const bytes = payloadBytes(input, inputEncoding(config))
-  const opts = { mode, padding, ivHex }
+  // 上面已校验 padding 只能是 pkcs#7/none，这里收窄类型
+  const opts = { mode, padding: padding as Sm4Padding, ivHex }
   const outEnc = configText(config, 'outputEncoding', 'auto')
+  // 非法输出编码必须报错：否则非 auto 的任意值都会静默按 Hex 输出
+  if (outEnc !== 'auto' && outEnc !== 'hex' && outEnc !== 'base64') throw new Error(`不支持的输出编码：${outEnc}`)
 
   if (operation === 'encrypt') {
     let out: Uint8Array
@@ -219,10 +230,18 @@ const sm4: StepExecutor = (input, config, secrets) => {
 
 const sm2Exec: StepExecutor = (input, config, secrets) => {
   const operation = configText(config, 'operation', 'encrypt')
-  const mode: Sm2CipherMode = configText(config, 'cipherMode', '1') === '0' ? 0 : 1
-  const enc = configText(config, 'encoding', 'hex') === 'base64' ? 'base64' : 'hex'
+  const cipherMode = configText(config, 'cipherMode', '1')
+  // 非法密文模式必须报错：否则会静默按 C1C3C2 处理，与配置不符
+  if (cipherMode !== '0' && cipherMode !== '1') throw new Error(`不支持的 SM2 密文模式：${cipherMode}`)
+  const mode: Sm2CipherMode = cipherMode === '0' ? 0 : 1
+  const enc = configText(config, 'encoding', 'hex')
+  // 非法密文编码必须报错：否则会静默按 Hex 处理 Base64 文本
+  if (enc !== 'hex' && enc !== 'base64') throw new Error(`不支持的 SM2 密文编码：${enc}`)
   const userId = configText(config, 'userId', SM2_DEFAULT_USER_ID)
-  const der = configText(config, 'sigFormat', 'raw') === 'der'
+  const sigFormat = configText(config, 'sigFormat', 'raw')
+  // 非法签名格式必须报错：否则会静默按 raw 处理，DER 签名会直接验签失败
+  if (sigFormat !== 'raw' && sigFormat !== 'der') throw new Error(`不支持的 SM2 签名格式：${sigFormat}`)
+  const der = sigFormat === 'der'
   const publicKey = configText(config, 'publicKey')
   const privateKey = secrets.privateKey ?? ''
   const modeLabel = mode === 1 ? 'C1C3C2' : 'C1C2C3'

@@ -2,26 +2,76 @@
  * T45 JSON Schema：从 JSON 推断 Schema，以及按 Draft 2020-12 子集校验实例。
  * 校验一次收集全部错误（不是遇到第一个就停），并给出 JSONPath 与 Schema 位置。
  */
-import { RawNumber } from './json'
+import { isSafeJsonNumber, RawNumber } from './json'
 
 export type Draft = '2020-12' | 'draft-07'
-
-/** 大整数原文是否按整数书写（供 RawNumber 判定 type: integer） */
-const RAW_INTEGER_RE = /^-?\d+$/
 
 /** 值是否为 RawNumber（parseJson 为保留大整数原文而使用的包装类型） */
 function isRawNumber(v: unknown): v is RawNumber {
   return v instanceof RawNumber
 }
 
-/** RawNumber 还原成可比较的数值（超出精度时按 Number 近似，仅用于数值关键字） */
-function numericValue(v: unknown): number | null {
-  if (typeof v === 'number') return v
-  if (isRawNumber(v)) {
-    const n = Number(v.raw)
-    return Number.isFinite(n) ? n : null
+/**
+ * 数字原文是否为整数（供 RawNumber 判定 type: integer）。
+ * 安全范围内按精确数值判断（1.0 / 1e2 / 100.0 均为整数）；
+ * 超出安全范围的整数则回退到原文书写形式，避免 Number 近似导致的误判。
+ */
+function isIntegerRaw(raw: string): boolean {
+  if (isSafeJsonNumber(raw)) return Number.isInteger(Number(raw))
+  return /^-?\d+$/.test(raw)
+}
+
+/**
+ * 数值关键字（minimum / maximum / multipleOf…）可接受的比较值：
+ * number、RawNumber 或数字字符串；整数统一转 BigInt 精确比较，避免大整数丢精度。
+ */
+type Comparable = number | bigint
+
+function rawToComparable(raw: string): Comparable | null {
+  const n = Number(raw)
+  if (!Number.isFinite(n)) return null
+  if (/^[-+]?\d+$/.test(raw)) {
+    try {
+      return BigInt(raw)
+    } catch {
+      return n
+    }
   }
+  return n
+}
+
+function toComparable(v: unknown): Comparable | null {
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v)) return null
+    return Number.isInteger(v) ? BigInt(v) : v
+  }
+  if (isRawNumber(v)) return rawToComparable(v.raw)
+  if (typeof v === 'string') return rawToComparable(v)
   return null
+}
+
+/** multipleOf：整数用 BigInt 取模，其余比较 value 与最近的整数倍；非正因子按「不约束」处理 */
+function isMultipleOf(value: Comparable, factor: Comparable): boolean {
+  const fnum = Number(factor)
+  if (!(fnum > 0)) return true
+  if (typeof value === 'bigint' && typeof factor === 'bigint') return value % factor === 0n
+  const vnum = Number(value)
+  if (!Number.isFinite(vnum)) return false
+  // 用「value 与最近的整数倍之差」判断，避免 value/factor 极小时商落在 1e-9 容差内被误判为整数倍
+  const k = Math.round(vnum / fnum)
+  if (!Number.isFinite(k)) return false
+  return Math.abs(vnum - k * fnum) <= 1e-9 * Math.max(1, Math.abs(vnum))
+}
+
+/**
+ * 长度 / 项数 / 字段数等计数类关键字（minLength / maxItems / minProperties…）：
+ * 同样接受 number、RawNumber 或数字字符串，避免 schema 保留 RawNumber 后被 typeof === 'number' 跳过。
+ */
+function countValue(v: unknown): number | null {
+  const c = toComparable(v)
+  if (c === null) return null
+  const n = Number(c)
+  return Number.isFinite(n) ? n : null
 }
 
 /** 面向用户的取值展示：RawNumber 显示数字原文，避免泄漏 {"raw":…} */
@@ -56,7 +106,7 @@ export interface InferOptions {
 function typeOf(v: unknown): string {
   if (v === null) return 'null'
   if (Array.isArray(v)) return 'array'
-  if (isRawNumber(v)) return RAW_INTEGER_RE.test(v.raw) ? 'integer' : 'number'
+  if (isRawNumber(v)) return isIntegerRaw(v.raw) ? 'integer' : 'number'
   if (typeof v === 'number') return Number.isInteger(v) ? 'integer' : 'number'
   return typeof v
 }
@@ -64,7 +114,7 @@ function typeOf(v: unknown): string {
 function actualType(v: unknown): string {
   if (v === null) return 'null'
   if (Array.isArray(v)) return 'array'
-  if (isRawNumber(v)) return RAW_INTEGER_RE.test(v.raw) ? 'integer' : 'number'
+  if (isRawNumber(v)) return isIntegerRaw(v.raw) ? 'integer' : 'number'
   return typeof v
 }
 
@@ -281,11 +331,13 @@ export function validateInstance(
     }
 
     if (typeof inst === 'string') {
-      if (typeof s.minLength === 'number' && inst.length < s.minLength) {
-        push(pointer, `${spath}/minLength`, 'minLength', `长度至少 ${s.minLength}，当前 ${inst.length}`)
+      const minLen = countValue(s.minLength)
+      if (minLen !== null && inst.length < minLen) {
+        push(pointer, `${spath}/minLength`, 'minLength', `长度至少 ${minLen}，当前 ${inst.length}`)
       }
-      if (typeof s.maxLength === 'number' && inst.length > s.maxLength) {
-        push(pointer, `${spath}/maxLength`, 'maxLength', `长度至多 ${s.maxLength}，当前 ${inst.length}`)
+      const maxLen = countValue(s.maxLength)
+      if (maxLen !== null && inst.length > maxLen) {
+        push(pointer, `${spath}/maxLength`, 'maxLength', `长度至多 ${maxLen}，当前 ${inst.length}`)
       }
       if (typeof s.pattern === 'string') {
         // 不做静态风险硬门禁：schema.pattern 由调用方在 Worker 中执行并带超时保护，
@@ -308,31 +360,38 @@ export function validateInstance(
       }
     }
 
-    const num = numericValue(inst)
+    const num = toComparable(inst)
     if (num !== null) {
-      if (typeof s.minimum === 'number' && num < s.minimum) {
-        push(pointer, `${spath}/minimum`, 'minimum', `不得小于 ${s.minimum}，当前 ${num}`)
+      const min = toComparable(s.minimum)
+      if (min !== null && num < min) {
+        push(pointer, `${spath}/minimum`, 'minimum', `不得小于 ${min}，当前 ${num}`)
       }
-      if (typeof s.maximum === 'number' && num > s.maximum) {
-        push(pointer, `${spath}/maximum`, 'maximum', `不得大于 ${s.maximum}，当前 ${num}`)
+      const max = toComparable(s.maximum)
+      if (max !== null && num > max) {
+        push(pointer, `${spath}/maximum`, 'maximum', `不得大于 ${max}，当前 ${num}`)
       }
-      if (typeof s.exclusiveMinimum === 'number' && num <= s.exclusiveMinimum) {
-        push(pointer, `${spath}/exclusiveMinimum`, 'exclusiveMinimum', `必须大于 ${s.exclusiveMinimum}，当前 ${num}`)
+      const exMin = toComparable(s.exclusiveMinimum)
+      if (exMin !== null && num <= exMin) {
+        push(pointer, `${spath}/exclusiveMinimum`, 'exclusiveMinimum', `必须大于 ${exMin}，当前 ${num}`)
       }
-      if (typeof s.exclusiveMaximum === 'number' && num >= s.exclusiveMaximum) {
-        push(pointer, `${spath}/exclusiveMaximum`, 'exclusiveMaximum', `必须小于 ${s.exclusiveMaximum}，当前 ${num}`)
+      const exMax = toComparable(s.exclusiveMaximum)
+      if (exMax !== null && num >= exMax) {
+        push(pointer, `${spath}/exclusiveMaximum`, 'exclusiveMaximum', `必须小于 ${exMax}，当前 ${num}`)
       }
-      if (typeof s.multipleOf === 'number' && s.multipleOf > 0 && Math.abs(num / s.multipleOf - Math.round(num / s.multipleOf)) > 1e-9) {
-        push(pointer, `${spath}/multipleOf`, 'multipleOf', `必须是 ${s.multipleOf} 的整数倍，当前 ${num}`)
+      const multiple = toComparable(s.multipleOf)
+      if (multiple !== null && !isMultipleOf(num, multiple)) {
+        push(pointer, `${spath}/multipleOf`, 'multipleOf', `必须是 ${multiple} 的整数倍，当前 ${num}`)
       }
     }
 
     if (Array.isArray(inst)) {
-      if (typeof s.minItems === 'number' && inst.length < s.minItems) {
-        push(pointer, `${spath}/minItems`, 'minItems', `至少 ${s.minItems} 项，当前 ${inst.length} 项`)
+      const minItems = countValue(s.minItems)
+      if (minItems !== null && inst.length < minItems) {
+        push(pointer, `${spath}/minItems`, 'minItems', `至少 ${minItems} 项，当前 ${inst.length} 项`)
       }
-      if (typeof s.maxItems === 'number' && inst.length > s.maxItems) {
-        push(pointer, `${spath}/maxItems`, 'maxItems', `至多 ${s.maxItems} 项，当前 ${inst.length} 项`)
+      const maxItems = countValue(s.maxItems)
+      if (maxItems !== null && inst.length > maxItems) {
+        push(pointer, `${spath}/maxItems`, 'maxItems', `至多 ${maxItems} 项，当前 ${inst.length} 项`)
       }
       if (s.uniqueItems === true) {
         const seen = new Set(inst.map((v) => JSON.stringify(v)))
@@ -373,11 +432,13 @@ export function validateInstance(
         }
       }
       const keys = Object.keys(obj)
-      if (typeof s.minProperties === 'number' && keys.length < s.minProperties) {
-        push(pointer, `${spath}/minProperties`, 'minProperties', `至少 ${s.minProperties} 个字段，当前 ${keys.length} 个`)
+      const minProps = countValue(s.minProperties)
+      if (minProps !== null && keys.length < minProps) {
+        push(pointer, `${spath}/minProperties`, 'minProperties', `至少 ${minProps} 个字段，当前 ${keys.length} 个`)
       }
-      if (typeof s.maxProperties === 'number' && keys.length > s.maxProperties) {
-        push(pointer, `${spath}/maxProperties`, 'maxProperties', `至多 ${s.maxProperties} 个字段，当前 ${keys.length} 个`)
+      const maxProps = countValue(s.maxProperties)
+      if (maxProps !== null && keys.length > maxProps) {
+        push(pointer, `${spath}/maxProperties`, 'maxProperties', `至多 ${maxProps} 个字段，当前 ${keys.length} 个`)
       }
       for (const key of keys) {
         const childPointer = `${pointer}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`
@@ -424,7 +485,7 @@ export function validateInstance(
 
   function typeNameMatch(v: unknown, want: string): boolean {
     if (isRawNumber(v)) {
-      if (want === 'integer') return RAW_INTEGER_RE.test(v.raw)
+      if (want === 'integer') return isIntegerRaw(v.raw)
       if (want === 'number') return true
       return false
     }

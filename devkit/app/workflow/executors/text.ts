@@ -19,9 +19,12 @@ import { bytesPayload, textPayload } from '../types'
 import { runComputation } from '../workers/run-compute'
 import type { StepExecutor, StepPayload } from '../types'
 
-function byteSize(text: string): string {
-  const bytes = new TextEncoder().encode(text).length
+function byteCountLabel(bytes: number): string {
   return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`
+}
+
+function byteSize(text: string): string {
+  return byteCountLabel(new TextEncoder().encode(text).length)
 }
 
 function lineSize(text: string): string {
@@ -288,11 +291,13 @@ const schemaValidate: StepExecutor = async (input, config) => {
   }
   // 实例 / Schema 里的数字超出安全范围时给出告警（成功与失败路径都要给）
   const unsafeNote = hasUnsafeRawNumber(value) || hasUnsafeRawNumber(schemaRaw) ? UNSAFE_NUMBER_RAW_NOTE : ''
-  // 有 Worker 时把原始 JSON 文本交给 Worker：实例保留 RawNumber 大整数语义，schema 侧还原普通值；
-  // 无 Worker（Node / SSR / 测试）时用同步回退，实例同样保留 RawNumber，与 Worker 分支语义一致。
+  // 有 Worker 时把原始 JSON 文本交给 Worker：实例与 schema 都保留 RawNumber，
+  // 数值关键字（minimum / multipleOf…）才能精确比较；
+  // 无 Worker（Node / SSR / 测试）时用同步回退，同样直接传 schema 原始 parse 结果（不 toPlainJson，
+  // 否则大整数约束会降级为字符串，被 typeof === 'number' 整条跳过）。
   const res = await runComputation<ValidateResult>(
     { fn: 'validate', instanceText: text, schemaText, strict: true },
-    () => validateInstance(value, toPlainJson(schemaRaw), { strict: true })
+    () => validateInstance(value, schemaRaw, { strict: true })
   )
   const warn = warnNote(res.warnings)
   if (res.valid) {
@@ -405,7 +410,9 @@ function sanitizeFilename(name: string): string {
 
 const download: StepExecutor = (input, config) => {
   const name = sanitizeFilename(configText(config, 'filename', 'result.txt')) || 'result.txt'
-  return { payload: input, note: `将导出为 ${name}，${byteSize(input.text)}` }
+  // 二进制载荷按真实字节数（input.text 是 Hex 视图，长度是两倍），文本按 UTF-8 长度
+  const bytes = input.bytes ?? textToBytes(input.text)
+  return { payload: input, note: `将导出为 ${name}，${byteCountLabel(bytes.length)}` }
 }
 
 /* ── JSON 转 Java：与 t22 工具页同一套命名与类型推断规则 ── */

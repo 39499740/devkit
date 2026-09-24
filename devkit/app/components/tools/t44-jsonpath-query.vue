@@ -4,6 +4,7 @@ import { getTool } from '~/data/tools'
 import { evalJsonPath, jsonPathSamples } from '~/utils/jsonpath'
 import { toPlainJson } from '~/utils/json'
 import { evalJmesPath, jmesPathSamples } from '~/utils/jmespath'
+import { runComputation } from '~/workflow/workers/run-compute'
 
 defineProps<{ tool: ToolMeta }>()
 
@@ -46,6 +47,11 @@ const samples = computed(() =>
 const sig = () => JSON.stringify([lang.value, expr.value, input.value])
 const run = useToolRun(sig)
 
+/** 异步求值序号：只采纳最后一次发起的结果，避免慢请求覆盖新结果 */
+let runToken = 0
+/** 求值进行中（仅用于按钮 loading 反馈，不阻断后续输入触发的求值） */
+const busy = ref(false)
+
 const fromName = computed(() => (source.value ? (getTool(source.value.from)?.name ?? source.value.from) : ''))
 
 const sourceAge = computed(() => {
@@ -77,19 +83,35 @@ function resultSummary(value: unknown): string {
   return `单个值 · ${value === null ? 'null' : typeof value}`
 }
 
-function execute() {
+async function execute() {
   if (!input.value.trim()) {
+    runToken += 1
+    busy.value = false
     run.markIdle()
     resultText.value = ''
     matches.value = []
     warnings.value = []
     return
   }
+  const token = ++runToken
+  // 快照入参：Worker 消息与同步回退读到同一份输入
+  const dataText = input.value
+  const query = expr.value
+  const langSnapshot = lang.value
+  busy.value = true
   const t0 = performance.now()
   try {
-    const { value } = parseJson(input.value)
-    const plain = toPlainJson(value)
-    const res = lang.value === 'jsonpath' ? evalJsonPath(plain, expr.value) : evalJmesPath(plain, expr.value)
+    // JSONPath 走 Worker + 超时，隔离 =~ 正则的灾难性回溯；
+    // JMESPath 暂无 Worker 分支（其语法不含用户可控正则），保持同步求值。
+    const res =
+      langSnapshot === 'jsonpath'
+        ? await runComputation(
+            { fn: 'path', dataText, expr: query },
+            () => evalJsonPath(toPlainJson(parseJson(dataText).value), query),
+            2000
+          )
+        : evalJmesPath(toPlainJson(parseJson(dataText).value), query)
+    if (token !== runToken) return
     matches.value = res.matches
     warnings.value = res.warnings
     resultText.value = JSON.stringify(
@@ -100,10 +122,13 @@ function execute() {
     elapsed.value = Math.round(performance.now() - t0)
     run.markOk(`${res.matches.length} 个匹配`)
   } catch (e) {
+    if (token !== runToken) return
     resultText.value = ''
     matches.value = []
     warnings.value = []
     run.markFail(errMessage(e))
+  } finally {
+    if (token === runToken) busy.value = false
   }
 }
 
@@ -195,7 +220,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
           @keydown.enter.prevent="execute"
         />
       </label>
-      <DkButton size="sm" variant="primary" @click="execute">
+      <DkButton size="sm" variant="primary" :loading="busy" @click="execute">
         <DkIcon name="play" :size="12" />运行
       </DkButton>
       <DkButton

@@ -9,8 +9,8 @@
  *   请求 { fn:'path', dataText, expr }                        → { ok:true, result: { matches, warnings } }
  *   失败一律回 { ok:false, error: 中文原因 }
  *
- * 注意：实例按原始 JSON 文本传入并交给 parseJson，保留大整数 RawNumber 语义；
- * schema 侧用 toPlainJson 还原普通值，供 const/enum 等比较。
+ * 注意：实例与 schema 都按原始 JSON 文本传入并交给 parseJson，保留大整数 RawNumber 语义
+ * （schema 的 minimum / multipleOf / const / enum 等数值关键字据此做精确比较，不再降级为字符串）。
  */
 import { parseJson, toPlainJson } from '~/utils/json'
 import { validateInstance } from '~/utils/jsonschema'
@@ -33,7 +33,7 @@ ctx.onmessage = (e: MessageEvent) => {
   try {
     if (data && data.fn === 'validate') {
       const instance = parseJson(data.instanceText).value
-      const schema = toPlainJson(parseJson(data.schemaText).value)
+      const schema = parseJson(data.schemaText).value
       const result = validateInstance(instance, schema, { strict: !!data.strict })
       ctx.postMessage({ ok: true, result })
       return

@@ -73,11 +73,15 @@ function makeUnwrap(prefix: string) {
   }
 }
 
-/** 把 parseJson 结果里的 RawNumber 还原成普通值：安全范围内转 number，超出范围保留原始字符串 */
+/**
+ * 把 parseJson 结果里的 RawNumber 还原成普通值：安全范围内转 number，超出范围（或会丢精度 / 下溢）
+ * 保留原始字符串。
+ * 这里统一走 isSafeJsonNumber，保证与 hasUnsafeRawNumber 的判定口径完全一致：
+ * 不会出现「toPlainJson 已降级为字符串、hasUnsafeRawNumber 却不告警」的不一致。
+ */
 export function toPlainJson(v: unknown): unknown {
   if (v instanceof RawNumber) {
-    const n = Number(v.raw)
-    return Number.isFinite(n) && Math.abs(n) <= Number.MAX_SAFE_INTEGER ? n : v.raw
+    return isSafeJsonNumber(v.raw) ? Number(v.raw) : v.raw
   }
   if (Array.isArray(v)) return v.map(toPlainJson)
   if (v && typeof v === 'object') {
@@ -253,10 +257,20 @@ export function detectDuplicateKeys(text: string): string[] {
 
 /* ---------------- JSON → YAML 的数值保真（t03 工具页与流程执行器共用） ---------------- */
 
-/** 数字原文是否可安全转为 JS number（不丢精度） */
+/**
+ * 数字原文是否可安全转为 JS number（不丢精度）。
+ * 与 toPlainJson / hasUnsafeRawNumber 共用这一份判定，口径必须保持一致：
+ * - 指数形式使 |Number(raw)| 超出安全整数范围（1e21、1.5e30）→ 不安全；
+ * - 下溢：Number(raw) === 0 但原文含非零有效数字（1e-400）→ 不安全；
+ * - 整数按 Number.isSafeInteger，其余小数按有效数字位数（<= 15）估算。
+ */
 export function isSafeJsonNumber(raw: string): boolean {
   const n = Number(raw)
   if (!Number.isFinite(n)) return false
+  // 超出安全整数范围：转 number 会静默改值（指数形式尤其容易被漏判）
+  if (Math.abs(n) > Number.MAX_SAFE_INTEGER) return false
+  // 下溢：原文有非零有效数字，却被解析成 0（如 1e-400）
+  if (n === 0 && /[1-9]/.test(raw)) return false
   if (/^[-+]?\d+$/.test(raw)) return Number.isSafeInteger(n)
   const m = /^[-+]?([0-9]*)\.?([0-9]*)/.exec(raw)
   const sig = (((m?.[1] ?? '') + (m?.[2] ?? '')).replace(/^0+/, '')).length
@@ -470,6 +484,34 @@ export function findNonFinite(v: unknown, path: string): { path: string; kind: s
 }
 
 /**
+ * 深度查找 yaml.load 之后残留的非字符串键。
+ *
+ * js-yaml 在构造映射键时会把非字符串键强制转成字符串：带标签/锚点的数字键（!!int 1: / &k 1: a）
+ * 经自定义 Type 构造成 RawNumber 对象后，作为键会被 String() 成 "[object Object]"。
+ * 此时文本层的 scanNonStringKeys 因首字符是 & / ! 已被跳过，加载后再也拿不到原始键，
+ * 只能据此拒绝，避免把数据静默损坏成 "[object Object]"。
+ */
+function findNonStringKey(v: unknown, path: string, seen: WeakSet<object>): string | null {
+  if (Array.isArray(v)) {
+    for (let i = 0; i < v.length; i++) {
+      const r = findNonStringKey(v[i], `${path}[${i}]`, seen)
+      if (r) return r
+    }
+    return null
+  }
+  if (v === null || typeof v !== 'object' || v instanceof RawNumber) return null
+  if (seen.has(v)) return null
+  seen.add(v)
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    // Object.entries 的键静态上恒为 string，但 "[object Object]" 是非字符串键被强转后的残留标记
+    if (typeof k !== 'string' || k === '[object Object]') return path || '$'
+    const r = findNonStringKey(val, joinKey(path, k), seen)
+    if (r) return r
+  }
+  return null
+}
+
+/**
  * 把 js-yaml 的英文 reason 映射成中文；未知 reason 也回退中文，不回显英文原文。
  * 若错误带 mark，会在前面补上「第 X 行第 Y 列附近：」。
  */
@@ -555,6 +597,13 @@ export function loadYamlPreservingNumbers(text: string): { value: unknown; notes
     throw new Error(
       `无法静默转换：第 ${first.line} 行的键 ${JSON.stringify(first.key || '（空键）')} 是 ${first.type}，` +
         `JSON 对象的键必须是字符串（共 ${keyIssues.length} 处）。请为键加引号，如 "${first.key || '键名'}": …`
+    )
+  }
+  // 文本层扫不到、但加载后已损坏成 "[object Object]" 的非字符串键（标签/锚点导致）兜底
+  const badKeyPath = findNonStringKey(value, '$', new WeakSet())
+  if (badKeyPath) {
+    throw new Error(
+      `YAML 的键必须是字符串：存在非字符串键（可能是标签/锚点导致），无法无损转为 JSON（位置 ${badKeyPath}）`
     )
   }
   const nf = findNonFinite(value, '$')

@@ -2,6 +2,7 @@
 import type { ToolMeta } from '~/data/tools'
 import { inferSchema, validateInstance, type Draft, type SchemaError } from '~/utils/jsonschema'
 import { toPlainJson } from '~/utils/json'
+import { runComputation } from '~/workflow/workers/run-compute'
 
 defineProps<{ tool: ToolMeta }>()
 
@@ -71,6 +72,11 @@ const SAMPLE_SCHEMA = `{
 const sig = () => JSON.stringify([mode.value, draft.value, strict.value, doc.value, schemaText.value])
 const run = useToolRun(sig)
 
+/** 异步校验序号：同步生成 / 后续校验都会 +1，使旧校验结果失效 */
+let runToken = 0
+/** 校验进行中（仅用于按钮 loading 反馈） */
+const busy = ref(false)
+
 onMounted(() => {
   const p = transfer.take('json-schema')
   if (p) {
@@ -80,6 +86,8 @@ onMounted(() => {
 })
 
 function generate() {
+  runToken += 1
+  busy.value = false
   if (!doc.value.trim()) {
     run.markIdle()
     status.value = 'idle'
@@ -103,18 +111,33 @@ function generate() {
   }
 }
 
-function validate() {
+async function validate() {
+  const token = ++runToken
   if (!doc.value.trim() || !schemaText.value.trim()) {
+    busy.value = false
     run.markIdle()
     status.value = 'idle'
     errors.value = []
     return
   }
+  // 快照入参：Worker 消息与同步回退读到同一份输入
+  const instanceText = doc.value
+  const currentSchema = schemaText.value
+  const useStrict = strict.value
+  busy.value = true
   const t0 = performance.now()
   try {
-    const { value: instance } = parseJson(doc.value)
-    const { value: schema } = parseJson(schemaText.value)
-    const res = validateInstance(toPlainJson(instance), toPlainJson(schema), { strict: strict.value })
+    // 走 Worker + 超时，隔离用户 schema 里 pattern 的灾难性回溯；无 Worker 时同步回退。
+    const res = await runComputation(
+      { fn: 'validate', instanceText, schemaText: currentSchema, strict: useStrict },
+      () => {
+        const { value: instance } = parseJson(instanceText)
+        const { value: schema } = parseJson(currentSchema)
+        return validateInstance(toPlainJson(instance), toPlainJson(schema), { strict: useStrict })
+      },
+      2000
+    )
+    if (token !== runToken) return
     errors.value = res.errors
     warnings.value = res.warnings
     status.value = res.valid ? 'pass' : 'fail'
@@ -122,10 +145,13 @@ function validate() {
     if (res.valid) run.markOk(`校验通过，检查了 ${res.checked} 个 schema 节点`)
     else run.markFail(`校验失败 · ${res.errors.length} 个错误`)
   } catch (e) {
+    if (token !== runToken) return
     errors.value = []
     warnings.value = []
     status.value = 'idle'
     run.markFail(errMessage(e))
+  } finally {
+    if (token === runToken) busy.value = false
   }
 }
 
@@ -210,7 +236,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         <span class="t45__label">严格模式</span>
       </label>
       <span class="t45__sep"></span>
-      <DkButton size="sm" variant="primary" @click="mode === 'validate' ? validate() : generate()">
+      <DkButton size="sm" variant="primary" :loading="busy" @click="mode === 'validate' ? validate() : generate()">
         <DkIcon name="play" :size="12" />{{ mode === 'validate' ? '校验' : '生成' }}
       </DkButton>
       <DkButton
