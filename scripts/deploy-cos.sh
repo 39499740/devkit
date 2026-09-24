@@ -80,4 +80,4 @@ else
 fi
 
 echo "==> 4/4 完成"
-echo "    别忘了在 COS 控制台核对静态网站：索引文档=index.html，错误文档=index.html，错误文档响应码=200"
+echo "    别忘了在 COS 控制台核对静态网站：索引文档=index.html，错误文档=404.html（不要填 index.html；动态流程地址依赖它兜底成 SPA 外壳），错误文档响应码=404（或 200）"

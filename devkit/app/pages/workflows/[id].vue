@@ -429,6 +429,38 @@ function exportJson() {
   // 走 store 的导出：密钥、私钥、IV、AAD 一律不落进文件
   downloadText(`${current.name || 'workflow'}.json`, store.exportText(id.value), 'application/json')
 }
+
+/** 文件名清理：去掉首尾空白与路径分隔符/非法字符，避免下载名带目录或被系统拒绝 */
+function sanitizeFilename(name: string): string {
+  return name.trim().replace(/[/\\:*?"<>|]/g, '')
+}
+
+/**
+ * 流程输出文件名：优先最后一个 `download` 步骤配置的 filename（清理后为空则回退），
+ * 否则回退 `<流程名>.out.txt`；二进制输出用 `.bin` 后缀。
+ */
+function outputFilename(binary: boolean): string {
+  for (let i = steps.value.length - 1; i >= 0; i--) {
+    const step = steps.value[i]
+    if (step?.type !== 'download') continue
+    const configured = sanitizeFilename(String(step.config.filename ?? ''))
+    if (configured) return configured
+    break
+  }
+  const base = wf.value?.name ? `${wf.value.name}.out` : 'workflow-output'
+  return `${base}${binary ? '.bin' : '.txt'}`
+}
+
+/** 下载流程输出：最后一步是二进制就导出原始字节，否则按文本导出 */
+function downloadOutput() {
+  if (!finalOutput.value.ok) return
+  const payload = results.value[steps.value.length - 1]?.payload
+  if (payload?.kind === 'bytes' && payload.bytes) {
+    downloadBytes(outputFilename(true), payload.bytes)
+    return
+  }
+  downloadText(outputFilename(false), finalOutput.value.text)
+}
 </script>
 
 <template>
@@ -786,7 +818,7 @@ function exportJson() {
               size="sm"
               variant="ghost"
               :disabled="!finalOutput.ok"
-              @click="downloadText(wf?.name ? wf.name + '.out.txt' : 'workflow-output.txt', finalOutput.text)"
+              @click="downloadOutput"
             >
               <DkIcon name="download" :size="12" />下载
             </DkButton>

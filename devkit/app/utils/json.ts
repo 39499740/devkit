@@ -218,6 +218,62 @@ export function detectDuplicateKeys(text: string): string[] {
   return dups
 }
 
+/* ---------------- JSON → YAML 的数值保真（t03 工具页与流程执行器共用） ---------------- */
+
+/** 数字原文是否可安全转为 JS number（不丢精度） */
+export function isSafeJsonNumber(raw: string): boolean {
+  const n = Number(raw)
+  if (!Number.isFinite(n)) return false
+  if (/^[-+]?\d+$/.test(raw)) return Number.isSafeInteger(n)
+  const m = /^[-+]?([0-9]*)\.?([0-9]*)/.exec(raw)
+  const sig = (((m?.[1] ?? '') + (m?.[2] ?? '')).replace(/^0+/, '')).length
+  return sig <= 15
+}
+
+const escapeReg = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const SIMPLE_KEY = /^[A-Za-z_$][A-Za-z0-9_$\u4e00-\u9fa5]*$/
+
+/** 把 JSON 路径与键拼成可读路径：简单键用 .key，其余用 ["key"] */
+export function joinKey(path: string, k: string): string {
+  return SIMPLE_KEY.test(k) ? `${path}.${k}` : `${path}[${JSON.stringify(k)}]`
+}
+
+/**
+ * 把 parseJson 的结果（含 RawNumber）转成可交给 js-yaml 的普通值；
+ * 超出安全范围的大数用占位符替代（dump 后由 applyYamlRawMap 替换回原文，保证 YAML 文本不丢精度）。
+ */
+export function toYamlJsonable(
+  v: unknown,
+  token: string,
+  counter: { n: number },
+  rawMap: Map<string, string>,
+  unsafe: string[],
+  path: string
+): unknown {
+  if (v instanceof RawNumber) {
+    if (isSafeJsonNumber(v.raw)) return Number(v.raw)
+    unsafe.push(path)
+    const ph = `${token}${String(counter.n++).padStart(6, '0')}zz`
+    rawMap.set(ph, v.raw)
+    return ph
+  }
+  if (Array.isArray(v)) {
+    return v.map((x, i) => toYamlJsonable(x, token, counter, rawMap, unsafe, `${path}[${i}]`))
+  }
+  if (v !== null && typeof v === 'object') {
+    const o: Record<string, unknown> = {}
+    for (const [k, val] of Object.entries(v)) o[k] = toYamlJsonable(val, token, counter, rawMap, unsafe, joinKey(path, k))
+    return o
+  }
+  return v
+}
+
+/** 把 dump 结果中的占位符回填为数字原文；无占位符时原样返回 */
+export function applyYamlRawMap(dumped: string, token: string, rawMap: Map<string, string>): string {
+  if (!rawMap.size) return dumped
+  return dumped.replace(new RegExp(escapeReg(token) + '\\d{6}zz', 'g'), (m) => rawMap.get(m) ?? m)
+}
+
 /** 从 JSON.parse 错误中提取行列位置 */
 export function jsonErrorPosition(e: unknown, text: string): { line: number; column: number; message: string } | null {
   const msg = e instanceof Error ? e.message : String(e)

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import yaml from 'js-yaml'
 import type { ToolMeta } from '~/data/tools'
+import { applyYamlRawMap, isSafeJsonNumber, joinKey, toYamlJsonable } from '~/utils/json'
 
 defineProps<{ tool: ToolMeta }>()
 const toast = useToast()
@@ -48,49 +49,7 @@ const run = useToolRun(sig)
 const indentUnit = computed(() => (indent.value === '4' ? 4 : 2))
 
 /* ---------------- JSON → YAML ---------------- */
-/** 数字原文是否可安全转为 JS number（不丢精度） */
-function isSafeJsonNumber(raw: string): boolean {
-  const n = Number(raw)
-  if (!Number.isFinite(n)) return false
-  if (/^[-+]?\d+$/.test(raw)) return Number.isSafeInteger(n)
-  const m = /^[-+]?([0-9]*)\.?([0-9]*)/.exec(raw)
-  const sig = (((m?.[1] ?? '') + (m?.[2] ?? '')).replace(/^0+/, '')).length
-  return sig <= 15
-}
-
-const escapeReg = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-const SIMPLE_KEY = /^[A-Za-z_$][A-Za-z0-9_$\u4e00-\u9fa5]*$/
-const joinKey = (path: string, k: string) => (SIMPLE_KEY.test(k) ? `${path}.${k}` : `${path}[${JSON.stringify(k)}]`)
-
-/**
- * 把 parseJson 的结果（含 RawNumber）转成可交给 js-yaml 的普通值；
- * 超出安全范围的大数用占位符替代（dump 后替换回原文，保证 YAML 文本不丢精度）。
- */
-function toJsonable(
-  v: unknown,
-  token: string,
-  counter: { n: number },
-  rawMap: Map<string, string>,
-  unsafe: string[],
-  path: string
-): unknown {
-  if (v instanceof RawNumber) {
-    if (isSafeJsonNumber(v.raw)) return Number(v.raw)
-    unsafe.push(path)
-    const ph = `${token}${String(counter.n++).padStart(6, '0')}zz`
-    rawMap.set(ph, v.raw)
-    return ph
-  }
-  if (Array.isArray(v)) {
-    return v.map((x, i) => toJsonable(x, token, counter, rawMap, unsafe, `${path}[${i}]`))
-  }
-  if (v !== null && typeof v === 'object') {
-    const o: Record<string, unknown> = {}
-    for (const [k, val] of Object.entries(v)) o[k] = toJsonable(val, token, counter, rawMap, unsafe, joinKey(path, k))
-    return o
-  }
-  return v
-}
+// 数值保真逻辑与 utils/json.ts 共用：超出安全范围的数字用占位符替换，dump 后回填原文。
 
 function runJson2Yaml(): string {
   let value: unknown
@@ -109,12 +68,9 @@ function runJson2Yaml(): string {
   const counter = { n: 0 }
   const rawMap = new Map<string, string>()
   const unsafe: string[] = []
-  const jsonable = toJsonable(value, token, counter, rawMap, unsafe, '$')
+  const jsonable = toYamlJsonable(value, token, counter, rawMap, unsafe, '$')
   const dumped = yaml.dump(jsonable, { indent: indentUnit.value, lineWidth: -1 })
-  let out = dumped
-  if (rawMap.size) {
-    out = dumped.replace(new RegExp(escapeReg(token) + '\\d{6}zz', 'g'), (m) => rawMap.get(m) ?? m)
-  }
+  const out = applyYamlRawMap(dumped, token, rawMap)
   const notes: string[] = []
   if (duplicateKeys.length) {
     notes.push(

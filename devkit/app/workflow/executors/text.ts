@@ -6,7 +6,7 @@ import yaml from 'js-yaml'
 import { base64ToBytes, bytesToBase64, textToBytes } from '../../utils/bytes'
 import { csvToJson, jsonToCsv } from '../../utils/csv'
 import { errMessage } from '../../utils/errors'
-import { detectDuplicateKeys, jsonErrorPosition, minifyJson, parseJson, RawNumber, stringifyJson, toPlainJson } from '../../utils/json'
+import { applyYamlRawMap, detectDuplicateKeys, jsonErrorPosition, minifyJson, parseJson, RawNumber, stringifyJson, toPlainJson, toYamlJsonable } from '../../utils/json'
 import { evalJmesPath } from '../../utils/jmespath'
 import { evalJsonPath } from '../../utils/jsonpath'
 import { inferSchema, validateInstance, type Draft } from '../../utils/jsonschema'
@@ -75,16 +75,6 @@ function parseJsonLocalized(text: string, what = 'JSON') {
     throw new Error(`${what} 解析失败：${detail}`)
   }
 }
-
-/** 是否存在超出安全整数范围的原始数字（这些数字经 toPlainJson 会变成字符串，需提示用户） */
-function hasBigRawNumber(v: unknown): boolean {
-  if (v instanceof RawNumber) return !Number.isSafeInteger(Number(v.raw))
-  if (Array.isArray(v)) return v.some(hasBigRawNumber)
-  if (v && typeof v === 'object') return Object.values(v as Record<string, unknown>).some(hasBigRawNumber)
-  return false
-}
-
-const BIG_NUMBER_WARN = '；检测到超出安全整数范围的数字，已按原文以字符串输出（与工具页的大整数保真策略一致，如需数值类型请手动处理）'
 
 const base64Decode: StepExecutor = (input) => {
   const src = requireText(input, 'Base64 解码')
@@ -262,8 +252,20 @@ const jsonYaml: StepExecutor = (input, config) => {
     return { payload: textPayload(JSON.stringify(obj, null, 2), 'json'), note: 'YAML 已转为 JSON' }
   }
   const { value } = parseJsonLocalized(text)
-  const out = yaml.dump(toPlainJson(value), { indent: 2, lineWidth: -1 })
-  return { payload: textPayload(out), note: `JSON 已转为 YAML${hasBigRawNumber(value) ? BIG_NUMBER_WARN : ''}` }
+  const token = `dkyamlraw${Math.random().toString(36).slice(2, 10)}`
+  const counter = { n: 0 }
+  const rawMap = new Map<string, string>()
+  const unsafe: string[] = []
+  const jsonable = toYamlJsonable(value, token, counter, rawMap, unsafe, '$')
+  const dumped = yaml.dump(jsonable, { indent: 2, lineWidth: -1 })
+  const out = applyYamlRawMap(dumped, token, rawMap)
+  const notes: string[] = []
+  if (unsafe.length) {
+    notes.push(
+      `${unsafe.length} 个数值超出 JS 安全范围（如 ${unsafe[0]}），已按原文输出以保留精度；部分工具按数值解析时仍可能丢失精度（超出安全整数范围的数值尤其如此）`
+    )
+  }
+  return { payload: textPayload(out), note: `JSON 已转为 YAML${notes.length ? `；${notes.join('；')}` : ''}` }
 }
 
 const schemaValidate: StepExecutor = (input, config) => {
@@ -308,6 +310,7 @@ const csvJson: StepExecutor = (input, config) => {
     }
   }
   const infer = configBool(config, 'infer', false)
+  if (!text.trim()) throw new Error('CSV 输入为空：请提供至少一行表头或数据')
   const res = csvToJson(text, { separator, header, infer })
   return {
     payload: textPayload(res.json, 'json'),
@@ -385,7 +388,29 @@ const download: StepExecutor = (input, config) => {
 
 /* ── JSON 转 Java：与 t22 工具页同一套命名与类型推断规则 ── */
 
-function javaTypeOf(value: unknown): string {
+const INT_MIN = -2147483648n
+const INT_MAX = 2147483647n
+const LONG_MIN = -(2n ** 63n)
+const LONG_MAX = 2n ** 63n - 1n
+
+/**
+ * 数字原文的 Java 类型（紧凑版：int 范围也统一用 long，超出 long 用 String 并告警）。
+ * 与 t22 的 numberFamily 语义保持一致，但不引入 wrapper / 类型确认机制。
+ */
+function javaNumberType(raw: string, warnings: string[], label: string): string {
+  if (/^-?\d+$/.test(raw)) {
+    const b = BigInt(raw)
+    if (b >= INT_MIN && b <= INT_MAX) return 'long'
+    if (b >= LONG_MIN && b <= LONG_MAX) return 'long'
+    warnings.push(`字段 ${label} 的整数超出 long 范围（> 2^63-1 或 < -2^63），已按 String 输出`)
+    return 'String'
+  }
+  return 'double'
+}
+
+/** 标量值的 Java 类型；RawNumber 保留原文做范围判断，避免大整数被降级成字符串 */
+function javaTypeOf(value: unknown, warnings: string[], label: string): string {
+  if (value instanceof RawNumber) return javaNumberType(value.raw, warnings, label)
   if (value === null) return 'Object'
   if (Array.isArray(value)) return 'List<Object>'
   if (typeof value === 'number') return Number.isInteger(value) ? 'long' : 'double'
@@ -414,32 +439,34 @@ function pascal(key: string): string {
 }
 
 /** 紧凑版 POJO 生成：嵌套对象生成静态内部类，数组按首个非空元素推断元素类型 */
-function javaFromJson(value: unknown, className: string): string {
+function javaFromJson(value: unknown, className: string, warnings: string[] = []): string {
   let needsList = false
 
-  function classOf(obj: Record<string, unknown>, name: string): string {
+  function classOf(obj: Record<string, unknown>, name: string, path: string): string {
     const fields: string[] = []
     const methods: string[] = []
     const inners: string[] = []
     for (const [key, v] of Object.entries(obj)) {
       const prop = javaName(key)
+      const fp = `${path}.${key}`
       let type: string
-      if (v && typeof v === 'object' && !Array.isArray(v)) {
+      // RawNumber 是对象类型，但绝不能当成嵌套对象展开
+      if (v && typeof v === 'object' && !Array.isArray(v) && !(v instanceof RawNumber)) {
         const inner = pascal(key)
         type = inner
-        inners.push(classOf(v as Record<string, unknown>, inner))
+        inners.push(classOf(v as Record<string, unknown>, inner, fp))
       } else if (Array.isArray(v)) {
         needsList = true
         const first = v.find((x) => x !== null && x !== undefined)
-        if (first && typeof first === 'object' && !Array.isArray(first)) {
+        if (first && typeof first === 'object' && !Array.isArray(first) && !(first instanceof RawNumber)) {
           const inner = pascal(key)
           type = `List<${inner}>`
-          inners.push(classOf(first as Record<string, unknown>, inner))
+          inners.push(classOf(first as Record<string, unknown>, inner, `${fp}[]`))
         } else {
-          type = `List<${first === undefined ? 'Object' : javaTypeOf(first)}>`
+          type = `List<${first === undefined ? 'Object' : javaTypeOf(first, warnings, `${fp}[]`)}>`
         }
       } else {
-        type = javaTypeOf(v)
+        type = javaTypeOf(v, warnings, fp)
       }
       fields.push(`    private ${type} ${prop};`)
       methods.push(
@@ -458,10 +485,10 @@ function javaFromJson(value: unknown, className: string): string {
     return [`public class ${name} {`, ...all, '}'].join('\n')
   }
 
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || value instanceof RawNumber) {
     return `public class ${className} {\n    // 顶层不是对象，无法生成字段；请先用 JSONPath 提取出对象\n}`
   }
-  const code = classOf(value as Record<string, unknown>, className)
+  const code = classOf(value as Record<string, unknown>, className, '$')
   return needsList ? `import java.util.List;\n\n${code}` : code
 }
 
@@ -469,8 +496,10 @@ const json2java: StepExecutor = (input, config) => {
   const text = requireText(input, 'JSON 转 Java')
   const { value } = parseJsonLocalized(text)
   const cls = configText(config, 'className', 'Order').trim() || 'Order'
-  const code = javaFromJson(toPlainJson(value), cls)
-  return { payload: textPayload(code), note: `生成 ${cls}，${lineSize(code)}${hasBigRawNumber(value) ? BIG_NUMBER_WARN : ''}` }
+  const warnings: string[] = []
+  const code = javaFromJson(value, cls, warnings)
+  const warn = warnings.length ? `；${warnings.slice(0, 2).join('；')}` : ''
+  return { payload: textPayload(code), note: `生成 ${cls}，${lineSize(code)}${warn}` }
 }
 
 export const textExecutors: Partial<Record<string, StepExecutor>> = {

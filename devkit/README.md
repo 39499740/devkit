@@ -15,6 +15,7 @@ npm run preview    # 预览构建产物
 npm run typecheck  # 类型检查
 npm test           # 引擎回归测试（Node，无额外依赖）
 npm run test:dom   # DOM 用例（真实浏览器，需 ego-browser）
+npm run test:e2e   # 端到端用例（真实浏览器，重复预设密钥隔离）
 ```
 
 ## 功能范围

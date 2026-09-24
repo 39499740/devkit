@@ -469,14 +469,14 @@ const executors: Record<StepType, StepExecutor> = {
 
 ### 验收证据（2026-09-22）
 - `npm run typecheck` exit 0；`npm run generate` 预渲染 134 条路由成功。
-- `npm test` **293/293**（新增 crypto 43、workflow-storage 60、workflow 82）；`npm run test:dom` **55/55**（含 XML 步骤与 `regexWorkerSource()` 在真实 Worker 里的执行）。
+- `npm test` **404/404**（新增 crypto 43、workflow-storage 68、workflow 90，以及 crypto-edge / regex-guard / json-fidelity / csv-warnings）；`npm run test:dom` **55/55**（含 XML 步骤与 `regexWorkerSource()` 在真实 Worker 里的执行）。
 - 加解密对照公开标准向量：NIST / McGrew-Viega AES-GCM 4 组、RFC 4231 HMAC、GB/T 32905 SM3、GB/T 32907 SM4；期望值另用 `node:crypto` 独立复核，不以自我往返为唯一证据。
 - 自动化浏览器用例（可复算）：`tests/workflow.browser.mjs` 13 条在真实 Chromium（ego-browser）里执行流程编排与 XML 步骤，含 `regexWorkerSource()` 在真 Worker 中运行。
 - 手工浏览器实测（ego-browser，390 / 1280 双视口，**无自动化留档**）：未勾选风险确认时无法添加、取消后步骤数与 localStorage 都不变；确认后写入 `acceptedAt` 与 `noticeVersion`；密钥刷新后恢复（掩码显示 + 上次修改时间）；「运行全部」在真实输入下端到端跑通，缺 IV 的 AES 步骤给出可读失败说明。
 
 ### 复核记录（2026-09-22，独立复算）
 
-- `npm test` 293/293、`npm run test:dom` 55/55、`npm run typecheck` exit 0、`npm run generate` 134 路由，全部原样复现。
+- `npm test` 404/404、`npm run test:dom` 55/55、`npm run typecheck` exit 0、`npm run generate` 134 路由，全部原样复现。
 - 加解密不采信仓库自证：把 `app/utils/crypto/*` 与 `node:crypto` 做随机输入差分（MD5 / SHA-256 / SHA-512、HMAC-SHA256/512、AES-GCM 128/192/256 × tag 96/112/128、SM4 ECB/CBC PKCS#7）共 148 项全一致；SM2 的固定密钥对 / 签名 / 密文另用 OpenSSL 3.6 独立验证（私钥推导公钥一致、验签 `Verified OK`、篡改报文失败、密文解出原文）；SM3 对照 GB/T 32905 标准向量。
 - 类型检查有效性：临时注入一个类型错误文件后重跑 `npm run typecheck` 得到 exit 2 并报出该文件，确认该门禁不是空跑。
 - 导出与密钥边界：`sanitizeStep` / `exportWorkflow` 按 `f.sensitive` 剔除敏感字段，`useWorkflows.addStep` 再校验 `isCurrentConsent`（UI 漏判也加不进去），「发送到 → 新建流程」对敏感步骤只带输入、不自动加步骤。

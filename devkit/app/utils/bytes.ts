@@ -5,6 +5,13 @@ export function downloadText(filename: string, text: string, mime = 'text/plain;
   downloadBlob(filename, blob)
 }
 
+/** 下载原始字节为文件（二进制结果专用，避免把界面上的 Hex 视图当成内容写盘） */
+export function downloadBytes(filename: string, bytes: Uint8Array, mime = 'application/octet-stream') {
+  if (import.meta.server) return
+  const blob = new Blob([bytes as unknown as BlobPart], { type: mime })
+  downloadBlob(filename, blob)
+}
+
 /** 下载 Blob 为文件 */
 export function downloadBlob(filename: string, blob: Blob) {
   if (import.meta.server) return

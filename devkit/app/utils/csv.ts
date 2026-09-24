@@ -100,10 +100,19 @@ export function inferCsvValue(s: string): unknown {
   return s
 }
 
-/** 拍平叶子字段路径：对象递归展开（数组与 RawNumber 视为叶子） */
-export function flattenPaths(v: unknown, prefix: string, out: string[]): void {
+/**
+ * 拍平叶子字段路径：对象递归展开（数组与 RawNumber 视为叶子）。
+ * warnings 可选：键名本身含 `.` 时收集中文告警（`.` 会被当作路径分隔符，可能导致取值失败）。
+ */
+export function flattenPaths(v: unknown, prefix: string, out: string[], warnings?: string[]): void {
   if (v !== null && typeof v === 'object' && !Array.isArray(v) && !(v instanceof RawNumber)) {
-    for (const [k, val] of Object.entries(v)) flattenPaths(val, prefix ? `${prefix}.${k}` : k, out)
+    for (const [k, val] of Object.entries(v)) {
+      if (warnings && k.includes('.')) {
+        const msg = `字段名 ${k} 含点号，按路径分隔符处理，可能导致取值失败；建议改用不含点号的键名`
+        if (!warnings.includes(msg)) warnings.push(msg)
+      }
+      flattenPaths(val, prefix ? `${prefix}.${k}` : k, out, warnings)
+    }
   } else {
     out.push(prefix)
   }
@@ -163,6 +172,19 @@ export function csvToJson(text: string, opts: Csv2JsonOptions): Csv2JsonResult {
   }
   if (opts.header) {
     const keys = (header as string[]).map((h, i) => (h === '' ? `列${i + 1}` : h))
+    // 重复表头：后列覆盖前列会静默丢列，显式告警（最多列出 3 个重复键）
+    const keyCols = new Map<string, number[]>()
+    keys.forEach((k, i) => {
+      const cols = keyCols.get(k)
+      if (cols) cols.push(i + 1)
+      else keyCols.set(k, [i + 1])
+    })
+    const dups = [...keyCols.entries()].filter(([, cols]) => cols.length > 1)
+    if (dups.length) {
+      const shown = dups.slice(0, 3).map(([k, cols]) => `${k}（第 ${cols.join('、')} 列）`).join('、')
+      const more = dups.length > 3 ? ` 等 ${dups.length} 个重复列名` : ''
+      warnings.push(`表头存在重复列名：${shown}${more}，后一列会覆盖前一列`)
+    }
     data.forEach((row, i) => {
       if (row.length !== keys.length) {
         warnings.push(`第 ${i + 2} 行（含表头）有 ${row.length} 列，与表头的 ${keys.length} 列不一致，该行已保留`)
@@ -239,7 +261,7 @@ export function jsonToCsv(text: string, opts: Json2CsvOptions): Json2CsvResult {
   const seen = new Set<string>()
   for (const el of value as unknown[]) {
     const paths: string[] = []
-    flattenPaths(el, '', paths)
+    flattenPaths(el, '', paths, warnings)
     for (const p of paths) {
       if (!seen.has(p)) {
         seen.add(p)
