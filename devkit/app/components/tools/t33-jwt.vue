@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
-import { RawNumber } from '~/utils/json'
+import { RawNumber, localizeJsonMessage } from '~/utils/json'
 
 const props = defineProps<{ tool: ToolMeta }>()
 
@@ -160,7 +160,7 @@ function decodeSeg(seg: string, label: string): { value: Record<string, unknown>
     return { value: value as Record<string, unknown> }
   } catch (e) {
     const pos = jsonErrorPosition(e, t.text)
-    return { value: null, error: `${label} 不是有效 JSON：${pos ? `第 ${pos.line} 行第 ${pos.column} 列附近 ${pos.message}` : errMessage(e)}` }
+    return { value: null, error: `${label} 不是有效 JSON：${pos ? `第 ${pos.line} 行第 ${pos.column} 列附近 ${pos.message}` : localizeJsonMessage(errMessage(e))}` }
   }
 }
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
 import yaml from 'js-yaml'
+import { localizeYamlMessage } from '~/utils/json'
 
 const props = defineProps<{ tool: ToolMeta }>()
 
@@ -444,7 +445,7 @@ function execute() {
       try {
         doc = yaml.load(input.value, { schema: yaml.JSON_SCHEMA })
       } catch (e) {
-        errDetail.value = `YAML 解析失败：${errMessage(e)}`
+        errDetail.value = `YAML 解析失败：${localizeYamlMessage(e)}`
         run.markFail(errDetail.value)
         return
       }

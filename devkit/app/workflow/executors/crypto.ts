@@ -150,6 +150,10 @@ function sm4ErrorText(e: unknown): string {
   }
   if (msg.includes('key is invalid')) return '解密失败：密钥无效（应解码后为 16 字节）'
   if (msg.includes('iv is invalid')) return '解密失败：IV 无效（应解码后为 16 字节）'
+  // 兜底：未知错误若仍是英文（不含 CJK 且含拉丁字母），不回显英文原文，改用中性中文提示
+  if (!/[\u3400-\u9fff\uf900-\ufaff]/.test(msg) && /[A-Za-z]/.test(msg)) {
+    return 'SM4 运算失败：请检查密钥、IV、模式与填充设置'
+  }
   return msg
 }
 

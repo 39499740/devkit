@@ -6,11 +6,11 @@ import yaml from 'js-yaml'
 import { base64ToBytes, bytesToBase64, textToBytes } from '../../utils/bytes'
 import { csvToJson, jsonToCsv } from '../../utils/csv'
 import { errMessage } from '../../utils/errors'
-import { applyYamlRawMap, detectDuplicateKeys, jsonErrorPosition, minifyJson, parseJson, RawNumber, stringifyJson, toPlainJson, toYamlJsonable } from '../../utils/json'
+import { applyYamlRawMap, detectDuplicateKeys, hasUnsafeRawNumber, jsonErrorPosition, loadYamlPreservingNumbers, localizeJsonMessage, minifyJson, parseJson, RawNumber, stringifyJson, toPlainJson, toYamlJsonable } from '../../utils/json'
 import { evalJmesPath } from '../../utils/jmespath'
 import { evalJsonPath } from '../../utils/jsonpath'
 import { inferSchema, validateInstance, type Draft } from '../../utils/jsonschema'
-import { execRegexWithTimeout, validateFlags } from '../../utils/regex'
+import { execRegexWithTimeout, localizeRegexMessage, validateFlags } from '../../utils/regex'
 import { formatSql, minifySql, type SqlDialect } from '../../utils/sql'
 import { tidyText } from '../../utils/text'
 import { formatXml, jsonToXml, minifyXml, queryXPath, xmlToJson } from '../../utils/xml'
@@ -39,26 +39,18 @@ function warnNote(warnings: string[]): string {
   return warnings.length ? `；${warnings.slice(0, 2).join('；')}` : ''
 }
 
-/**
- * 把 V8 的常见英文 JSON 错误翻成中文（未知错误回退原文），
- * 配合 jsonErrorPosition 给出「第 X 行第 Y 列附近」的中文定位。
- */
-function localizeJsonMessage(msg: string): string {
-  if (/Expected property name or '}'/.test(msg)) return '属性名缺失或格式不正确（可能是多余逗号或缺少引号）'
-  if (/Expected double-quoted property name/.test(msg)) return '属性名必须用双引号（常见于多余逗号或使用了单引号/无引号键）'
-  if (/Expected ':' after property name/.test(msg)) return '属性名后缺少冒号'
-  if (/Expected ',' or ']' after array element/.test(msg)) return '数组元素之间缺少逗号或右方括号'
-  if (/Expected ',' or '}' after property value/.test(msg)) return '对象属性之间缺少逗号或右花括号'
-  if (/Unexpected end of JSON input/.test(msg)) return 'JSON 提前结束（可能缺少右括号、引号或值）'
-  if (/Unterminated string/.test(msg)) return '字符串缺少结束引号'
-  if (/Bad control character/.test(msg)) return '字符串中包含非法控制字符'
-  if (/Bad escaped character/.test(msg)) return '包含非法的转义字符'
-  if (/Unexpected non-whitespace character/.test(msg)) return 'JSON 结束后还有多余内容'
-  if (/Unexpected token/.test(msg)) return '出现意外字符，不是合法的 JSON'
-  if (/Unexpected number/.test(msg)) return '出现意外的数字'
-  if (/Unexpected string/.test(msg)) return '出现意外的字符串'
-  // 兜底也用中文，确保不再泄漏 V8 英文原文
-  return 'JSON 语法错误，请检查该位置附近的内容'
+/** 与 json-minify 一致的重复键告警文案（无重复返回空串） */
+function duplicateNote(dups: string[]): string {
+  if (!dups.length) return ''
+  return `；检测到重复键：${dups.slice(0, 3).join('、')}${dups.length > 3 ? ' 等' : ''}（后出现的键覆盖前者）`
+}
+
+/** 大整数精度告警文案：仅提示，不改变输出（实例 / schema 含超范围整数时追加） */
+const UNSAFE_NUMBER_NOTE = '；检测到超出安全整数范围的数字，已按字符串处理，数值类型/比较可能不精确'
+
+/** 值中含超出安全范围的 RawNumber 时返回告警文案，否则空串 */
+function unsafeNumberNote(v: unknown): string {
+  return hasUnsafeRawNumber(v) ? UNSAFE_NUMBER_NOTE : ''
 }
 
 /**
@@ -70,9 +62,8 @@ function parseJsonLocalized(text: string, what = 'JSON') {
     return parseJson(text)
   } catch (e) {
     const pos = jsonErrorPosition(e, text)
-    const detail = localizeJsonMessage(errMessage(e))
-    if (pos) throw new Error(`${what} 解析失败：第 ${pos.line} 行第 ${pos.column} 列附近：${detail}`)
-    throw new Error(`${what} 解析失败：${detail}`)
+    if (pos) throw new Error(`${what} 解析失败：第 ${pos.line} 行第 ${pos.column} 列附近：${pos.message}`)
+    throw new Error(`${what} 解析失败：${localizeJsonMessage(errMessage(e))}`)
   }
 }
 
@@ -149,7 +140,7 @@ const regexReplace: StepExecutor = async (input, config) => {
   try {
     new RegExp(pattern, flags)
   } catch (e) {
-    throw new Error(`表达式语法错误：${errMessage(e)}`)
+    throw new Error(`表达式语法错误：${localizeRegexMessage(errMessage(e), pattern)}`)
   }
   const mode = configText(config, 'mode', 'replace')
   const replacement = configText(config, 'replacement')
@@ -184,10 +175,10 @@ const regexReplace: StepExecutor = async (input, config) => {
 const jsonFormat: StepExecutor = (input, config) => {
   const text = requireText(input, 'JSON 格式化')
   const indent = Math.max(0, Math.min(8, configNumber(config, 'indent', 2)))
-  const { value } = parseJsonLocalized(text)
+  const { value, duplicateKeys } = parseJsonLocalized(text)
   // 缩进 0 = 真正单行（minifyJson）；stringifyJson 在缩进 0 时仍会插换行
   const out = indent === 0 ? minifyJson(value) : stringifyJson(value, indent)
-  return { payload: textPayload(out, 'json'), note: `格式化完成，${lineSize(out)}` }
+  return { payload: textPayload(out, 'json'), note: `格式化完成，${lineSize(out)}${duplicateNote(duplicateKeys)}` }
 }
 
 const jsonMinify: StepExecutor = (input, config) => {
@@ -218,7 +209,7 @@ const jsonpath: StepExecutor = (input, config) => {
   )
   return {
     payload: textPayload(out, 'json'),
-    note: `匹配 ${res.matches.length} 项${warnNote(res.warnings)}`
+    note: `匹配 ${res.matches.length} 项${warnNote(res.warnings)}${unsafeNumberNote(value)}`
   }
 }
 
@@ -236,22 +227,20 @@ const jmespath: StepExecutor = (input, config) => {
   )
   return {
     payload: textPayload(out, 'json'),
-    note: `匹配 ${res.matches.length} 项${warnNote(res.warnings)}`
+    note: `匹配 ${res.matches.length} 项${warnNote(res.warnings)}${unsafeNumberNote(value)}`
   }
 }
 
 const jsonYaml: StepExecutor = (input, config) => {
   const text = requireText(input, 'JSON / YAML 转换')
   if (configText(config, 'direction', 'json2yaml') === 'yaml2json') {
-    let obj: unknown
-    try {
-      obj = yaml.load(text)
-    } catch (e) {
-      throw new Error(`YAML 解析失败：${errMessage(e).split('\n')[0]!.trim()}。请按提示修正缩进或语法后重试`)
+    const { value, notes } = loadYamlPreservingNumbers(text)
+    return {
+      payload: textPayload(stringifyJson(value, 2), 'json'),
+      note: `YAML 已转为 JSON${notes.length ? `；${notes.join('；')}` : ''}`
     }
-    return { payload: textPayload(JSON.stringify(obj, null, 2), 'json'), note: 'YAML 已转为 JSON' }
   }
-  const { value } = parseJsonLocalized(text)
+  const { value, duplicateKeys } = parseJsonLocalized(text)
   const token = `dkyamlraw${Math.random().toString(36).slice(2, 10)}`
   const counter = { n: 0 }
   const rawMap = new Map<string, string>()
@@ -265,7 +254,10 @@ const jsonYaml: StepExecutor = (input, config) => {
       `${unsafe.length} 个数值超出 JS 安全范围（如 ${unsafe[0]}），已按原文输出以保留精度；部分工具按数值解析时仍可能丢失精度（超出安全整数范围的数值尤其如此）`
     )
   }
-  return { payload: textPayload(out), note: `JSON 已转为 YAML${notes.length ? `；${notes.join('；')}` : ''}` }
+  return {
+    payload: textPayload(out),
+    note: `JSON 已转为 YAML${notes.length ? `；${notes.join('；')}` : ''}${duplicateNote(duplicateKeys)}`
+  }
 }
 
 const schemaValidate: StepExecutor = (input, config) => {
@@ -273,13 +265,17 @@ const schemaValidate: StepExecutor = (input, config) => {
   const schemaText = configText(config, 'schema')
   if (!schemaText.trim()) throw new Error('该步骤还没有配置 Schema')
   const { value } = parseJsonLocalized(text)
-  const { value: schema } = parseJsonLocalized(schemaText, 'Schema')
-  if (schema instanceof RawNumber || schema === null || Array.isArray(schema) || (typeof schema !== 'object' && typeof schema !== 'boolean')) {
+  const { value: schemaRaw } = parseJsonLocalized(schemaText, 'Schema')
+  if (schemaRaw instanceof RawNumber || schemaRaw === null || Array.isArray(schemaRaw) || (typeof schemaRaw !== 'object' && typeof schemaRaw !== 'boolean')) {
     throw new Error('Schema 必须是对象或布尔值（true/false），当前不是合法的 JSON Schema')
   }
+  // Schema 里的数字同样要还原成普通 number，否则 const/enum 比较会把 {"raw":"1"} 暴露给用户，
+  // 且 minLength / maximum / minItems 等数值关键字会因类型不是 number 被静默跳过。
+  const schema = toPlainJson(schemaRaw)
   const res = validateInstance(toPlainJson(value), schema, { strict: true })
   if (res.valid) {
-    return { payload: textPayload(text, 'json'), note: `校验通过，检查了 ${res.checked} 个节点` }
+    const unsafeNote = hasUnsafeRawNumber(value) || hasUnsafeRawNumber(schemaRaw) ? UNSAFE_NUMBER_NOTE : ''
+    return { payload: textPayload(text, 'json'), note: `校验通过，检查了 ${res.checked} 个节点${unsafeNote}` }
   }
   const lines = res.errors.map((e) => `${e.path} [${e.keyword}] ${e.message}`)
   throw new Error(`校验失败 · ${res.errors.length} 个错误：${lines.slice(0, 2).join('；')}`)
@@ -294,7 +290,7 @@ const jsonSchemaGen: StepExecutor = (input, config) => {
   const out = JSON.stringify(schema, null, 2)
   return {
     payload: textPayload(out, 'json'),
-    note: `已按 ${draft}${strict ? '（严格模式）' : ''} 反推 Schema，${lineSize(out)}`
+    note: `已按 ${draft}${strict ? '（严格模式）' : ''} 反推 Schema，${lineSize(out)}${unsafeNumberNote(value)}`
   }
 }
 

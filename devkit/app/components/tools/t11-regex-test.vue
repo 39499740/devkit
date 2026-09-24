@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
-import { regexWorkerSource, validateFlags } from '~/utils/regex'
+import { localizeRegexMessage, regexWorkerSource, validateFlags } from '~/utils/regex'
 
 defineProps<{ tool: ToolMeta }>()
 
@@ -45,7 +45,7 @@ const liveError = computed(() => {
     new RegExp(source.value, flags.value)
     return ''
   } catch (e) {
-    return `表达式语法错误：${errMessage(e)}`
+    return `表达式语法错误：${localizeRegexMessage(errMessage(e), source.value)}`
   }
 })
 

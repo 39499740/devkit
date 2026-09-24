@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import yaml from 'js-yaml'
 import type { ToolMeta } from '~/data/tools'
-import { applyYamlRawMap, isSafeJsonNumber, joinKey, toYamlJsonable } from '~/utils/json'
+import { applyYamlRawMap, jsonErrorPosition, loadYamlPreservingNumbers, localizeJsonMessage, parseJson, stringifyJson, toYamlJsonable } from '~/utils/json'
 
 defineProps<{ tool: ToolMeta }>()
 const toast = useToast()
@@ -60,7 +60,7 @@ function runJson2Yaml(): string {
     duplicateKeys = r.duplicateKeys
   } catch (e) {
     const pos = jsonErrorPosition(e, input.value)
-    const detail = pos ? `第 ${pos.line} 行第 ${pos.column} 列附近：${pos.message}` : errMessage(e)
+    const detail = pos ? `第 ${pos.line} 行第 ${pos.column} 列附近：${pos.message}` : localizeJsonMessage(errMessage(e))
     run.markFail(`JSON 解析失败：${detail}`)
     throw new Error('__fail__')
   }
@@ -86,183 +86,19 @@ function runJson2Yaml(): string {
   return out
 }
 
-/* ---------------- YAML 非字符串键扫描 ---------------- */
-const RE_BOOL_KEY = /^(?:true|false|True|False|TRUE|FALSE)$/
-const RE_NULL_KEY = /^(?:~|null|Null|NULL)$/
-const RE_INT_KEY = /^[-+]?(?:[0-9][0-9_]*|0x[0-9a-fA-F_]+|0o[0-7_]+)$/
-const RE_FLOAT_KEY = /^[-+]?(?:[0-9][0-9_]*\.[0-9_]*(?:[eE][-+]?[0-9]+)?|\.[0-9_]+(?:[eE][-+]?[0-9]+)?|[0-9][0-9_]*[eE][-+]?[0-9]+)$/
-const RE_INF_KEY = /^(?:[-+]?\.(?:inf|Inf|INF)|\.nan|\.NaN|\.NAN)$/
-
-interface KeyIssue {
-  line: number
-  key: string
-  type: string
-}
-
-function keyIssueType(k: string): string | null {
-  if (RE_NULL_KEY.test(k)) return 'null'
-  if (RE_BOOL_KEY.test(k)) return '布尔值'
-  if (RE_INT_KEY.test(k) || RE_FLOAT_KEY.test(k) || RE_INF_KEY.test(k)) return '数字'
-  return null
-}
-
-/** 去掉行内注释（引号内的 # 保留） */
-function stripComment(line: string): string {
-  let out = ''
-  let inS = false
-  let inD = false
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i]!
-    if (inS) {
-      out += c
-      if (c === "'") inS = false
-    } else if (inD) {
-      out += c
-      if (c === '\\') {
-        out += line[++i] ?? ''
-      } else if (c === '"') inD = false
-    } else if (c === "'") {
-      inS = true
-      out += c
-    } else if (c === '"') {
-      inD = true
-      out += c
-    } else if (c === '#') {
-      break
-    } else {
-      out += c
-    }
-  }
-  return out
-}
-
-/**
- * 扫描 YAML 文本中的非字符串键（数字 / 布尔 / null）。
- * 覆盖常见的块式与流式写法；跳过块标量内容、引号键与带标签/锚点的键。
- * js-yaml 加载后对象键已被字符串化，无法事后区分，故在文本层检测。
- */
-function scanNonStringKeys(text: string): KeyIssue[] {
-  const issues: KeyIssue[] = []
-  const lines = text.split('\n')
-  let blockIndent: number | null = null
-  const checkKeyText = (k: string, lineNo: number) => {
-    const type = keyIssueType(k)
-    if (type) issues.push({ line: lineNo, key: k, type })
-  }
-  lines.forEach((rawLine, idx) => {
-    const lineNo = idx + 1
-    if (blockIndent !== null) {
-      if (rawLine.trim() === '') return
-      if (/^ */.exec(rawLine)![0]!.length > blockIndent) return
-      blockIndent = null
-    }
-    const line = stripComment(rawLine)
-    if (!line.trim()) return
-    // 块标量头部（key: | / key: >- / - | 等）：其后更深缩进的行是纯文本，跳过
-    if (/:(?:\s|$)/.test(line) && /[|>][+-]?\d*\s*$/.test(line)) {
-      blockIndent = /^ */.exec(line)![0]!.length
-      return
-    }
-    if (/^ *(?:- +)+[|>][+-]?\d*\s*$/.test(line)) {
-      blockIndent = /^ */.exec(line)![0]!.length
-      return
-    }
-    // 块式键：行首（可带列表破折号前缀），冒号后必须有空格或行尾（YAML 规则）
-    const m = /^ *(?:- +)*(?:"(?:[^"\\]|\\.)*"|'(?:[^'])*'|([^:#{}[\],&*!?'%\s][^:]*?)) *:(?=\s|$)/.exec(line)
-    if (m && m[1]) checkKeyText(m[1].trim(), lineNo)
-    // 形如「: value」的空键在 YAML 中是 null 键
-    if (/^ *(?:- +)*:(?=\s|$)/.test(line)) checkKeyText('~', lineNo)
-    // 流式键：{80: x, true: y}
-    const flowRe = /(?:\{|,|&|\*) *("(?:[^"\\]|\\.)*"|'(?:[^'])*'|([^:{}[\],&*!?'%\s#][^:{}[\],]*?)) *:(?=[ \t}]|$)/g
-    let fm: RegExpExecArray | null
-    while ((fm = flowRe.exec(line)) !== null) {
-      const k = (fm[2] ?? '').trim()
-      if (k) checkKeyText(k, lineNo)
-    }
-  })
-  return issues
-}
-
-/** 查找无法映射为 JSON 的特殊数值（.inf / .nan） */
-function findNonFinite(v: unknown, path: string): { path: string; kind: string } | null {
-  if (typeof v === 'number' && !Number.isFinite(v)) {
-    return { path, kind: Number.isNaN(v) ? 'NaN' : v > 0 ? 'Infinity（.inf）' : '-Infinity（-.inf）' }
-  }
-  if (Array.isArray(v)) {
-    for (let i = 0; i < v.length; i++) {
-      const r = findNonFinite(v[i], `${path}[${i}]`)
-      if (r) return r
-    }
-    return null
-  }
-  if (v !== null && typeof v === 'object') {
-    for (const [k, val] of Object.entries(v)) {
-      const r = findNonFinite(val, joinKey(path, k))
-      if (r) return r
-    }
-  }
-  return null
-}
-
-const YAML_NUM_TEXT = /^[-+]?(?:\d+\.?\d*(?:[eE][-+]?\d+)?|\.\d+(?:[eE][-+]?\d+)?|0x[0-9a-fA-F]+|0o[0-7]+)$/
-const YAML_INF_NAN_TEXT = /^(?:[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$/
-const JSON_NUM_TEXT = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/
+/* ---------------- YAML → JSON ---------------- */
+// 保真加载逻辑与 utils/json.ts 共用（JSON_SCHEMA + 数字覆盖 + 非法键 / .inf/.nan 检测）。
 
 function runYaml2Json(): string {
-  const stringKept: string[] = []
-  const rawKept: string[] = []
-  const numberValue = (raw: string): unknown => {
-    if (YAML_INF_NAN_TEXT.test(raw)) {
-      if (/nan/i.test(raw)) return NaN
-      return raw.startsWith('-') ? -Infinity : Infinity
-    }
-    if (!JSON_NUM_TEXT.test(raw)) {
-      stringKept.push(raw)
-      return raw
-    }
-    if (!isSafeJsonNumber(raw)) rawKept.push(raw)
-    return new RawNumber(raw)
-  }
-  const numberType = (tag: string) =>
-    new yaml.Type(tag, {
-      kind: 'scalar',
-      resolve: (d: unknown) => typeof d === 'string' && (YAML_NUM_TEXT.test(d) || YAML_INF_NAN_TEXT.test(d)),
-      construct: (d: unknown) => numberValue(String(d))
-    })
-  const schema = yaml.JSON_SCHEMA.extend({
-    implicit: [numberType('tag:yaml.org,2002:int'), numberType('tag:yaml.org,2002:float')]
-  })
   let value: unknown
+  let notes: string[]
   try {
-    // JSON_SCHEMA：只识别 null/bool/number/string，日期等不会被自动转对象
-    value = yaml.load(input.value, { schema })
+    const r = loadYamlPreservingNumbers(input.value)
+    value = r.value
+    notes = r.notes
   } catch (e) {
-    const msg = errMessage(e)
-    run.markFail(`YAML 解析失败：${msg.split('\n')[0]!.trim()}。请按提示修正缩进或语法后重试`)
+    run.markFail(errMessage(e))
     throw new Error('__fail__')
-  }
-  const keyIssues = scanNonStringKeys(input.value)
-  if (keyIssues.length) {
-    const first = keyIssues[0]!
-    run.markFail(
-      `无法静默转换：第 ${first.line} 行的键 ${JSON.stringify(first.key || '（空键）')} 是 ${first.type}，` +
-        `JSON 对象的键必须是字符串（共 ${keyIssues.length} 处）。请为键加引号，如 "${first.key || '键名'}": …`
-    )
-    throw new Error('__fail__')
-  }
-  const nf = findNonFinite(value, '$')
-  if (nf) {
-    run.markFail(`无法静默转换：${nf.path} 的值是 ${nf.kind}，JSON 数字不支持无穷或 NaN。请改为字符串或有限数值`)
-    throw new Error('__fail__')
-  }
-  const notes: string[] = []
-  if (stringKept.length) {
-    notes.push(
-      `${stringKept.length} 个标量不是 JSON 数字字面量（如 ${stringKept[0]}），已按字符串保留原文，避免 007 等被改写为数字`
-    )
-  }
-  if (rawKept.length) {
-    notes.push(`${rawKept.length} 个数值超出 JS 安全范围（如 ${rawKept[0]}），已按原文输出以保留精度`)
   }
   run.markOk(notes.join('；'))
   return stringifyJson(value, indentUnit.value)

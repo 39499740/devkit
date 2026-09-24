@@ -40,6 +40,121 @@ export function validateFlags(flags: string): string | null {
 }
 
 /**
+ * 把 V8 的正则语法错误翻成中文（回退中文，不回显英文原文）。
+ * 传入 pattern 时会在提示中带上用户的表达式（过长截断），便于定位问题；
+ * 不传 pattern 时给出独立可读的中文句子。工具页与流程执行器共用同一份映射。
+ */
+export function localizeRegexMessage(msg: string, pattern?: string): string {
+  const p = pattern === undefined ? '' : pattern.length > 60 ? `${pattern.slice(0, 60)}…` : pattern
+  const head = p ? `表达式「${p}」` : '正则表达式'
+  if (/Unterminated group/i.test(msg)) return `${head}中的分组括号 ( ) 没有闭合`
+  if (/Unmatched '\)'/i.test(msg) || /Unmatched \)/i.test(msg)) return `${head}中出现了多余的右括号 )`
+  if (/Unterminated character class/i.test(msg)) return `${head}中的字符组 [ ] 没有闭合`
+  if (/Nothing to repeat/i.test(msg)) return `${head}中的量词（* + ? {n}）前没有可重复的内容`
+  if (/Lone quantifier brackets/i.test(msg)) return `${head}中的量词花括号 { } 使用不完整（缺少可重复内容或数字）`
+  if (/Invalid quantifier/i.test(msg)) return `${head}中的量词写法不合法`
+  if (/Duplicate capture group name/i.test(msg)) return `${head}中存在重名的命名分组`
+  if (/Invalid (?:capture )?group/i.test(msg)) return `${head}中的分组语法不合法`
+  if (/Invalid character class/i.test(msg)) return `${head}中的字符组写法不合法`
+  if (/Invalid (?:unicode )?escape/i.test(msg)) return `${head}中包含非法的转义`
+  if (/Invalid flags/i.test(msg)) return `${head}使用了不支持的标志`
+  if (/Invalid regular expression/i.test(msg)) return `${head}不合法`
+  return `${head}语法不正确，请检查括号、量词与转义`
+}
+
+/**
+ * 静态风险判定：识别经典「嵌套无界量词」导致的灾难性回溯（ReDoS）。
+ *
+ * 原理：匹配失败时正则引擎会尝试不同的回溯路径；若一个分组内部含无界量词
+ * （`+`、`*`、`{m,}`），而该分组本身又被无界量词重复，回溯路径会随输入长度
+ * 指数级增长，例如 `^(a+)+$` 在长串 a 上会冻结主线程。这里做纯静态启发式扫描：
+ *   1. 跳过转义字符与字符类内部（`[+*]` 里的 `+` 只是字面量，不算量词）；
+ *   2. 用栈跟踪分组的括号层级，记录其内部是否出现过无界量词；
+ *   3. 分组闭合时若紧跟一个无界量词，且组内出现过无界量词，即判定危险；
+ *   4. 分组的无界性会向上传播（如 `((ab)+)+` 同样危险）。
+ *
+ * 只覆盖「嵌套量词」这一经典形态：安全结构（`(?:ab)+`、`\d+`、`(a|b)+`、
+ * `[0-9]{2,4}`、`(?<y>\d{4})` 等）与无法判定的情况一律返回 null，避免误伤。
+ *
+ * @returns 危险时返回中文原因；安全或无法判定返回 null。
+ */
+export function regexRiskReason(pattern: string): string | null {
+  if (typeof pattern !== 'string' || !pattern) return null
+
+  /** 在 pos 处尝试解析一个量词：返回是否无界（无上界）以及量词的结束位置 */
+  const quantifierAt = (pos: number): { unbounded: boolean; end: number } | null => {
+    const ch = pattern[pos]
+    if (ch === '*' || ch === '+') return { unbounded: true, end: pos + 1 }
+    if (ch === '?') return { unbounded: false, end: pos + 1 }
+    if (ch === '{') {
+      const m = /^\{(\d+)(,(\d*))?\}/.exec(pattern.slice(pos))
+      if (!m) return null
+      // {m} 与 {m,n} 有上界；{m,}（逗号后无数字）无上界
+      const unbounded = m[2] !== undefined && (m[3] === undefined || m[3] === '')
+      return { unbounded, end: pos + m[0].length }
+    }
+    return null
+  }
+
+  /** 每个未闭合分组是否已包含无界量词 */
+  const stack: { hasUnbounded: boolean }[] = []
+  let inClass = false
+  let i = 0
+  while (i < pattern.length) {
+    const ch = pattern[i]!
+    if (ch === '\\') {
+      i += 2 // 转义序列：下一个字符按字面量处理
+      continue
+    }
+    if (inClass) {
+      if (ch === ']') inClass = false
+      i += 1
+      continue
+    }
+    if (ch === '[') {
+      inClass = true
+      i += 1
+      // 紧跟 [ 或 [^ 的 ] 是字面量，不算字符类结束
+      if (pattern[i] === '^') i += 1
+      if (pattern[i] === ']') i += 1
+      continue
+    }
+    if (ch === '(') {
+      stack.push({ hasUnbounded: false })
+      i += 1
+      continue
+    }
+    if (ch === ')') {
+      const frame = stack.pop()
+      const parent = stack[stack.length - 1]
+      const q = quantifierAt(i + 1)
+      if (frame && frame.hasUnbounded && q && q.unbounded) {
+        return '检测到嵌套的无界量词（如 (a+)+、(a*)*），会触发灾难性回溯并冻结页面'
+      }
+      // 组内含无界量词，或分组本身被无界量词重复，都会让父分组具备无界性
+      if (parent && ((frame && frame.hasUnbounded) || (q && q.unbounded))) parent.hasUnbounded = true
+      if (q) {
+        i = q.end
+        if (pattern[i] === '?') i += 1 // 惰性量词后缀，不改变无界性
+      } else {
+        i += 1
+      }
+      continue
+    }
+    // 作用在普通原子（字符、字符类、\d 等）上的量词
+    const q = quantifierAt(i)
+    if (q) {
+      if (q.unbounded && stack.length) stack[stack.length - 1]!.hasUnbounded = true
+      i = q.end
+      if (pattern[i] === '?') i += 1
+      continue
+    }
+    i += 1
+  }
+  return null
+}
+
+/**
  * 纯同步执行器。
  * 必须完全自包含：函数体内不引用任何模块级标识符或 import 的符号——
  * 它会被 Function.prototype.toString() 注入到 Web Worker 源码里执行。

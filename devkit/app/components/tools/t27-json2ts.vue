@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
-import { parseJson, jsonErrorPosition, RawNumber } from '~/utils/json'
+import { parseJson, jsonErrorPosition, localizeJsonMessage, RawNumber } from '~/utils/json'
 
 const props = defineProps<{ tool: ToolMeta }>()
 const clipboard = useClipboard()
@@ -384,7 +384,7 @@ function execute() {
   } catch (e) {
     output.value = ''
     const pos = jsonErrorPosition(e, input.value)
-    errDetail.value = pos ? `JSON 第 ${pos.line} 行第 ${pos.column} 列附近：${pos.message}` : errMessage(e)
+    errDetail.value = pos ? `JSON 第 ${pos.line} 行第 ${pos.column} 列附近：${pos.message}` : localizeJsonMessage(errMessage(e))
     run.markFail(errDetail.value)
   }
 }

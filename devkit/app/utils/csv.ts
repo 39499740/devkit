@@ -2,7 +2,7 @@
  * T04 CSV ⇄ JSON 的纯计算实现：
  * 组件与流程编排（app/workflow/executors）共用同一份逻辑，避免两份行为漂移。
  */
-import { RawNumber, minifyJson, stringifyJson, parseJson, jsonErrorPosition } from './json'
+import { RawNumber, minifyJson, stringifyJson, parseJson, jsonErrorPosition, localizeJsonMessage } from './json'
 import { errMessage } from './errors'
 
 export interface CsvParseResult {
@@ -241,7 +241,7 @@ export function jsonToCsv(text: string, opts: Json2CsvOptions): Json2CsvResult {
     value = parseJson(text).value
   } catch (e) {
     const pos = jsonErrorPosition(e, text)
-    const detail = pos ? `第 ${pos.line} 行第 ${pos.column} 列附近：${pos.message}` : errMessage(e)
+    const detail = pos ? `第 ${pos.line} 行第 ${pos.column} 列附近：${pos.message}` : localizeJsonMessage(errMessage(e))
     throw new Error(`JSON 解析失败：${detail}`)
   }
   if (!Array.isArray(value)) {

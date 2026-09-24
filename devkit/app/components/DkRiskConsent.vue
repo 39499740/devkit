@@ -18,6 +18,12 @@ watch(
     if (v) checked.value = false
   }
 )
+
+// 卸载即取消：路由跳转等导致组件被销毁时，若弹窗仍处于打开状态，等价于「仍不添加」。
+// 仅在 open 为 true 时 emit，避免正常确认（open 已置 false）后再触发一次 cancel 误伤下一个请求。
+onBeforeUnmount(() => {
+  if (props.open) emit('cancel')
+})
 </script>
 
 <template>

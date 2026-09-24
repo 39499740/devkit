@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
+import { localizeRegexMessage } from '~/utils/regex'
 
 const props = defineProps<{ tool: ToolMeta }>()
 const clipboard = useClipboard()
@@ -265,7 +266,7 @@ function execute() {
   try {
     bizRe = new RegExp(bizPrefix.value)
   } catch (e) {
-    bizErr.value = `业务包前缀不是合法正则：${errMessage(e)}`
+    bizErr.value = `业务包前缀不是合法正则：${localizeRegexMessage(errMessage(e), bizPrefix.value)}`
     run.markFail(bizErr.value)
     return
   }

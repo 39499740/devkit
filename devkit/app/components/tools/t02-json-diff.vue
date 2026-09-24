@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
+import { localizeJsonMessage } from '~/utils/json'
 
 defineProps<{ tool: ToolMeta }>()
 const clipboard = useClipboard()
@@ -266,7 +267,7 @@ function execute() {
       a = parseJson(left.value).value
     } catch (e) {
       const pos = jsonErrorPosition(e, left.value)
-      errLeft.value = pos ? `第 ${pos.line} 行第 ${pos.column} 列附近：${pos.message}` : errMessage(e)
+      errLeft.value = pos ? `第 ${pos.line} 行第 ${pos.column} 列附近：${pos.message}` : localizeJsonMessage(errMessage(e))
     }
   }
   if (!right.value.trim()) {
@@ -276,7 +277,7 @@ function execute() {
       b = parseJson(right.value).value
     } catch (e) {
       const pos = jsonErrorPosition(e, right.value)
-      errRight.value = pos ? `第 ${pos.line} 行第 ${pos.column} 列附近：${pos.message}` : errMessage(e)
+      errRight.value = pos ? `第 ${pos.line} 行第 ${pos.column} 列附近：${pos.message}` : localizeJsonMessage(errMessage(e))
     }
   }
   if (errLeft.value || errRight.value) {

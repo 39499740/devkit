@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
-import { parseJson, jsonErrorPosition, RawNumber } from '~/utils/json'
+import { parseJson, jsonErrorPosition, localizeJsonMessage, RawNumber } from '~/utils/json'
 
 const props = defineProps<{ tool: ToolMeta }>()
 const clipboard = useClipboard()
@@ -517,7 +517,7 @@ function execute() {
     for (const d of parsed.duplicateKeys) ctx.warnings.push(`JSON 中存在重复键：${d}（后者生效）`)
   } catch (e) {
     const pos = jsonErrorPosition(e, input.value)
-    errDetail.value = pos ? `JSON 解析失败：第 ${pos.line} 行第 ${pos.column} 列附近：${pos.message}` : `JSON 解析失败：${errMessage(e)}`
+    errDetail.value = pos ? `JSON 解析失败：第 ${pos.line} 行第 ${pos.column} 列附近：${pos.message}` : `JSON 解析失败：${localizeJsonMessage(errMessage(e))}`
     run.markFail(errDetail.value)
     return
   }
