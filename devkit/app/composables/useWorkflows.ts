@@ -285,8 +285,11 @@ export function useWorkflows() {
 
   /** 清空全部已保存密钥：步骤保留，但会重新变成「缺少密钥」 */
   function clearSecrets(): { ok: boolean; error?: string } {
+    const kv = browserKv()
+    // 没有可用存储时不能假装清空成功：否则用户以为密钥已删除，实际什么都没发生
+    if (!kv) return { ok: false, error: '当前环境不支持本地存储，无法清除密钥' }
     secrets.value = emptySecrets()
-    const res = clearStoredSecrets(browserKv())
+    const res = clearStoredSecrets(kv)
     if (!res.ok && res.error) {
       storageError.value = res.error
       return { ok: false, error: res.error }

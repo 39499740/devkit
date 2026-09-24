@@ -3,9 +3,9 @@
  * 输入与中间结果只存在于内存；这里不读写任何存储。
  */
 import { errMessage } from '../utils/errors'
-import { stepDef } from './catalog'
+import { isSensitiveStep, stepDef } from './catalog'
 import { executors } from './executors'
-import { missingRequiredSecrets, redactSecrets } from './secrets'
+import { isCurrentConsent, missingRequiredSecrets, redactSecrets } from './secrets'
 import { asPayload, textPayload } from './types'
 import type { StepPayload, StepResult, Workflow, WorkflowRunResult, WorkflowStep } from './types'
 
@@ -63,6 +63,13 @@ export async function runStep(
       logs,
       ms: Math.max(1, Date.now() - t0)
     }
+  }
+
+  // 风险确认门禁：敏感步骤的确认文案版本过旧或缺失时，旧密钥一律不可用，
+  // 必须重新确认风险后才能运行（先于「缺少密钥」判断，确认优先）。
+  if (isSensitiveStep(step.type) && !isCurrentConsent(step.consent)) {
+    logs.push('风险确认已失效或缺失：敏感步骤需要重新确认风险后才能运行')
+    return finish('fail', textPayload(''), '该步骤的风险确认已失效或缺失，请重新确认风险后再运行')
   }
 
   const missing = missingRequiredSecrets(step.type, secrets)

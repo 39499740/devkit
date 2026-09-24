@@ -10,6 +10,7 @@ import { sm4Encrypt } from '../app/utils/crypto/sm4.ts'
 import { executors } from '../app/workflow/executors/index.ts'
 import {
   buildWorkflowFromPreset,
+  CONSENT_NOTICE_VERSION,
   createStep,
   defaultWorkflows,
   exportWorkflowText,
@@ -44,6 +45,13 @@ const SM2_SIG =
   '178ad21eeb334f351d77e034f17505af69e4d0431ad2a819f0cb22c93f4f34d765af22944b1ecaa6346f8efd30b93d78f15c0e087229057904186ed7433a20a7'
 const SM2_CT =
   'e3642e93167253042a349c8ebdb90849eb23599e9a3f5315869c587bf386149cf275aa602437e160dca17fb02123b149af2cf3cbc0728d4371971b14aed36ca6f738faa0e20c4176147e218bb7319f1a20ae8915bc19be822a66807c6534fe5959d3d8b10c7c41b8c61a8beb011a7c3d0c'
+
+// 运行侧现在会校验风险确认：会真正执行的敏感步骤必须带当前版本的 consent。
+const CONSENT = { accepted: true, acceptedAt: Date.now(), noticeVersion: CONSENT_NOTICE_VERSION }
+const sensitiveStep = (type, cfg = {}) => {
+  const step = createStep(type, cfg)
+  return { ...step, consent: CONSENT, secretRef: step.id }
+}
 
 export const run = async () => {
   const { cases, ok, eqj, rejects } = makeCases()
@@ -136,7 +144,7 @@ export const run = async () => {
   const d4 = await runStep(createStep('digest', { algo: 'MD5', outputEncoding: 'base64' }), 'abc', 0)
   eqj('摘要 Base64 输出', d4.output, 'kAFQmDzST7DWlj99KOF/cg==')
 
-  const hmacStep = createStep('hmac', { algo: 'SHA-256', keyEncoding: 'hex', outputEncoding: 'hex' })
+  const hmacStep = sensitiveStep('hmac', { algo: 'SHA-256', keyEncoding: 'hex', outputEncoding: 'hex' })
   const h1 = await runStep(hmacStep, 'Hi There', 0, { secrets: { key: '0b'.repeat(20) } })
   eqj('HMAC 步骤 RFC4231 TC1', h1.output, 'b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7')
   const h2 = await runStep(hmacStep, 'Hi There', 0, { secrets: {} })
@@ -145,12 +153,12 @@ export const run = async () => {
   const h3 = await runStep(hmacStep, 'Hi There', 0, { secrets: { key: '0b'.repeat(20) } })
   ok('日志里不出现密钥值', h3.logs.every((l) => !l.includes('0b'.repeat(20))))
 
-  const aesDec = createStep('aes-gcm', { operation: 'decrypt', keyEncoding: 'hex', inputEncoding: 'hex', outputEncoding: 'hex' })
+  const aesDec = sensitiveStep('aes-gcm', { operation: 'decrypt', keyEncoding: 'hex', inputEncoding: 'hex', outputEncoding: 'hex' })
   const a1 = await runStep(aesDec, AES_T14_VEC, 0, { secrets: { key: AES_KEY, iv: AES_IV, aad: 'devkit' } })
   eqj('AES-GCM 解密步骤还原样例明文', a1.output, 'DevKit AES-GCM 示例')
   const a2 = await runStep(aesDec, AES_T14_VEC, 0, { secrets: { key: 'ff'.repeat(32), iv: AES_IV, aad: 'devkit' } })
   ok('AES-GCM 认证失败给出专有提示', a2.status === 'fail' && a2.note.includes('认证失败'), a2.note)
-  const aesEnc = createStep('aes-gcm', { operation: 'encrypt', keyEncoding: 'hex', inputEncoding: 'utf8', outputEncoding: 'hex' })
+  const aesEnc = sensitiveStep('aes-gcm', { operation: 'encrypt', keyEncoding: 'hex', inputEncoding: 'utf8', outputEncoding: 'hex' })
   const a3 = await runStep(aesEnc, 'DevKit AES-GCM 示例', 0, { secrets: { key: AES_KEY, iv: AES_IV, aad: 'devkit' } })
   eqj('AES-GCM 加密步骤命中工具页样例向量', a3.output, AES_T14_VEC)
   const aesRound = await runWorkflow(
@@ -160,33 +168,60 @@ export const run = async () => {
   )
   ok('AES-GCM 加密→解密往返一致', aesRound.status === 'ok' && aesRound.finalOutput === '往返文本', aesRound.finalOutput)
   const aesMissingTag = await runStep(aesDec, '0011', 0, { secrets: { key: AES_KEY, iv: AES_IV, aad: '' } })
-  ok('AES-GCM 密文短于标签长度时报错', aesMissingTag.status === 'fail' && aesMissingTag.note.includes('短于认证标签'), aesMissingTag.note)
+  ok('AES-GCM 密文不足标签长度时报错', aesMissingTag.status === 'fail' && aesMissingTag.note.includes('不足认证标签'), aesMissingTag.note)
 
   const s3 = await runStep(createStep('sm3'), 'abc', 0)
   eqj('SM3 步骤 GB/T 向量', s3.output, '66c7f0f462eeedd9d1f2d46bdc10e4e24167c4875cf2f7a2297da02b8f4ba8e0')
 
-  const sm4Vec = await runStep(createStep('sm4', { operation: 'encrypt', mode: 'ecb', padding: 'none', keyEncoding: 'hex', inputEncoding: 'hex', outputEncoding: 'hex' }), SM4_KEY, 0, { secrets: { key: SM4_KEY } })
+  const sm4Vec = await runStep(sensitiveStep('sm4', { operation: 'encrypt', mode: 'ecb', padding: 'none', keyEncoding: 'hex', inputEncoding: 'hex', outputEncoding: 'hex' }), SM4_KEY, 0, { secrets: { key: SM4_KEY } })
   eqj('SM4 步骤 GB/T 标准向量', sm4Vec.output, '681edf34d206965e86b3e94f536e4246')
   const sm4CbcCt = h(sm4Encrypt(textToBytes('{"code":1}'), SM4_KEY, { mode: 'cbc', padding: 'pkcs#7', ivHex: SM4_IV }))
   const sm4Dec = await runStep(
-    createStep('sm4', { operation: 'decrypt', mode: 'cbc', padding: 'pkcs#7', keyEncoding: 'hex', inputEncoding: 'hex', outputEncoding: 'auto' }),
+    sensitiveStep('sm4', { operation: 'decrypt', mode: 'cbc', padding: 'pkcs#7', keyEncoding: 'hex', inputEncoding: 'hex', outputEncoding: 'auto' }),
     sm4CbcCt,
     0,
     { secrets: { key: SM4_KEY, iv: SM4_IV } }
   )
   eqj('SM4 CBC 解密步骤还原明文', sm4Dec.output, '{"code":1}')
-  const sm4NoIv = await runStep(createStep('sm4', { mode: 'cbc', keyEncoding: 'hex', inputEncoding: 'hex' }), sm4CbcCt, 0, { secrets: { key: SM4_KEY } })
+  const sm4NoIv = await runStep(sensitiveStep('sm4', { mode: 'cbc', keyEncoding: 'hex', inputEncoding: 'hex' }), sm4CbcCt, 0, { secrets: { key: SM4_KEY } })
   ok('SM4 CBC 缺 IV 时报错', sm4NoIv.status === 'fail' && sm4NoIv.note.includes('IV'), sm4NoIv.note)
 
-  const sm2VerifyStep = createStep('sm2', { operation: 'verify', publicKey: SM2_PUB, signature: SM2_SIG })
+  const sm2VerifyStep = sensitiveStep('sm2', { operation: 'verify', publicKey: SM2_PUB, signature: SM2_SIG })
   const v1 = await runStep(sm2VerifyStep, SM2_MSG, 0)
   ok('SM2 验签步骤通过', v1.status === 'ok' && v1.note.includes('验签通过'), v1.note)
   const v2 = await runStep(sm2VerifyStep, SM2_MSG + '改过', 0)
   ok('SM2 验签不通过时中止并说明是真实结论', v2.status === 'fail' && v2.note.includes('验签不通过') && v2.note.includes('不是执行错误'), v2.note)
-  const v3 = await runStep(createStep('sm2', { operation: 'decrypt', encoding: 'hex' }), SM2_CT, 0, { secrets: { privateKey: SM2_PRIV } })
+  const v3 = await runStep(sensitiveStep('sm2', { operation: 'decrypt', encoding: 'hex' }), SM2_CT, 0, { secrets: { privateKey: SM2_PRIV } })
   eqj('SM2 解密步骤还原外部密文', v3.output, SM2_MSG)
-  const v4 = await runStep(createStep('sm2', { operation: 'verify', publicKey: SM2_PUB, signature: SM2_SIG }), SM2_MSG, 0, {})
+  const v4 = await runStep(sensitiveStep('sm2', { operation: 'verify', publicKey: SM2_PUB, signature: SM2_SIG }), SM2_MSG, 0, {})
   ok('缺少私钥不影响验签（验签只用公钥）', v4.status === 'ok')
+
+  // ── 运行侧风险确认门禁（写入侧早已校验，运行侧现在也要拦住旧确认）──
+  const noConsentHmac = createStep('hmac', { algo: 'SHA-256', keyEncoding: 'hex', outputEncoding: 'hex' })
+  const gateNoConsent = await runStep(noConsentHmac, 'Hi There', 0, { secrets: { key: '0b'.repeat(20) } })
+  ok(
+    '敏感步骤无风险确认时拒绝运行',
+    gateNoConsent.status === 'fail' && gateNoConsent.note.includes('重新确认风险'),
+    gateNoConsent.note
+  )
+  ok('无确认被拒的日志里不出现密钥值', gateNoConsent.logs.every((l) => !l.includes('0b'.repeat(20))))
+  const gateWithConsent = await runStep(hmacStep, 'Hi There', 0, { secrets: { key: '0b'.repeat(20) } })
+  ok('敏感步骤带有效风险确认时正常运行', gateWithConsent.status === 'ok' && gateWithConsent.output === h1.output, gateWithConsent.note)
+  const staleConsent = { accepted: true, acceptedAt: Date.now(), noticeVersion: CONSENT_NOTICE_VERSION - 1 }
+  const gateStale = await runStep({ ...hmacStep, consent: staleConsent }, 'Hi There', 0, { secrets: { key: '0b'.repeat(20) } })
+  ok(
+    '旧版本风险确认失效后拒绝运行',
+    gateStale.status === 'fail' && gateStale.note.includes('重新确认风险'),
+    gateStale.note
+  )
+  const gateDigest = await runStep(createStep('digest', { algo: 'SHA-256' }), 'abc', 0)
+  const gateSm3 = await runStep(createStep('sm3'), 'abc', 0)
+  const gateJson = await runStep(createStep('json-format'), '{"a":1}', 0)
+  ok(
+    '非敏感步骤无确认仍可运行',
+    gateDigest.status === 'ok' && gateSm3.status === 'ok' && gateJson.status === 'ok',
+    `${gateDigest.note} | ${gateSm3.note} | ${gateJson.note}`
+  )
 
   // ── 批次 C：数据转换 ──
   const b64 = await runStep(createStep('base64-encode'), 'DevKit 本地工具箱', 0)

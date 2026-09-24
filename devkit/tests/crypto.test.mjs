@@ -219,7 +219,8 @@ export const run = async () => {
   eqj('SM2 公钥格式错误可读', /130 位/.test(sm2PublicKeyError('04abcd')), true)
   eqj('SM2 非曲线点被识别', sm2PublicKeyError('04' + '11'.repeat(64)).length > 0, true)
   eqj('SM2 私钥长度错误可读', /64 位 Hex/.test(sm2PrivateKeyError('abcd')), true)
-  await rejects('SM2 错误私钥解密失败', () => Promise.resolve(sm2Decrypt(SM2_CT, 'ff'.repeat(32), 1)), /C3 校验未通过/)
+  await rejects('SM2 错误私钥解密失败', () => Promise.resolve(sm2Decrypt(SM2_CT, '11'.repeat(32), 1)), /C3 校验未通过/)
+  await rejects('SM2 私钥超出曲线阶 n 被拒（不再落到 C3 失败）', () => Promise.resolve(sm2Decrypt(SM2_CT, 'ff'.repeat(32), 1)), /私钥超出/)
   await rejects('SM2 密文过短直接报错', () => Promise.resolve(sm2Decrypt('00'.repeat(10), SM2_PRIV, 1)), /C3|长度|invalid/i)
 
   ok('向量用例全部在本地执行（无网络）', true)

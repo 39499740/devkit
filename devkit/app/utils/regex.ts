@@ -85,7 +85,8 @@ export function execRegex(source: string, flags: string, text: string, replaceme
       if (one) matches.push(serialize(one))
     }
     let replaced: string | null = null
-    if (replacement !== undefined && replacement !== '') {
+    // 只要传入了替换模板就计算：undefined 表示不做替换；空串是合法替换（等价于删除匹配）
+    if (replacement !== undefined) {
       replaced = text.replace(new RegExp(source, flags), replacement)
     }
     return { ok: true, matches, replaced, capped }
@@ -111,4 +112,59 @@ export function regexWorkerSource(): string {
   self.postMessage(execRegex(d.source, d.flags, d.text, d.replacement))
 }
 `
+}
+
+/**
+ * 主线程安全守卫：能做 Blob Worker 就在 Worker 里执行并加超时，避免灾难性回溯冻结页面；
+ * Worker 不可用时（Node / 测试环境）回退到同步 execRegex，返回值语义完全一致。
+ * 超时、Worker 错误、消息反序列化失败都会 settle 成失败结果，绝不悬挂、也不抛出。
+ */
+export function execRegexWithTimeout(
+  source: string,
+  flags: string,
+  text: string,
+  replacement?: string,
+  timeoutMs = 2000
+): Promise<RegexResult> {
+  if (typeof Worker === 'undefined' || typeof Blob === 'undefined' || typeof URL === 'undefined') {
+    return Promise.resolve(execRegex(source, flags, text, replacement))
+  }
+  let worker: Worker
+  let url = ''
+  try {
+    url = URL.createObjectURL(new Blob([regexWorkerSource()], { type: 'text/javascript' }))
+    worker = new Worker(url)
+  } catch {
+    // 创建失败（如浏览器策略限制）时退回同步路径，宁可慢也不能让步骤直接报错
+    return Promise.resolve(execRegex(source, flags, text, replacement))
+  }
+  return new Promise<RegexResult>((resolve) => {
+    const w = worker
+    let settled = false
+    const settle = (result: RegexResult) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      w.terminate()
+      if (url) URL.revokeObjectURL(url)
+      resolve(result)
+    }
+    const timer = setTimeout(() => {
+      settle({
+        ok: false,
+        matches: [],
+        replaced: null,
+        capped: false,
+        error: `正则执行超时（超过 ${timeoutMs}ms）：表达式可能存在灾难性回溯，请简化表达式或减少输入`
+      })
+    }, timeoutMs)
+    w.onmessage = (ev: MessageEvent<RegexResult>) => settle(ev.data)
+    w.onerror = (ev: ErrorEvent) => {
+      settle({ ok: false, matches: [], replaced: null, capped: false, error: `Worker 执行错误：${ev.message || '未知错误'}` })
+    }
+    w.onmessageerror = () => {
+      settle({ ok: false, matches: [], replaced: null, capped: false, error: 'Worker 消息无法反序列化' })
+    }
+    w.postMessage({ source, flags, text, replacement })
+  })
 }

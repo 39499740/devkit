@@ -5,15 +5,16 @@ declare module 'sm-crypto' {
     compressPublicKeyHex(publicKey: string): string
     comparePublicKeyHex(a: string, b: string): boolean
     verifyPublicKey(publicKey: string): boolean
-    doEncrypt(msg: string, publicKey: string, cipherMode?: number): string
-    doDecrypt(encryptData: string, privateKey: string, cipherMode?: number): string
+    doEncrypt(msg: string | number[], publicKey: string, cipherMode?: number): string
+    doDecrypt(encryptData: string, privateKey: string, cipherMode?: number, options?: { output?: 'string' }): string
+    doDecrypt(encryptData: string, privateKey: string, cipherMode: number, options: { output: 'array' }): number[]
     doSignature(
-      msg: string,
+      msg: string | number[],
       privateKey: string,
       options?: { pointPool?: unknown; der?: boolean; hash?: boolean; publicKey?: string; userId?: string }
     ): string
     doVerifySignature(
-      msg: string,
+      msg: string | number[],
       signValue: string,
       publicKey: string,
       options?: { der?: boolean; hash?: boolean; userId?: string }

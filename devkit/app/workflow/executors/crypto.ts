@@ -26,6 +26,7 @@ import {
 } from '../../utils/crypto/sm2'
 import { computeSm3 } from '../../utils/crypto/sm3'
 import { sm4Decrypt, sm4Encrypt, type Sm4Mode, type Sm4Padding } from '../../utils/crypto/sm4'
+import { errMessage } from '../../utils/errors'
 import { configText } from '../catalog'
 import { bytesPayload, payloadBytes, textPayload } from '../types'
 import type { StepConfig, StepExecutor } from '../types'
@@ -108,9 +109,9 @@ const aesGcm: StepExecutor = async (input, config, secrets) => {
 
   const combined = payloadBytes(input, inputEncoding(config))
   const tagBytes = tagLength / 8
-  if (combined.length <= tagBytes) {
+  if (combined.length < tagBytes) {
     throw new Error(
-      `密文（含认证标签）共 ${combined.length} 字节，短于认证标签长度（${tagBytes} 字节）：请确认输入是「密文||认证标签」拼接，且输入编码选择正确`
+      `密文（含认证标签）共 ${combined.length} 字节，不足认证标签长度（${tagBytes} 字节）：请确认输入是「密文||认证标签」拼接，且输入编码选择正确`
     )
   }
   try {
@@ -141,6 +142,17 @@ const sm3: StepExecutor = (input, config) => {
   }
 }
 
+/** 把 sm-crypto 的英文错误映射成与工具页 t17 一致的中文，未知错误用 errMessage 兜底（不涉及密钥内容） */
+function sm4ErrorText(e: unknown): string {
+  const msg = errMessage(e)
+  if (msg.includes('padding is invalid')) {
+    return '解密失败：PKCS#7 去填充校验未通过（通常是密钥错误或密文被修改；请核对密钥、IV 与模式）'
+  }
+  if (msg.includes('key is invalid')) return '解密失败：密钥无效（应解码后为 16 字节）'
+  if (msg.includes('iv is invalid')) return '解密失败：IV 无效（应解码后为 16 字节）'
+  return msg
+}
+
 const sm4: StepExecutor = (input, config, secrets) => {
   const operation = configText(config, 'operation', 'encrypt')
   const mode = configText(config, 'mode', 'cbc') as Sm4Mode
@@ -162,7 +174,12 @@ const sm4: StepExecutor = (input, config, secrets) => {
   const outEnc = configText(config, 'outputEncoding', 'auto')
 
   if (operation === 'encrypt') {
-    const out = sm4Encrypt(bytes, bytesToHex(keyBytes), opts)
+    let out: Uint8Array
+    try {
+      out = sm4Encrypt(bytes, bytesToHex(keyBytes), opts)
+    } catch (e) {
+      throw new Error(sm4ErrorText(e))
+    }
     const payload =
       outEnc === 'auto' ? bytesPayload(out) : textPayload(encodeOutput(out, outEnc === 'base64' ? 'base64' : 'hex'))
     return {
@@ -171,7 +188,12 @@ const sm4: StepExecutor = (input, config, secrets) => {
     }
   }
 
-  const out = sm4Decrypt(bytes, bytesToHex(keyBytes), opts)
+  let out: Uint8Array
+  try {
+    out = sm4Decrypt(bytes, bytesToHex(keyBytes), opts)
+  } catch (e) {
+    throw new Error(sm4ErrorText(e))
+  }
   const payload = outEnc === 'auto' ? bytesPayload(out) : textPayload(encodeOutput(out, outEnc === 'base64' ? 'base64' : 'hex'))
   return {
     payload,
@@ -205,12 +227,18 @@ const sm2Exec: StepExecutor = (input, config, secrets) => {
     if (input.bytes && input.kind === 'bytes') return bytesToHex(input.bytes)
     return bytesToHex(decodeInput(input.text.trim(), enc === 'base64' ? 'base64' : 'hex', label))
   }
+  /**
+   * SM2 待处理消息：与 AES/SM4 一致走 `payloadBytes(..., 'auto')`——
+   * 上游是二进制就取原始字节，否则按 UTF-8 文本编码，避免把 Hex 视图当明文。
+   * sm-crypto 的 doEncrypt/doSignature/doVerifySignature 同时接受字符串与字节数组。
+   */
+  const message = payloadBytes(input, 'auto')
 
   if (operation === 'encrypt') {
-    const hex = sm2Encrypt(input.text, needPublicKey(), mode)
+    const hex = sm2Encrypt(message, needPublicKey(), mode)
     return {
       payload: textPayload(enc === 'base64' ? encodeOutput(hexToBytes(hex).bytes, 'base64') : hex),
-      note: `SM2 加密成功（${modeLabel}，明文 ${textToBytes(input.text).length} 字节，密文 ${hex.length / 2} 字节，输出 ${labelOf(enc)}）；每次加密使用新的随机数 k，同参数重复加密结果不同`
+      note: `SM2 加密成功（${modeLabel}，明文 ${message.length} 字节，密文 ${hex.length / 2} 字节，输出 ${labelOf(enc)}）；每次加密使用新的随机数 k，同参数重复加密结果不同`
     }
   }
 
@@ -221,17 +249,18 @@ const sm2Exec: StepExecutor = (input, config, secrets) => {
         `密文长度异常：解码后 ${cipherHex.length / 2} 字节，SM2 密文至少 ${SM2_MIN_CIPHER_BYTES} 字节（C1 64 + C3 32 + C2 至少 0）`
       )
     }
-    const out = sm2Decrypt(cipherHex, needPrivateKey(), mode)
+    const out = sm2Decrypt(cipherHex, needPrivateKey(), mode, { output: 'array' })
+    const bytes = out.bytes ?? new Uint8Array(0)
     return {
-      payload: textPayload(out.text),
+      payload: bytesPayload(bytes),
       note: out.empty
         ? 'SM2 解密成功：明文为空字符串（C2 为 0 字节），C3 校验通过'
-        : `SM2 解密成功（${modeLabel}，C3 校验通过，明文 ${textToBytes(out.text).length} 字节）`
+        : `SM2 解密成功（${modeLabel}，C3 校验通过，明文 ${bytes.length} 字节）`
     }
   }
 
   if (operation === 'sign') {
-    const signature = sm2Sign(input.text, needPrivateKey(), { userId, der })
+    const signature = sm2Sign(message, needPrivateKey(), { userId, der })
     return {
       payload: textPayload(signature),
       note: `SM2 签名成功（SM3 摘要 + User ID「${userId}」，${der ? 'DER' : 'raw r||s'} 编码）`
@@ -244,10 +273,11 @@ const sm2Exec: StepExecutor = (input, config, secrets) => {
     const sigHex = cleanHex(signature)
     if (!/^[0-9a-f]+$/.test(sigHex)) throw new Error('签名 Hex 非法：包含非十六进制字符')
     if (!der && sigHex.length !== 128) throw new Error(`raw 签名应为 128 位 Hex（r||s 各 64 位），当前 ${sigHex.length} 位`)
-    const pass = sm2Verify(input.text, sigHex, needPublicKey(), { userId, der })
+    const pass = sm2Verify(message, sigHex, needPublicKey(), { userId, der })
     // 验签不通过是真实结论，与「执行出错」区分：这里按校验类步骤的惯例中止流程并写在说明里
     if (!pass) throw new Error(`验签不通过：签名与原文、公钥、User ID「${userId}」及 ${der ? 'DER' : 'raw r||s'} 格式不匹配（这是真实计算结果，不是执行错误）`)
-    return { payload: textPayload(input.text), note: `验签通过：签名与原文、公钥、User ID「${userId}」及 ${der ? 'DER' : 'raw r||s'} 格式均匹配` }
+    // 验签通过即原样透传上游载荷（保留二进制 bytes，供后续步骤继续处理）
+    return { payload: input, note: `验签通过：签名与原文、公钥、User ID「${userId}」及 ${der ? 'DER' : 'raw r||s'} 格式均匹配` }
   }
 
   throw new Error(`不支持的 SM2 操作：${operation}`)

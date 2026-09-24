@@ -148,10 +148,10 @@ async function execute() {
         run.markFail(`密文 ${decInEnc.value === 'hex' ? 'Hex' : 'Base64'} 非法：${r.error}（输入编码当前为 ${decInEnc.value === 'hex' ? 'Hex' : 'Base64'}）`)
         return
       }
-      if (r.bytes.length <= tagBytes.value) {
+      if (r.bytes.length < tagBytes.value) {
         encResult.value = null
         decResult.value = null
-        run.markFail(`密文（含认证标签）共 ${r.bytes.length} 字节，短于认证标签长度（${tagBytes.value} 字节）：请确认输入的是「密文||认证标签」拼接格式`)
+        run.markFail(`密文（含认证标签）共 ${r.bytes.length} 字节，不足认证标签长度（${tagBytes.value} 字节）：请确认输入的是「密文||认证标签」拼接格式`)
         return
       }
       try {

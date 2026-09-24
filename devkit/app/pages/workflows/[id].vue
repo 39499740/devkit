@@ -9,6 +9,7 @@ import {
   isSensitiveStep,
   isCurrentConsent,
   MISSING_SECRET_HINT,
+  type StepConfigValue,
   type StepResult,
   type StepType,
   type WorkflowStep
@@ -56,6 +57,20 @@ const clearAfterRun = ref(false)
 const lastRunAt = ref(0)
 const busy = ref(false)
 
+/**
+ * 结果失效：任何会改变计算语义的操作（改输入/参数、增删/移动/复制步骤、写入密钥）
+ * 都必须让旧结果作废，否则界面会把上一步的输出贴到另一步名下，并继续显示「全部成功」。
+ */
+function invalidateResults() {
+  results.value = []
+}
+
+/** 流程输入改走这里而不是 watch(input)：runAll 里会清空输入，watch 会误清新结果 */
+function onInputChange(v: string) {
+  input.value = v
+  invalidateResults()
+}
+
 /** 本地存储错误横幅：记住被关掉的那条文案，出现新错误时还能再提示一次 */
 const dismissedStorageError = ref('')
 const storageErrorText = computed(() =>
@@ -84,6 +99,7 @@ onMounted(async () => {
   if (!p) return
   // 内容先作为流程输入带入：即使后面拒绝添加步骤，这次传递也不算白费
   input.value = p.text
+  invalidateResults()
   const intent = p.intent
   if (intent?.workflowId === id.value) {
     if (intent.stepType) {
@@ -96,6 +112,7 @@ onMounted(async () => {
         toast.warning(res.error ?? '追加步骤失败')
         return
       }
+      invalidateResults()
       selected.value = steps.value.length - 1
       toast.success(`已把「${stepDef(intent.stepType).name}」追加为第 ${steps.value.length} 步`)
       return
@@ -160,10 +177,16 @@ async function runOne(i: number) {
     toast.warning('该位置没有步骤可运行')
     return
   }
+  // 上游未运行就单步运行，会拿「流程输入」当上游，算出一个与链路不符的结果
+  if (i > 0 && !results.value[i - 1]) {
+    toast.warning('上一步还没有结果：请先运行上一步，或点「运行全部」后再单步运行')
+    return
+  }
   busy.value = true
   try {
     const res = await runStep(step, inputOf(i), i, { secrets: store.stepSecrets(id.value, step.id) })
-    const list = [...results.value]
+    // 只保留到本步：本步之后基于旧上游算出的结果已失效，必须作废，避免错位显示
+    const list = results.value.slice(0, i)
     list[i] = res
     results.value = list
     selected.value = i
@@ -203,6 +226,7 @@ async function addWithConsent(type: StepType) {
     toast.warning(res.error ?? '添加步骤失败')
     return
   }
+  invalidateResults()
   selected.value = steps.value.length - 1
 }
 
@@ -218,25 +242,116 @@ async function duplicateStep(i: number) {
     toast.warning(res.error ?? '复制步骤失败')
     return
   }
+  invalidateResults()
   selected.value = i + 1
   toast.success(`已复制「${stepDef(step.type).name}」为第 ${i + 2} 步（密钥不复制，需要重新填写）`)
 }
 
+/** 移动步骤会改变上下游关系，旧结果一律作废；选中项跟随被移动的步骤，避免指向另一条 */
+function moveStep(i: number, dir: -1 | 1) {
+  store.moveStep(id.value, i, dir)
+  invalidateResults()
+  if (selected.value === i) selected.value = i + dir
+  else if (selected.value === i + dir) selected.value = i
+}
+
+/** 修改步骤参数会改变计算结果，旧结果一律作废 */
+function onConfigChange(key: string, value: StepConfigValue) {
+  store.updateStepConfig(id.value, currentStepIndex.value, key, value)
+  invalidateResults()
+}
+
 function removeStep(i: number) {
   store.removeStep(id.value, i)
-  results.value = results.value.filter((_, idx) => idx !== i)
+  // 删除会改变其后所有步骤的输入：删除点之前的结果仍有效，下游一律作废，避免显示错位的成功
+  results.value = results.value.slice(0, i)
   if (selected.value >= i) selected.value = Math.max(-1, selected.value - 1)
 }
 
-/** 密钥值只经这里写进本地存储，绝不回显、绝不写进 config */
+const SECRET_COMMIT_DELAY = 300
+
+/** 密钥输入草稿：按 `stepId:key` 键控，保证输入即时显示；防抖结束后才写 store */
+const secretDrafts = ref<Record<string, string>>({})
+interface PendingSecret {
+  /** 记录调度时的流程 ID：卸载/导航后仍能按正确的 (workflowId, stepId) 落盘 */
+  workflowId: string
+  step: WorkflowStep
+  key: string
+  timer: ReturnType<typeof setTimeout>
+}
+const pendingSecrets = new Map<string, PendingSecret>()
+
+function secretKey(stepId: string, key: string) {
+  return `${stepId}:${key}`
+}
+
+/** 密钥字段的显示值：草稿优先，其次已保存值；密钥值绝不写进 config */
+function secretValue(stepId: string, key: string): string {
+  const k = secretKey(stepId, key)
+  if (k in secretDrafts.value) return secretDrafts.value[k] ?? ''
+  return store.stepSecrets(id.value, stepId)[key] ?? ''
+}
+
+/** 密钥值只经这里写进本地存储，绝不回显、绝不写进 config；每次按键只更新草稿并重置防抖 */
 function onSecretInput(step: WorkflowStep, key: string, value: string) {
-  const res = store.setStepSecret(id.value, step.id, key, value)
-  if (!res.ok) {
-    toast.warning(res.error ?? '密钥未保存')
+  const k = secretKey(step.id, key)
+  secretDrafts.value = { ...secretDrafts.value, [k]: value }
+  const prev = pendingSecrets.get(k)
+  if (prev) clearTimeout(prev.timer)
+  const workflowId = id.value
+  const timer = setTimeout(() => {
+    pendingSecrets.delete(k)
+    commitSecret(workflowId, step, key)
+  }, SECRET_COMMIT_DELAY)
+  pendingSecrets.set(k, { workflowId, step, key, timer })
+}
+
+/** 失焦立即提交，避免用户输入后马上切走还没落盘 */
+function flushSecret(step: WorkflowStep, key: string) {
+  const k = secretKey(step.id, key)
+  const prev = pendingSecrets.get(k)
+  if (prev) {
+    clearTimeout(prev.timer)
+    pendingSecrets.delete(k)
+  }
+  if (k in secretDrafts.value) commitSecret(prev?.workflowId ?? id.value, step, key)
+}
+
+/** 真正写入本地存储：只有成功才提示一次；失败只 warning，绝不提示成功 */
+function commitSecret(workflowId: string, step: WorkflowStep, key: string, notify = true) {
+  const k = secretKey(step.id, key)
+  if (!(k in secretDrafts.value)) return
+  // 流程或步骤可能已被删除：直接丢弃草稿，不要写入不存在的数据，也不要弹无意义的警告。
+  // 这里用调度时记录的 workflowId，而不是当前路由的 id，避免导航离开后误判为「步骤不存在」而丢草稿。
+  if (!store.get(workflowId)?.steps.some((s) => s.id === step.id)) {
+    const dropped = { ...secretDrafts.value }
+    delete dropped[k]
+    secretDrafts.value = dropped
     return
   }
-  toast.success('密钥已保存到本机浏览器')
+  const value = secretDrafts.value[k] ?? ''
+  const res = store.setStepSecret(workflowId, step.id, key, value)
+  if (!res.ok) {
+    if (notify) toast.warning(res.error ?? '密钥未保存')
+    return
+  }
+  // 成功后清掉草稿，改为以 store 为唯一真源
+  const next = { ...secretDrafts.value }
+  delete next[k]
+  secretDrafts.value = next
+  invalidateResults()
+  if (notify) toast.success(value === '' ? '已删除本机保存的密钥' : '密钥已保存到本机浏览器')
 }
+
+onUnmounted(() => {
+  // 卸载时清掉防抖定时器；把尚未提交的草稿补写一次，避免快速离开丢输入
+  const pending = [...pendingSecrets.values()]
+  pendingSecrets.clear()
+  for (const p of pending) {
+    clearTimeout(p.timer)
+    commitSecret(p.workflowId, p.step, p.key, false)
+  }
+})
 
 async function reconfirmStep(step: WorkflowStep) {
   if (!(await requestConsent())) return
@@ -276,12 +391,12 @@ const currentMissingSecrets = computed(() =>
 /** 确认记录可能是旧文案版本或压根没有，两种情况都要求重新确认 */
 const currentConsentOk = computed(() => isCurrentConsent(currentStep.value?.consent))
 
-/** 流程输出：最后一步成功时才有可用输出 */
+/** 流程输出：每一步都有真实结果且最后一步成功时，才提供可用输出 */
 const finalOutput = computed(() => {
-  const last = results.value[steps.value.length - 1]
-  if (steps.value.length && results.value.length === steps.value.length && last?.status === 'ok') {
-    return { text: last.output, ok: true as const }
-  }
+  const n = steps.value.length
+  if (!n || results.value.filter((r) => !!r).length !== n) return { text: '', ok: false as const }
+  const last = results.value[n - 1]
+  if (last?.status === 'ok') return { text: last.output, ok: true as const }
   return { text: '', ok: false as const }
 })
 
@@ -388,12 +503,13 @@ function exportJson() {
         <span class="tertiary">可以手动粘贴，也可以从其他工具「发送到 → 加入处理流程」传入</span>
       </div>
       <DkEditor
-        v-model="input"
+        :model-value="input"
         hide-toolbar
         lang="流程输入 · 文本"
         placeholder="粘贴 Base64 / JSON / URL 编码文本，作为第一个步骤的输入"
         height="140px"
         filename="workflow-input.txt"
+        @update:model-value="onInputChange"
       />
     </section>
 
@@ -515,14 +631,14 @@ function exportJson() {
               <button class="wfe__node-act" title="复制该步骤（不复制密钥）" @click.stop="duplicateStep(i)">
                 <DkIcon name="copy" :size="12" />
               </button>
-              <button class="wfe__node-act" title="上移" :disabled="i === 0" @click.stop="store.moveStep(id, i, -1)">
+              <button class="wfe__node-act" title="上移" :disabled="i === 0" @click.stop="moveStep(i, -1)">
                 <DkIcon name="chevron-up" :size="12" />
               </button>
               <button
                 class="wfe__node-act"
                 title="下移"
                 :disabled="i === steps.length - 1"
-                @click.stop="store.moveStep(id, i, 1)"
+                @click.stop="moveStep(i, 1)"
               >
                 <DkIcon name="chevron-down" :size="12" />
               </button>
@@ -587,7 +703,7 @@ function exportJson() {
               密钥以明文保存在本机浏览器 localStorage，不会发送到服务器；localStorage 不是密钥保险箱。
             </p>
             <div v-if="!currentConsentOk" class="wfe__risk-act">
-              <span class="wfe__risk-warn">风险确认已失效</span>
+              <span class="wfe__risk-warn">风险确认已失效，请重新确认后再填写密钥</span>
               <DkButton size="sm" @click="reconfirmStep(currentStep)">重新确认风险</DkButton>
             </div>
             <p v-if="currentMissingSecrets.length" class="wfe__risk-missing">
@@ -600,17 +716,19 @@ function exportJson() {
             <DkSecretField
               v-if="f.control === 'secret'"
               :label="f.label"
-              :model-value="store.stepSecrets(id, currentStep.id)[f.key] ?? ''"
+              :model-value="secretValue(currentStep.id, f.key)"
               :help="f.help"
               :placeholder="f.placeholder"
               :updated-at="store.secretUpdatedAt(id, currentStep.id)"
+              :disabled="!currentConsentOk"
               @update:model-value="onSecretInput(currentStep, f.key, $event)"
+              @blur="flushSecret(currentStep, f.key)"
             />
             <label v-else-if="f.control === 'switch'" class="wfe__switch">
               <DkSwitch
                 :on="!!currentStep.config[f.key]"
                 :label="f.label"
-                @toggle="store.updateStepConfig(id, currentStepIndex, f.key, !currentStep.config[f.key])"
+                @toggle="onConfigChange(f.key, !currentStep.config[f.key])"
               />
               <span>{{ f.label }}</span>
             </label>
@@ -620,7 +738,7 @@ function exportJson() {
                 :model-value="String(currentStep.config[f.key] ?? f.default ?? '')"
                 :options="f.options ?? []"
                 :aria-label="f.label"
-                @update:model-value="store.updateStepConfig(id, currentStepIndex, f.key, $event)"
+                @update:model-value="onConfigChange(f.key, $event)"
               />
               <span v-if="f.help" class="wfe__field-help">{{ f.help }}</span>
             </label>
@@ -632,7 +750,7 @@ function exportJson() {
                 :placeholder="f.placeholder"
                 :aria-label="f.label"
                 rows="4"
-                @input="store.updateStepConfig(id, currentStepIndex, f.key, ($event.target as HTMLTextAreaElement).value)"
+                @input="onConfigChange(f.key, ($event.target as HTMLTextAreaElement).value)"
               ></textarea>
               <span v-if="f.help" class="wfe__field-help">{{ f.help }}</span>
             </label>
@@ -643,7 +761,7 @@ function exportJson() {
                 :value="String(currentStep.config[f.key] ?? '')"
                 :placeholder="f.placeholder"
                 :aria-label="f.label"
-                @input="store.updateStepConfig(id, currentStepIndex, f.key, ($event.target as HTMLInputElement).value)"
+                @input="onConfigChange(f.key, ($event.target as HTMLInputElement).value)"
               />
               <span v-if="f.help" class="wfe__field-help">{{ f.help }}</span>
             </label>

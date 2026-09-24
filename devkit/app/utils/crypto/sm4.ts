@@ -25,7 +25,13 @@ export const sm4PaddingOptions: { value: Sm4Padding; label: string }[] = [
 
 export const SM4_BLOCK_BYTES = 16
 
+/** Hex 里混入非十六进制字符时必须报错，否则会被底层静默当 0 处理，产出看似成功的错误结果 */
+function assertHexChars(hex: string, label: string): void {
+  if (!/^[0-9a-fA-F]*$/.test(hex)) throw new Error(`${label} Hex 非法：包含非十六进制字符`)
+}
+
 export function assertSm4KeyHex(keyHex: string): void {
+  assertHexChars(keyHex, '密钥')
   const len = keyHex.length / 2
   if (len !== SM4_BLOCK_BYTES) {
     throw new Error(`密钥解码后 ${len} 字节，需要 16 字节（SM4 密钥固定 128 位）`)
@@ -35,6 +41,7 @@ export function assertSm4KeyHex(keyHex: string): void {
 export function assertSm4IvHex(ivHex: string | undefined): void {
   const hex = ivHex ?? ''
   if (!hex) throw new Error('IV 为空：CBC 模式需要 16 字节 IV（32 个 Hex 字符）')
+  assertHexChars(hex, 'IV')
   const len = hex.length / 2
   if (len !== SM4_BLOCK_BYTES) throw new Error(`IV 解码后 ${len} 字节，需要 16 字节（32 个 Hex 字符）`)
 }

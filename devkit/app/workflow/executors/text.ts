@@ -6,11 +6,11 @@ import yaml from 'js-yaml'
 import { base64ToBytes, bytesToBase64, textToBytes } from '../../utils/bytes'
 import { csvToJson, jsonToCsv } from '../../utils/csv'
 import { errMessage } from '../../utils/errors'
-import { detectDuplicateKeys, minifyJson, parseJson, stringifyJson, toPlainJson } from '../../utils/json'
+import { detectDuplicateKeys, jsonErrorPosition, minifyJson, parseJson, RawNumber, stringifyJson, toPlainJson } from '../../utils/json'
 import { evalJmesPath } from '../../utils/jmespath'
 import { evalJsonPath } from '../../utils/jsonpath'
 import { inferSchema, validateInstance, type Draft } from '../../utils/jsonschema'
-import { execRegex, validateFlags } from '../../utils/regex'
+import { execRegexWithTimeout, validateFlags } from '../../utils/regex'
 import { formatSql, minifySql, type SqlDialect } from '../../utils/sql'
 import { tidyText } from '../../utils/text'
 import { formatXml, jsonToXml, minifyXml, queryXPath, xmlToJson } from '../../utils/xml'
@@ -39,8 +39,56 @@ function warnNote(warnings: string[]): string {
   return warnings.length ? `；${warnings.slice(0, 2).join('；')}` : ''
 }
 
+/**
+ * 把 V8 的常见英文 JSON 错误翻成中文（未知错误回退原文），
+ * 配合 jsonErrorPosition 给出「第 X 行第 Y 列附近」的中文定位。
+ */
+function localizeJsonMessage(msg: string): string {
+  if (/Expected property name or '}'/.test(msg)) return '属性名缺失或格式不正确（可能是多余逗号或缺少引号）'
+  if (/Expected double-quoted property name/.test(msg)) return '属性名必须用双引号（常见于多余逗号或使用了单引号/无引号键）'
+  if (/Expected ':' after property name/.test(msg)) return '属性名后缺少冒号'
+  if (/Expected ',' or ']' after array element/.test(msg)) return '数组元素之间缺少逗号或右方括号'
+  if (/Expected ',' or '}' after property value/.test(msg)) return '对象属性之间缺少逗号或右花括号'
+  if (/Unexpected end of JSON input/.test(msg)) return 'JSON 提前结束（可能缺少右括号、引号或值）'
+  if (/Unterminated string/.test(msg)) return '字符串缺少结束引号'
+  if (/Bad control character/.test(msg)) return '字符串中包含非法控制字符'
+  if (/Bad escaped character/.test(msg)) return '包含非法的转义字符'
+  if (/Unexpected non-whitespace character/.test(msg)) return 'JSON 结束后还有多余内容'
+  if (/Unexpected token/.test(msg)) return '出现意外字符，不是合法的 JSON'
+  if (/Unexpected number/.test(msg)) return '出现意外的数字'
+  if (/Unexpected string/.test(msg)) return '出现意外的字符串'
+  // 兜底也用中文，确保不再泄漏 V8 英文原文
+  return 'JSON 语法错误，请检查该位置附近的内容'
+}
+
+/**
+ * JSON 解析失败时给出与工具页一致的中文定位（「第 X 行第 Y 列附近」），
+ * 不再把 V8 的英文原文直接抛给用户。
+ */
+function parseJsonLocalized(text: string, what = 'JSON') {
+  try {
+    return parseJson(text)
+  } catch (e) {
+    const pos = jsonErrorPosition(e, text)
+    const detail = localizeJsonMessage(errMessage(e))
+    if (pos) throw new Error(`${what} 解析失败：第 ${pos.line} 行第 ${pos.column} 列附近：${detail}`)
+    throw new Error(`${what} 解析失败：${detail}`)
+  }
+}
+
+/** 是否存在超出安全整数范围的原始数字（这些数字经 toPlainJson 会变成字符串，需提示用户） */
+function hasBigRawNumber(v: unknown): boolean {
+  if (v instanceof RawNumber) return !Number.isSafeInteger(Number(v.raw))
+  if (Array.isArray(v)) return v.some(hasBigRawNumber)
+  if (v && typeof v === 'object') return Object.values(v as Record<string, unknown>).some(hasBigRawNumber)
+  return false
+}
+
+const BIG_NUMBER_WARN = '；检测到超出安全整数范围的数字，已按原文以字符串输出（与工具页的大整数保真策略一致，如需数值类型请手动处理）'
+
 const base64Decode: StepExecutor = (input) => {
-  const res = base64ToBytes(input.text.trim())
+  const src = requireText(input, 'Base64 解码')
+  const res = base64ToBytes(src.trim())
   if (res.error) throw new Error(res.error)
   const payload = bytesPayload(res.bytes)
   return {
@@ -57,7 +105,7 @@ const base64Encode: StepExecutor = (input, config) => {
   const urlSafe = configBool(config, 'urlSafe', false)
   let out = bytesToBase64(bytes)
   if (urlSafe) out = out.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  else if (configBool(config, 'lineBreak', false)) out = out.replace(/(.{76})/g, '$1\n').replace(/\n$/, '')
+  if (configBool(config, 'lineBreak', false)) out = out.replace(/(.{76})/g, '$1\n').replace(/\n$/, '')
   return {
     payload: textPayload(out),
     note: `编码为 Base64${urlSafe ? 'URL' : ''}：${bytes.length} 字节 → ${out.length} 字符`
@@ -65,7 +113,7 @@ const base64Encode: StepExecutor = (input, config) => {
 }
 
 const urlDecode: StepExecutor = (input) => {
-  const src = input.text.trim()
+  const src = requireText(input, 'URL 解码').trim()
   try {
     const text = decodeURIComponent(src)
     return { payload: textPayload(text), note: `解码为 ${byteSize(text)} 文本` }
@@ -75,11 +123,12 @@ const urlDecode: StepExecutor = (input) => {
 }
 
 const urlEncode: StepExecutor = (input, config) => {
+  const text = requireText(input, 'URL 编码')
   const component = configText(config, 'component', 'component') !== 'uri'
-  const out = component ? encodeURIComponent(input.text) : encodeURI(input.text)
+  const out = component ? encodeURIComponent(text) : encodeURI(text)
   return {
     payload: textPayload(out),
-    note: `按${component ? '组件（encodeURIComponent）' : '整条 URI（encodeURI）'}编码，${input.text.length} 字符 → ${out.length} 字符`
+    note: `按${component ? '组件（encodeURIComponent）' : '整条 URI（encodeURI）'}编码，${text.length} 字符 → ${out.length} 字符`
   }
 }
 
@@ -100,7 +149,7 @@ const textDedup: StepExecutor = (input, config) => {
   }
 }
 
-const regexReplace: StepExecutor = (input, config) => {
+const regexReplace: StepExecutor = async (input, config) => {
   const text = requireText(input, '正则提取替换')
   const pattern = configText(config, 'pattern')
   if (!pattern) throw new Error('正则表达式为空：请在步骤参数里填写表达式')
@@ -112,9 +161,11 @@ const regexReplace: StepExecutor = (input, config) => {
   } catch (e) {
     throw new Error(`表达式语法错误：${errMessage(e)}`)
   }
-  const counted = execRegex(pattern, flags, text, '')
-  if (!counted.ok) throw new Error(`正则执行失败：${counted.error ?? '未知错误'}`)
   const mode = configText(config, 'mode', 'replace')
+  const replacement = configText(config, 'replacement')
+  // 一次执行同时拿到匹配与替换结果：Worker + 超时保护，避免灾难性回溯在主线程冻结页面
+  const counted = await execRegexWithTimeout(pattern, flags, text, mode === 'match' ? undefined : replacement)
+  if (!counted.ok) throw new Error(`正则执行失败：${counted.error ?? '未知错误'}`)
 
   if (mode === 'match') {
     if (!counted.matches.length) throw new Error('没有匹配到任何内容：表达式与 flags 合法，但当前输入里没有命中')
@@ -132,8 +183,8 @@ const regexReplace: StepExecutor = (input, config) => {
     }
   }
 
-  const replacement = configText(config, 'replacement')
-  const out = text.replace(new RegExp(pattern, flags), replacement)
+  // 替换结果已在同一次执行里算好（replaced），不再单独跑一遍 text.replace
+  const out = counted.replaced ?? text
   return {
     payload: textPayload(out),
     note: `替换完成，命中 ${counted.matches.length} 处${replacement === '' ? '（替换内容为空 = 删除匹配）' : ''}${counted.capped ? '（统计已截断在 20 万处）' : ''}`
@@ -143,14 +194,15 @@ const regexReplace: StepExecutor = (input, config) => {
 const jsonFormat: StepExecutor = (input, config) => {
   const text = requireText(input, 'JSON 格式化')
   const indent = Math.max(0, Math.min(8, configNumber(config, 'indent', 2)))
-  const { value } = parseJson(text)
-  const out = stringifyJson(value, indent)
+  const { value } = parseJsonLocalized(text)
+  // 缩进 0 = 真正单行（minifyJson）；stringifyJson 在缩进 0 时仍会插换行
+  const out = indent === 0 ? minifyJson(value) : stringifyJson(value, indent)
   return { payload: textPayload(out, 'json'), note: `格式化完成，${lineSize(out)}` }
 }
 
 const jsonMinify: StepExecutor = (input, config) => {
   const text = requireText(input, 'JSON 压缩')
-  const { value } = parseJson(text)
+  const { value } = parseJsonLocalized(text)
   const out = minifyJson(value)
   const dups = configBool(config, 'checkDuplicateKeys', true) ? detectDuplicateKeys(text) : []
   return {
@@ -166,7 +218,7 @@ const jsonMinify: StepExecutor = (input, config) => {
 const jsonpath: StepExecutor = (input, config) => {
   const text = requireText(input, 'JSONPath 提取')
   const expr = configText(config, 'expr', '$').trim() || '$'
-  const { value } = parseJson(text)
+  const { value } = parseJsonLocalized(text)
   const res = evalJsonPath(toPlainJson(value), expr)
   if (!res.matches.length) throw new Error('匹配 0 项：检查表达式与字段名（区分大小写）')
   const out = JSON.stringify(
@@ -184,7 +236,7 @@ const jmespath: StepExecutor = (input, config) => {
   const text = requireText(input, 'JMESPath 提取')
   const expr = configText(config, 'expr').trim()
   if (!expr) throw new Error('JMESPath 表达式为空：请在步骤参数里填写表达式')
-  const { value } = parseJson(text)
+  const { value } = parseJsonLocalized(text)
   const res = evalJmesPath(toPlainJson(value), expr)
   if (!res.matches.length) throw new Error(`匹配 0 项：${res.warnings[0] ?? '检查表达式与字段名'}`)
   const out = JSON.stringify(
@@ -201,20 +253,28 @@ const jmespath: StepExecutor = (input, config) => {
 const jsonYaml: StepExecutor = (input, config) => {
   const text = requireText(input, 'JSON / YAML 转换')
   if (configText(config, 'direction', 'json2yaml') === 'yaml2json') {
-    const obj = yaml.load(text)
+    let obj: unknown
+    try {
+      obj = yaml.load(text)
+    } catch (e) {
+      throw new Error(`YAML 解析失败：${errMessage(e).split('\n')[0]!.trim()}。请按提示修正缩进或语法后重试`)
+    }
     return { payload: textPayload(JSON.stringify(obj, null, 2), 'json'), note: 'YAML 已转为 JSON' }
   }
-  const { value } = parseJson(text)
+  const { value } = parseJsonLocalized(text)
   const out = yaml.dump(toPlainJson(value), { indent: 2, lineWidth: -1 })
-  return { payload: textPayload(out), note: 'JSON 已转为 YAML' }
+  return { payload: textPayload(out), note: `JSON 已转为 YAML${hasBigRawNumber(value) ? BIG_NUMBER_WARN : ''}` }
 }
 
 const schemaValidate: StepExecutor = (input, config) => {
   const text = requireText(input, 'JSON Schema 校验')
   const schemaText = configText(config, 'schema')
   if (!schemaText.trim()) throw new Error('该步骤还没有配置 Schema')
-  const { value } = parseJson(text)
-  const { value: schema } = parseJson(schemaText)
+  const { value } = parseJsonLocalized(text)
+  const { value: schema } = parseJsonLocalized(schemaText, 'Schema')
+  if (schema instanceof RawNumber || schema === null || Array.isArray(schema) || (typeof schema !== 'object' && typeof schema !== 'boolean')) {
+    throw new Error('Schema 必须是对象或布尔值（true/false），当前不是合法的 JSON Schema')
+  }
   const res = validateInstance(toPlainJson(value), schema, { strict: true })
   if (res.valid) {
     return { payload: textPayload(text, 'json'), note: `校验通过，检查了 ${res.checked} 个节点` }
@@ -227,7 +287,7 @@ const jsonSchemaGen: StepExecutor = (input, config) => {
   const text = requireText(input, 'JSON Schema 生成')
   const draft = (configText(config, 'draft', '2020-12') === 'draft-07' ? 'draft-07' : '2020-12') as Draft
   const strict = configBool(config, 'strict', false)
-  const { value } = parseJson(text)
+  const { value } = parseJsonLocalized(text)
   const schema = inferSchema(toPlainJson(value), { draft, strict })
   const out = JSON.stringify(schema, null, 2)
   return {
@@ -302,7 +362,7 @@ const xmlStep: StepExecutor = (input, config) => {
     return { payload: textPayload(out, 'json'), note: `XML 已转为 JSON，${lineSize(out)}${warnNote(res.warnings)}` }
   }
   if (mode === 'json2xml') {
-    const { value } = parseJson(text)
+    const { value } = parseJsonLocalized(text)
     const res = jsonToXml(toPlainJson(value), 'root')
     return { payload: textPayload(res.xml), note: `JSON 已转为 XML，${res.nodes} 个节点${warnNote(res.warnings)}` }
   }
@@ -407,10 +467,10 @@ function javaFromJson(value: unknown, className: string): string {
 
 const json2java: StepExecutor = (input, config) => {
   const text = requireText(input, 'JSON 转 Java')
-  const { value } = parseJson(text)
+  const { value } = parseJsonLocalized(text)
   const cls = configText(config, 'className', 'Order').trim() || 'Order'
   const code = javaFromJson(toPlainJson(value), cls)
-  return { payload: textPayload(code), note: `生成 ${cls}，${lineSize(code)}` }
+  return { payload: textPayload(code), note: `生成 ${cls}，${lineSize(code)}${hasBigRawNumber(value) ? BIG_NUMBER_WARN : ''}` }
 }
 
 export const textExecutors: Partial<Record<string, StepExecutor>> = {
