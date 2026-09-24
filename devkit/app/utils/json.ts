@@ -202,11 +202,58 @@ function unescapeJsonString(raw: string): string {
   }
 }
 
-/** 检测重复键（对合法 JSON 的对象逐层收集，单次扫描，O(n)） */
+/**
+ * JSON 嵌套深度硬上限：超过即拒绝。
+ * 深嵌套输入会让重复键扫描的栈帧 / 递归遍历开销随深度放大（旧实现每层都 join 完整路径 → O(depth²)，
+ * 2 万层即 ~600MB / 1.3s，5 万层直接 OOM）。
+ *
+ * 取 2500 层，与 parseJson 内部 `JSON.parse(wrapNumbers(...), reviver)` 的递归上限协调
+ * （实测 reviver 递归约 2950 层即抛 RangeError "Maximum call stack size exceeded"）：
+ * 在重复键扫描阶段就抛中文「嵌套层级过深」，避免随后 reviver 递归栈溢出抛英文 RangeError，
+ * 使 parseJson 与各调用方对深嵌套给出统一的中文提示，且不再 OOM。
+ * 正常数据（含代码生成器产物）的嵌套层级远小于该值。
+ */
+export const JSON_MAX_NESTING_DEPTH = 2500
+
+/** 嵌套过深时抛出的中文错误（parseJson / 调用方据此给出「嵌套层级过深」提示） */
+function nestingTooDeepError(): Error {
+  return new Error(`JSON 嵌套层级过深（超过 ${JSON_MAX_NESTING_DEPTH} 层），已拒绝处理，请减少嵌套层级后重试`)
+}
+
+/**
+ * 重复键扫描的栈帧。
+ * 关键点：不再为每一层预先保存完整路径字符串（那会使累计内存 / 时间达到 O(depth²)），
+ * 只保留父帧引用与本层在父路径中的占位段；可读路径仅在真正发现重复键时才按需重建。
+ */
+interface DupKeyFrame {
+  isArr: boolean
+  keys: Set<string>
+  /** 父容器帧；根容器为 null */
+  parent: DupKeyFrame | null
+  /** 本帧在父级路径中的占位段（'{}' / '[]'） */
+  seg: string
+  /** 惰性缓存的可读路径：仅在首次发现重复键时重建一次，同层后续重复直接复用 */
+  path?: string
+}
+
+/** 沿父链重建帧所在路径（不含本帧占位段）：与旧实现每层 `pathParts.join('.')` 的结果完全一致 */
+function rebuildFramePath(frame: DupKeyFrame): string {
+  if (frame.path !== undefined) return frame.path
+  const segs: string[] = []
+  for (let f = frame.parent; f !== null; f = f.parent) segs.push(f.seg)
+  segs.reverse()
+  frame.path = segs.join('.')
+  return frame.path
+}
+
+/**
+ * 检测重复键（对合法 JSON 的对象逐层收集，单次扫描）。
+ * 路径按需重建并缓存：整体 O(n + 含重复键的层数 × 深度)，深嵌套不再 OOM。
+ * 嵌套超过 JSON_MAX_NESTING_DEPTH 时抛出中文错误。
+ */
 export function detectDuplicateKeys(text: string): string[] {
   const dups: string[] = []
-  const stack: { isArr: boolean; keys: Set<string>; path: string }[] = []
-  const pathParts: string[] = []
+  const stack: DupKeyFrame[] = []
   let i = 0
   let inStr = false
   let esc = false
@@ -237,24 +284,25 @@ export function detectDuplicateKeys(text: string): string[] {
       continue
     }
     if (c === '{' || c === '[') {
+      if (stack.length >= JSON_MAX_NESTING_DEPTH) throw nestingTooDeepError()
       const isArr = c === '['
-      stack.push({ isArr, keys: new Set(), path: pathParts.join('.') })
-      pathParts.push(isArr ? '[]' : '{}')
+      const parent = stack.length ? stack[stack.length - 1]! : null
+      stack.push({ isArr, keys: new Set(), parent, seg: isArr ? '[]' : '{}' })
       i++
       continue
     }
     if (c === '}' || c === ']') {
       stack.pop()
-      pathParts.pop()
       i++
       continue
     }
     if (c === ':' && pendingKey !== null) {
       const top = stack[stack.length - 1]
       if (top && !top.isArr) {
-        const label = top.path ? `${top.path}.${pendingKey}` : pendingKey
-        if (top.keys.has(pendingKey)) dups.push(label)
-        else top.keys.add(pendingKey)
+        if (top.keys.has(pendingKey)) {
+          const path = rebuildFramePath(top)
+          dups.push(path ? `${path}.${pendingKey}` : pendingKey)
+        } else top.keys.add(pendingKey)
       }
       pendingKey = null
       i++
@@ -361,6 +409,8 @@ export function jsonErrorPosition(e: unknown, text: string): { line: number; col
  * jsonErrorPosition 与各调用方都复用它，保证工具页 / 流程 / CSV 呈现一致。
  */
 export function localizeJsonMessage(msg: string): string {
+  // 已是中文的「嵌套层级过深」错误原样保留，避免被下方兜底文案覆盖（parseJson 对深嵌套的提示）
+  if (/嵌套层级过深/.test(msg)) return msg
   if (/Expected property name or '}'/.test(msg)) return '属性名缺失或格式不正确（可能是多余逗号或缺少引号）'
   if (/Expected double-quoted property name/.test(msg)) return '属性名必须用双引号（常见于多余逗号或使用了单引号/无引号键）'
   if (/Expected ':' after property name/.test(msg)) return '属性名后缺少冒号'

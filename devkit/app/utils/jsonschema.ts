@@ -290,6 +290,16 @@ export function validateInstance(
   /** 当前收集器：组合关键字在隔离收集器里试算，避免失败分支的错误污染最终结果 */
   let sink: SchemaError[] = errors
 
+  /**
+   * 已识别但未实现的关键字：出现时显式追加中文 warning，避免把「校验通过」当成真结论。
+   * 按消息去重（而非全局 Set）：隔离分支回滚 warnings 后仍能在有效路径上重新提示。
+   * 只新增 warnings，不改变 valid / errors 语义。
+   */
+  function warnUnsupported(keyword: string, detail = ''): void {
+    const msg = `暂不支持关键字 ${keyword}${detail}，该项未校验，结果可能不完整`
+    if (!warnings.includes(msg)) warnings.push(msg)
+  }
+
   /** 把隔离分支收集到的错误合并进当前收集器（受 maxErrors 限制） */
   function merge(list: SchemaError[]) {
     for (const e of list) {
@@ -358,6 +368,19 @@ export function validateInstance(
     if (typeof sch !== 'object') throw new Error(`Schema 在 ${spath || '/'} 不是对象`)
     const s = sch as Record<string, unknown>
     checked += 1
+
+    // 已识别但未实现的关键字：显式告警，不再静默放过。
+    // dependencies 是 draft-07 写法（dependentRequired / dependentSchemas 已实现，勿混淆）；
+    // minContains / maxContains 需要计数版 contains；unevaluated* 需要「已求值」追踪；
+    // additionalItems 只在 items 为数组（draft-07 元组）时才有实现，其余位置无意义。
+    if (hasOwn(s, 'dependencies')) warnUnsupported('dependencies')
+    if (hasOwn(s, 'minContains')) warnUnsupported('minContains')
+    if (hasOwn(s, 'maxContains')) warnUnsupported('maxContains')
+    if (hasOwn(s, 'unevaluatedProperties')) warnUnsupported('unevaluatedProperties')
+    if (hasOwn(s, 'unevaluatedItems')) warnUnsupported('unevaluatedItems')
+    if (hasOwn(s, 'additionalItems') && !Array.isArray(s.items)) {
+      warnUnsupported('additionalItems', '（当前 items 不是数组）')
+    }
 
     if (typeof s.$ref === 'string') {
       // 解析失败（含 #/__proto__、#/constructor 这类命中原型成员的路径）按校验错误上报，

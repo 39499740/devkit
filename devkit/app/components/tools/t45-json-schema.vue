@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
 import { inferSchema, validateInstance, type Draft, type SchemaError } from '~/utils/jsonschema'
-import { jsonErrorPosition, localizeJsonMessage, toPlainJson } from '~/utils/json'
+import { jsonErrorPosition, localizeJsonMessage, stringifyJson, toPlainJson } from '~/utils/json'
 import { runComputation } from '~/workflow/workers/run-compute'
 
 defineProps<{ tool: ToolMeta }>()
@@ -78,6 +78,23 @@ const run = useToolRun(sig)
 let runToken = 0
 /** 校验进行中（仅用于按钮 loading 反馈） */
 const busy = ref(false)
+
+/**
+ * 输入文档 / Schema 文本变化即推进 runToken，使在途校验结果作废（P2-6）：
+ * 旧实现只靠 validate 内的 ++runToken 串行化并发校验，但「输入变化」本身不推进 runToken，
+ * 于是 await 返回后会把旧输入算出的结果写回，并 run.markOk 把 lastSig 刷成新签名，覆盖 stale 标记。
+ * 用 flush:'sync'：改动在同步阶段（含「载入示例」同 tick 改文本后立即校验）先推进 runToken，
+ * 随后发起的 validate 拿到的是新 token，不会被自己的输入改动误伤；校验期间未变化则 token 不变，正常写回。
+ */
+watch(
+  [doc, schemaText],
+  () => {
+    runToken++
+    // 在途校验已作废且不会再写回，清掉按钮 loading，避免 busy 永久卡住
+    busy.value = false
+  },
+  { flush: 'sync' }
+)
 
 onMounted(() => {
   const p = transfer.take('json-schema')
@@ -211,7 +228,9 @@ async function validate() {
 function formatSchema() {
   try {
     const { value } = parseJson(schemaText.value)
-    schemaText.value = JSON.stringify(value, null, 2)
+    // stringifyJson 保留 RawNumber 原文：否则 JSON.stringify 会把 schema 里的数值关键字
+    // （minimum / maximum / multipleOf / minLength …）改写成 {"raw":"1"}，破坏 schema。
+    schemaText.value = stringifyJson(value, 2)
     toast.success('Schema 已格式化')
   } catch (e) {
     toast.warning(localizeJsonParseError(e, schemaText.value, 'Schema'))

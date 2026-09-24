@@ -553,6 +553,19 @@ function pascal(key: string): string {
 /** 紧凑版 POJO 生成：嵌套对象生成静态内部类，数组按首个非空元素推断元素类型 */
 function javaFromJson(value: unknown, className: string, warnings: string[] = []): string {
   let needsList = false
+  // 文件级类名表：预置外层类名，内部类与外层或彼此同名时追加序号（AB → AB2），
+  // 否则会生成两个 `public class AB`（或与外层同名），产物无法编译。
+  const usedClassNames = new Set<string>([className])
+
+  /** 类名去重：冲突时追加序号并告警；调用方必须用返回名生成类与引用 */
+  function uniqueClassName(base: string): string {
+    let name = base
+    let seq = 2
+    while (usedClassNames.has(name)) name = `${base}${seq++}`
+    if (name !== base) warnings.push(`类名 ${base} 重复，后续类已改名为 ${name}`)
+    usedClassNames.add(name)
+    return name
+  }
 
   function classOf(obj: Record<string, unknown>, name: string, path: string): string {
     const fields: string[] = []
@@ -572,14 +585,14 @@ function javaFromJson(value: unknown, className: string, warnings: string[] = []
       let type: string
       // RawNumber 是对象类型，但绝不能当成嵌套对象展开
       if (v && typeof v === 'object' && !Array.isArray(v) && !(v instanceof RawNumber)) {
-        const inner = pascal(key)
+        const inner = uniqueClassName(pascal(key))
         type = inner
         inners.push(classOf(v as Record<string, unknown>, inner, fp))
       } else if (Array.isArray(v)) {
         needsList = true
         const first = v.find((x) => x !== null && x !== undefined)
         if (first && typeof first === 'object' && !Array.isArray(first) && !(first instanceof RawNumber)) {
-          const inner = pascal(key)
+          const inner = uniqueClassName(pascal(key))
           type = `List<${inner}>`
           inners.push(classOf(first as Record<string, unknown>, inner, `${fp}[]`))
         } else {

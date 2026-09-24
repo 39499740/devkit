@@ -244,25 +244,52 @@ export function jsonToXml(value: unknown, rootName = 'root'): XmlResult {
   const warnings: string[] = []
   const out: string[] = []
   if (Array.isArray(value)) {
-    const wrapper = /^[A-Za-z_][\w.-]*$/.test(rootName) ? rootName : 'root'
+    const wrapper = XML_NAME_RE.test(rootName) ? rootName : 'root'
     warnings.push(`顶层是数组，已用 <${wrapper}> 包裹，每个元素生成一个 <item>`)
     if (!value.length) {
       out.push(`<${wrapper}/>`)
     } else {
       out.push(`<${wrapper}>`)
-      for (const v of value) writeJson('item', v, 1, out)
+      for (const v of value) writeJson('item', v, 1, out, warnings)
       out.push(`</${wrapper}>`)
     }
   } else {
-    writeJson(rootName, value, 0, out)
+    writeJson(rootName, value, 0, out, warnings)
   }
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n${out.join('\n')}`
   return { xml, warnings, nodes: out.length, lines: out.length, chars: xml.length }
 }
 
-function writeJson(tag: string, value: unknown, depth: number, out: string[]) {
+/** 合法 XML 名称（元素名与属性名共用）：首字符为字母/下划线，其后可含字母数字、下划线、点、连字符 */
+const XML_NAME_RE = /^[A-Za-z_][\w.-]*$/
+
+/** 非法属性名的回退前缀（追加数字后缀以避免与同元素内其它属性重名） */
+const ATTR_FALLBACK = 'attr'
+
+/** 仅在文案尚未出现时追加，避免同一非法名在多处出现时刷屏 */
+function pushWarning(warnings: string[], message: string) {
+  if (!warnings.includes(message)) warnings.push(message)
+}
+
+/**
+ * 非法属性名（含 `@` 后为空）不能直接写进开标签，否则产出 `<root 1bad="x">` / `<root ="x">`
+ * 这类非法 XML（浏览器 parsererror），而调用方却拿到「成功 + 无告警」的结果。
+ * 这里回退为合法属性名 attr / attr2…，并在 warnings 里说明原名非法与处理方式。
+ */
+function safeAttrName(raw: string, used: Set<string>): string {
+  let candidate = ATTR_FALLBACK
+  let n = 1
+  while (used.has(candidate)) {
+    n += 1
+    candidate = `${ATTR_FALLBACK}${n}`
+  }
+  used.add(candidate)
+  return candidate
+}
+
+function writeJson(tag: string, value: unknown, depth: number, out: string[], warnings: string[]) {
   const pad = '  '.repeat(depth)
-  const name = /^[A-Za-z_][\w.-]*$/.test(tag) ? tag : 'item'
+  const name = XML_NAME_RE.test(tag) ? tag : 'item'
   if (value === null || value === undefined) {
     out.push(`${pad}<${name}/>`)
     return
@@ -272,7 +299,7 @@ function writeJson(tag: string, value: unknown, depth: number, out: string[]) {
       out.push(`${pad}<${name}/>`)
       return
     }
-    for (const v of value) writeJson(name, v, depth, out)
+    for (const v of value) writeJson(name, v, depth, out, warnings)
     return
   }
   if (typeof value !== 'object') {
@@ -282,10 +309,29 @@ function writeJson(tag: string, value: unknown, depth: number, out: string[]) {
   const entries = Object.entries(value as Record<string, unknown>)
   const attrs: string[] = []
   const children: [string, unknown][] = []
+  // 先登记全部合法属性名，保证非法名回退出的 attr / attr2… 不会与同元素里的合法属性撞名
+  const usedAttrNames = new Set<string>()
+  for (const [k] of entries) {
+    if (k.startsWith('@') && XML_NAME_RE.test(k.slice(1))) usedAttrNames.add(k.slice(1))
+  }
   for (const [k, v] of entries) {
-    if (k.startsWith('@')) attrs.push(`${k.slice(1)}="${escapeAttr(String(v))}"`)
-    else if (k === '#text') continue
-    else children.push([k, v])
+    if (k.startsWith('@')) {
+      const raw = k.slice(1)
+      if (XML_NAME_RE.test(raw)) {
+        attrs.push(`${raw}="${escapeAttr(String(v))}"`)
+        continue
+      }
+      const fallback = safeAttrName(raw, usedAttrNames)
+      attrs.push(`${fallback}="${escapeAttr(String(v))}"`)
+      if (raw === '') {
+        pushWarning(warnings, `JSON 键 "@" 的属性名为空，已改用 ${fallback} 属性承载原值`)
+      } else {
+        pushWarning(warnings, `属性名“${raw}”不是合法的 XML 名称，已改用 ${fallback} 属性承载原值`)
+      }
+      continue
+    }
+    if (k === '#text') continue
+    children.push([k, v])
   }
   const textEntry = entries.find(([k]) => k === '#text')
   const attrStr = attrs.length ? ` ${attrs.join(' ')}` : ''
@@ -297,11 +343,11 @@ function writeJson(tag: string, value: unknown, depth: number, out: string[]) {
   out.push(`${pad}<${name}${attrStr}>`)
   if (textEntry) out.push(`${pad}  ${escapeText(String(textEntry[1]))}`)
   for (const [k, v] of children) {
-    if (!/^[A-Za-z_][\w.-]*$/.test(k)) {
-      writeJson('item', v, depth + 1, out)
+    if (!XML_NAME_RE.test(k)) {
+      writeJson('item', v, depth + 1, out, warnings)
       continue
     }
-    writeJson(k, v, depth + 1, out)
+    writeJson(k, v, depth + 1, out, warnings)
   }
   out.push(`${pad}</${name}>`)
 }
