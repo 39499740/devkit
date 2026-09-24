@@ -245,7 +245,7 @@ function isActiveCat(key: string) {
   color: var(--accent);
   font-weight: 500;
 }
-/* 「新」徽标：本次新增的工具与功能（处理流程）在目录里标出来 */
+/* 「新」徽标：随发版轮换——本次为「处理流程」（步骤库扩到 24 种 + 加解密密钥）；工具徽标由 ToolMeta.isNew 驱动 */
 .sidenav__new {
   display: inline-flex;
   align-items: center;
