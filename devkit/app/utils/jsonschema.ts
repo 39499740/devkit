@@ -12,6 +12,14 @@ function isRawNumber(v: unknown): v is RawNumber {
 }
 
 /**
+ * own-property 判断。不能用 `in`：`'constructor' in {}`、`'toString' in {}`、`'__proto__' in {}`
+ * 都会沿原型链命中，导致 required / properties / $ref 等把原型成员误当作声明的键。
+ */
+function hasOwn(obj: object | null | undefined, key: string): boolean {
+  return obj != null && Object.prototype.hasOwnProperty.call(obj, key)
+}
+
+/**
  * 数字原文是否为整数（供 RawNumber 判定 type: integer）。
  * 安全范围内按精确数值判断（1.0 / 1e2 / 100.0 均为整数）；
  * 超出安全范围的整数则回退到原文书写形式，避免 Number 近似导致的误判。
@@ -50,17 +58,33 @@ function toComparable(v: unknown): Comparable | null {
   return null
 }
 
-/** multipleOf：整数用 BigInt 取模，其余比较 value 与最近的整数倍；非正因子按「不约束」处理 */
+/**
+ * 把 Comparable 精确转成 BigInt（仅当它确实表示整数时）；否则返回 null。
+ * number 为整数（含 1000000000.0 这类可精确表示的整值）与 bigint 都视为可精确取模。
+ */
+function exactBigInt(c: Comparable): bigint | null {
+  if (typeof c === 'bigint') return c
+  return Number.isInteger(c) ? BigInt(c) : null
+}
+
+/**
+ * multipleOf：整数用 BigInt 精确取模，其余比较 value 与最近的整数倍；非正因子按「不约束」处理。
+ * 两侧都能精确表示为整数时必须走 BigInt：浮点容差会随 |value| 放大，1e9 量级下容差可达 1，
+ * 会把余数为 1 的非法值误判成整数倍。
+ */
 function isMultipleOf(value: Comparable, factor: Comparable): boolean {
   const fnum = Number(factor)
   if (!(fnum > 0)) return true
-  if (typeof value === 'bigint' && typeof factor === 'bigint') return value % factor === 0n
+  const vBig = exactBigInt(value)
+  const fBig = exactBigInt(factor)
+  if (vBig !== null && fBig !== null) return vBig % fBig === 0n
   const vnum = Number(value)
   if (!Number.isFinite(vnum)) return false
-  // 用「value 与最近的整数倍之差」判断，避免 value/factor 极小时商落在 1e-9 容差内被误判为整数倍
+  // 仅在真正的小数场景使用容差，且按 ULP 量级（相对机器精度），不随 |value| 放大到放过余数
   const k = Math.round(vnum / fnum)
   if (!Number.isFinite(k)) return false
-  return Math.abs(vnum - k * fnum) <= 1e-9 * Math.max(1, Math.abs(vnum))
+  const scale = Math.max(Math.abs(vnum), Math.abs(k * fnum))
+  return Math.abs(vnum - k * fnum) <= 4 * Number.EPSILON * scale
 }
 
 /**
@@ -301,7 +325,7 @@ export function validateInstance(
       .map((p) => p.replace(/~1/g, '/').replace(/~0/g, '~'))
     let cur: unknown = schema
     for (const p of parts) {
-      if (cur && typeof cur === 'object' && p in (cur as object)) cur = (cur as Record<string, unknown>)[p]
+      if (cur && typeof cur === 'object' && hasOwn(cur, p)) cur = (cur as Record<string, unknown>)[p]
       else throw new Error(`$ref 指向的 ${ref} 在文档中不存在`)
     }
     return cur
@@ -336,7 +360,16 @@ export function validateInstance(
     checked += 1
 
     if (typeof s.$ref === 'string') {
-      walk(inst, resolveRef(s.$ref), pointer, `${spath}/$ref`, depth + 1)
+      // 解析失败（含 #/__proto__、#/constructor 这类命中原型成员的路径）按校验错误上报，
+      // 不静默成功，也不抛出「Schema 不是对象」这类内部错误。
+      let target: unknown
+      try {
+        target = resolveRef(s.$ref)
+      } catch (err) {
+        push(pointer, `${spath}/$ref`, '$ref', err instanceof Error ? err.message : String(err))
+        return
+      }
+      walk(inst, target, pointer, `${spath}/$ref`, depth + 1)
       return
     }
 
@@ -399,7 +432,7 @@ export function validateInstance(
       }
     }
 
-    if ('const' in s && !eq(inst, s.const)) {
+    if (hasOwn(s, 'const') && !eq(inst, s.const)) {
       push(pointer, `${spath}/const`, 'const', `应为常量 ${show(s.const)}，当前为 ${show(inst)}`)
     }
     if (Array.isArray(s.enum) && !s.enum.some((v) => eq(v, inst))) {
@@ -508,7 +541,7 @@ export function validateInstance(
       const patterns = (s.patternProperties ?? {}) as Record<string, unknown>
       if (Array.isArray(s.required)) {
         for (const key of s.required as string[]) {
-          if (!(key in obj)) {
+          if (!hasOwn(obj, key)) {
             const esc = key.replace(/~/g, '~0').replace(/\//g, '~1')
             push(`${pointer}/${esc}`, `${spath}/required`, 'required', '缺少必填字段')
           }
@@ -526,7 +559,7 @@ export function validateInstance(
       for (const key of keys) {
         const childPointer = `${pointer}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`
         let handled = false
-        if (key in props) {
+        if (hasOwn(props, key)) {
           walk(obj[key], props[key], childPointer, `${spath}/properties/${key}`, depth + 1)
           handled = true
         }
@@ -556,11 +589,17 @@ export function validateInstance(
       const dep = s.dependentRequired
       if (dep && typeof dep === 'object') {
         for (const [key, need] of Object.entries(dep as Record<string, unknown>)) {
-          if (key in obj && Array.isArray(need)) {
+          if (hasOwn(obj, key) && Array.isArray(need)) {
             for (const n of need as string[]) {
-              if (!(n in obj)) push(pointer, `${spath}/dependentRequired`, 'dependentRequired', `存在 ${key} 时必须有 ${n}`)
+              if (!hasOwn(obj, n)) push(pointer, `${spath}/dependentRequired`, 'dependentRequired', `存在 ${key} 时必须有 ${n}`)
             }
           }
+        }
+      }
+      const depSchemas = s.dependentSchemas
+      if (depSchemas && typeof depSchemas === 'object') {
+        for (const [key, sub] of Object.entries(depSchemas as Record<string, unknown>)) {
+          if (hasOwn(obj, key)) walk(inst, sub, pointer, `${spath}/dependentSchemas/${key}`, depth + 1)
         }
       }
     }
@@ -601,7 +640,16 @@ function inferNode(value: unknown, opts: InferOptions): Record<string, unknown> 
   const keys = Object.keys(obj)
   if (!keys.length) return { type: 'object', properties: {} }
   const properties: Record<string, unknown> = {}
-  for (const k of keys) properties[k] = inferNode(obj[k], opts)
+  for (const k of keys) {
+    // defineProperty：字面量 "__proto__" 键必须落成普通自有键，
+    // 用 properties[k] = … 会触发原型 setter，导致 properties 丢键而 required 仍保留该键。
+    Object.defineProperty(properties, k, {
+      value: inferNode(obj[k], opts),
+      enumerable: true,
+      writable: true,
+      configurable: true
+    })
+  }
   const out: Record<string, unknown> = { type: 'object', properties, required: keys }
   if (opts.strict) out.additionalProperties = false
   return out

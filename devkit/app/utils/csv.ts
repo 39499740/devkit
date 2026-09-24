@@ -148,10 +148,20 @@ export function flattenPaths(v: unknown, prefix: string, out: string[], warnings
   }
 }
 
+/**
+ * 解析结果对象落键统一走 defineProperty：
+ * 表头为 `__proto__` 时 `obj[k] = …` 会触发原型 setter，导致该列被静默丢弃。
+ */
+export function setOwnKey(obj: Record<string, unknown>, key: string, value: unknown): void {
+  Object.defineProperty(obj, key, { value, enumerable: true, writable: true, configurable: true })
+}
+
 export function getByPath(obj: Record<string, unknown>, path: string): unknown {
   let cur: unknown = obj
   for (const part of path.split('.')) {
     if (cur === null || cur === undefined || typeof cur !== 'object' || Array.isArray(cur)) return undefined
+    // 只认自有属性：命中 constructor / toString / __proto__ 等原型成员视为不存在
+    if (!Object.prototype.hasOwnProperty.call(cur, part)) return undefined
     cur = (cur as Record<string, unknown>)[part]
   }
   return cur
@@ -224,7 +234,7 @@ export function csvToJson(text: string, opts: Csv2JsonOptions): Csv2JsonResult {
     const arr = data.map((row) => {
       const obj: Record<string, unknown> = {}
       keys.forEach((k, ci) => {
-        obj[k] = ci < row.length ? conv(row[ci]!) : null // 缺失的列补 null
+        setOwnKey(obj, k, ci < row.length ? conv(row[ci]!) : null) // 缺失的列补 null
       })
       return obj
     })

@@ -184,9 +184,37 @@ export function xmlToJson(text: string): { value: unknown; warnings: string[] } 
   return { value: elementToJson(doc.documentElement), warnings }
 }
 
-function elementToJson(el: Element): unknown {
+/**
+ * 解析结果对象落键统一走 defineProperty：
+ * 键为 `__proto__` 时 `obj[key] = …` 会触发 Object.prototype 的原型 setter，
+ * 结果是该键被静默丢弃、还会把结果对象的原型改成写入值。
+ */
+function setOwnKey(obj: Record<string, unknown>, key: string, value: unknown): void {
+  Object.defineProperty(obj, key, { value, enumerable: true, writable: true, configurable: true })
+}
+
+/**
+ * 把子元素值并入结果对象：首次出现写自有键，已有同名兄弟合并为数组。
+ * 「已存在」用 hasOwnProperty 判定，不读原型链，避免 `constructor` / `toString` /
+ * `valueOf` 作为普通元素名时被误判成「已有同名兄弟」，产出 [原型成员, 值] 这类脏数组。
+ */
+export function assignChildValue(obj: Record<string, unknown>, key: string, value: unknown): void {
+  if (!Object.prototype.hasOwnProperty.call(obj, key)) {
+    setOwnKey(obj, key, value)
+    return
+  }
+  const prev = obj[key]
+  if (Array.isArray(prev)) prev.push(value)
+  else setOwnKey(obj, key, [prev, value])
+}
+
+/**
+ * 元素 → JSON。导出以便在无 DOMParser 的 Node 环境里用等价的假 DOM 节点做单元验证
+ * （只依赖 tagName / attributes / children / childNodes 四个成员）。
+ */
+export function elementToJson(el: Element): unknown {
   const obj: Record<string, unknown> = {}
-  for (const a of Array.from(el.attributes)) obj[`@${a.name}`] = a.value
+  for (const a of Array.from(el.attributes)) setOwnKey(obj, `@${a.name}`, a.value)
   const childEls = Array.from(el.children)
   // 保留文本节点的原始值再拼接：逐个 trim 会把 <p>Hello <b>w</b>!</p> 的 "Hello " 与 "!" 粘成 "Hello!"
   const text = Array.from(el.childNodes)
@@ -196,18 +224,13 @@ function elementToJson(el: Element): unknown {
     .trim()
   if (!childEls.length) {
     if (!Object.keys(obj).length) return text
-    if (text) obj['#text'] = text
+    if (text) setOwnKey(obj, '#text', text)
     return obj
   }
   for (const child of childEls) {
-    const key = child.tagName
-    const val = elementToJson(child)
-    const prev = obj[key]
-    if (prev === undefined) obj[key] = val
-    else if (Array.isArray(prev)) prev.push(val)
-    else obj[key] = [prev, val]
+    assignChildValue(obj, child.tagName, elementToJson(child))
   }
-  if (text) obj['#text'] = text
+  if (text) setOwnKey(obj, '#text', text)
   return obj
 }
 

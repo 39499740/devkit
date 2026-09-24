@@ -479,25 +479,107 @@ export function scanNonStringKeys(text: string): KeyIssue[] {
   return issues
 }
 
-/** 查找无法映射为 JSON 的特殊数值（.inf / .nan） */
-export function findNonFinite(v: unknown, path: string): { path: string; kind: string } | null {
+/**
+ * 查找无法映射为 JSON 的特殊数值（.inf / .nan）。
+ * YAML 别名会让同一节点被多处引用（DAG），用 WeakSet 去重保证每个节点只访问一次，
+ * 否则深层别名会指数级重复遍历、冻结主线程。
+ */
+export function findNonFinite(
+  v: unknown,
+  path: string,
+  seen: WeakSet<object> = new WeakSet()
+): { path: string; kind: string } | null {
   if (typeof v === 'number' && !Number.isFinite(v)) {
     return { path, kind: Number.isNaN(v) ? 'NaN' : v > 0 ? 'Infinity（.inf）' : '-Infinity（-.inf）' }
   }
   if (Array.isArray(v)) {
+    if (seen.has(v)) return null
+    seen.add(v)
     for (let i = 0; i < v.length; i++) {
-      const r = findNonFinite(v[i], `${path}[${i}]`)
+      const r = findNonFinite(v[i], `${path}[${i}]`, seen)
       if (r) return r
     }
     return null
   }
   if (v !== null && typeof v === 'object') {
+    if (seen.has(v)) return null
+    seen.add(v)
     for (const [k, val] of Object.entries(v)) {
-      const r = findNonFinite(val, joinKey(path, k))
+      const r = findNonFinite(val, joinKey(path, k), seen)
       if (r) return r
     }
   }
   return null
+}
+
+/* ---------------- YAML 别名放大（billion laughs）防护 ---------------- */
+
+/** YAML 输入文本长度上限：超过直接拒绝，避免超大文本进入解析 */
+const YAML_MAX_TEXT_LENGTH = 2_000_000
+/** 别名展开成树后的节点数上限 */
+const YAML_MAX_EXPANDED_NODES = 200_000
+/** 别名展开成树后的近似字符数上限 */
+const YAML_MAX_EXPANDED_CHARS = 8_000_000
+
+/**
+ * 校验 YAML 值「展开成树」后的规模，拦截别名放大（billion laughs）。
+ *
+ * 别名在 js-yaml 里共享同一对象引用（DAG），本身占用很小，但一旦被序列化 / 深度遍历
+ * 就会展开成指数级文本。这里不真正展开：对每个对象只计算一次「自身子树的规模」
+ * （WeakMap 记忆化），被多处引用时按引用次数累加，整体复杂度为 O(不同节点数)。
+ * 遇到自引用（循环别名）时真实展开为无限大，直接按超限处理。
+ */
+function assertYamlExpansionWithinBudget(value: unknown): void {
+  const sizeCache = new WeakMap<object, { nodes: number; chars: number }>()
+  const computing = new WeakSet<object>()
+  let overflow = false
+
+  const measure = (v: unknown): { nodes: number; chars: number } => {
+    if (v === null || typeof v !== 'object' || v instanceof RawNumber) {
+      const text = v === null ? 'null' : typeof v === 'string' ? v : String(v)
+      return { nodes: 1, chars: text.length + 2 }
+    }
+    const cached = sizeCache.get(v)
+    if (cached) return cached
+    if (computing.has(v)) {
+      // 循环别名：展开没有终点
+      overflow = true
+      return { nodes: Infinity, chars: Infinity }
+    }
+    computing.add(v)
+    let nodes = 1
+    let chars = 2
+    if (Array.isArray(v)) {
+      for (const item of v) {
+        const s = measure(item)
+        nodes += s.nodes
+        chars += s.chars
+        if (nodes > YAML_MAX_EXPANDED_NODES || chars > YAML_MAX_EXPANDED_CHARS) {
+          overflow = true
+          break
+        }
+      }
+    } else {
+      for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+        const s = measure(val)
+        nodes += s.nodes
+        chars += s.chars + k.length + 4
+        if (nodes > YAML_MAX_EXPANDED_NODES || chars > YAML_MAX_EXPANDED_CHARS) {
+          overflow = true
+          break
+        }
+      }
+    }
+    computing.delete(v)
+    const own = { nodes, chars }
+    sizeCache.set(v, own)
+    return own
+  }
+
+  const total = measure(value)
+  if (overflow || total.nodes > YAML_MAX_EXPANDED_NODES || total.chars > YAML_MAX_EXPANDED_CHARS) {
+    throw new Error('YAML 别名展开后数据过大（疑似别名放大），已拒绝处理；请避免深层嵌套的 * 别名')
+  }
 }
 
 /**
@@ -573,6 +655,11 @@ function mapYamlReason(reason: string): string {
  * 返回 notes 描述发生的保真处理（可直接拼接展示）。
  */
 export function loadYamlPreservingNumbers(text: string): { value: unknown; notes: string[] } {
+  if (text.length > YAML_MAX_TEXT_LENGTH) {
+    throw new Error(
+      `YAML 文本过长（${text.length} 字符，超过 ${YAML_MAX_TEXT_LENGTH} 上限），已拒绝处理；请先拆分或精简输入`
+    )
+  }
   const stringKept: string[] = []
   const rawKept: string[] = []
   const numberValue = (raw: string): unknown => {
@@ -608,6 +695,8 @@ export function loadYamlPreservingNumbers(text: string): { value: unknown; notes
   } catch (e) {
     throw new Error(`YAML 解析失败：${localizeYamlMessage(e)}。请按提示修正缩进或语法后重试`)
   }
+  // 别名放大防护：共享节点（anchor/alias）本身很小，但展开成树会指数级膨胀，必须尽早拒绝
+  assertYamlExpansionWithinBudget(value)
   const keyIssues = scanNonStringKeys(text)
   if (keyIssues.length) {
     const first = keyIssues[0]!

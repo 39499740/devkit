@@ -182,7 +182,16 @@ const regexReplace: StepExecutor = async (input, config) => {
     const items = counted.matches.map((m) => {
       if (m.named && m.named.length) {
         const obj: Record<string, string | null> = {}
-        for (const n of m.named) obj[n.name] = n.value
+        for (const n of m.named) {
+          // defineProperty：命名分组若为 "__proto__"，用 obj[n.name] = … 会被原型 setter 吞掉，
+          // 必须写成自有可枚举属性才能出现在 JSON 输出里。
+          Object.defineProperty(obj, n.name, {
+            value: n.value,
+            enumerable: true,
+            writable: true,
+            configurable: true
+          })
+        }
         return obj
       }
       return m.text
@@ -473,23 +482,41 @@ function javaTypeOf(value: unknown, warnings: string[], label: string): string {
   return 'Object'
 }
 
+/** Java 关键字（含字面量），字段名归一化后若命中需加后缀 `_` 规避编译错误 */
+const JAVA_KEYWORDS = new Set([
+  'abstract', 'assert', 'boolean', 'break', 'byte', 'case', 'catch', 'char', 'class', 'const',
+  'continue', 'default', 'do', 'double', 'else', 'enum', 'extends', 'final', 'finally', 'float',
+  'for', 'goto', 'if', 'implements', 'import', 'instanceof', 'int', 'interface', 'long', 'native',
+  'new', 'package', 'private', 'protected', 'public', 'return', 'short', 'static', 'strictfp',
+  'super', 'switch', 'synchronized', 'this', 'throw', 'throws', 'transient', 'try', 'void',
+  'volatile', 'while', 'true', 'false', 'null'
+])
+
+/** 把标识符净化成合法 Java 名：非法首字符加前缀，关键字加后缀 `_` */
+function sanitizeJavaIdent(name: string, prefix: string): string {
+  let out = name
+  if (!/^[A-Za-z_$]/.test(out)) out = prefix + out.charAt(0).toUpperCase() + out.slice(1)
+  if (JAVA_KEYWORDS.has(out)) out += '_'
+  return out
+}
+
 function javaName(key: string): string {
   const parts = key.split(/[^A-Za-z0-9]+/).filter(Boolean)
   if (!parts.length) return 'field'
   const first = parts[0]!
-  return (
+  const out =
     first.charAt(0).toLowerCase() +
     first.slice(1) +
     parts
       .slice(1)
       .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
       .join('')
-  )
+  return sanitizeJavaIdent(out, 'field')
 }
 
 function pascal(key: string): string {
   const n = javaName(key)
-  return n.charAt(0).toUpperCase() + n.slice(1)
+  return sanitizeJavaIdent(n.charAt(0).toUpperCase() + n.slice(1), 'Item')
 }
 
 /** 紧凑版 POJO 生成：嵌套对象生成静态内部类，数组按首个非空元素推断元素类型 */
@@ -500,8 +527,16 @@ function javaFromJson(value: unknown, className: string, warnings: string[] = []
     const fields: string[] = []
     const methods: string[] = []
     const inners: string[] = []
+    const usedProps = new Set<string>()
     for (const [key, v] of Object.entries(obj)) {
-      const prop = javaName(key)
+      const base = javaName(key)
+      // 同一类内字段名归一化后可能重名（a-b / a_b 都得到 aB），追加序号保证唯一
+      let prop = base
+      let seq = 2
+      while (usedProps.has(prop)) prop = `${base}${seq++}`
+      usedProps.add(prop)
+      // getter/setter 跟随去重后的字段名，避免重名字段产生重复方法
+      const accessor = prop.charAt(0).toUpperCase() + prop.slice(1)
       const fp = `${path}.${key}`
       let type: string
       // RawNumber 是对象类型，但绝不能当成嵌套对象展开
@@ -524,11 +559,11 @@ function javaFromJson(value: unknown, className: string, warnings: string[] = []
       }
       fields.push(`    private ${type} ${prop};`)
       methods.push(
-        `    public ${type} get${pascal(key)}() {`,
+        `    public ${type} get${accessor}() {`,
         `        return this.${prop};`,
         '    }',
         '',
-        `    public void set${pascal(key)}(${type} ${prop}) {`,
+        `    public void set${accessor}(${type} ${prop}) {`,
         `        this.${prop} = ${prop};`,
         '    }'
       )
