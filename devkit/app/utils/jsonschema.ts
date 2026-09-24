@@ -3,8 +3,33 @@
  * 校验一次收集全部错误（不是遇到第一个就停），并给出 JSONPath 与 Schema 位置。
  */
 import { regexRiskReason } from './regex'
+import { RawNumber } from './json'
 
 export type Draft = '2020-12' | 'draft-07'
+
+/** 大整数原文是否按整数书写（供 RawNumber 判定 type: integer） */
+const RAW_INTEGER_RE = /^-?\d+$/
+
+/** 值是否为 RawNumber（parseJson 为保留大整数原文而使用的包装类型） */
+function isRawNumber(v: unknown): v is RawNumber {
+  return v instanceof RawNumber
+}
+
+/** RawNumber 还原成可比较的数值（超出精度时按 Number 近似，仅用于数值关键字） */
+function numericValue(v: unknown): number | null {
+  if (typeof v === 'number') return v
+  if (isRawNumber(v)) {
+    const n = Number(v.raw)
+    return Number.isFinite(n) ? n : null
+  }
+  return null
+}
+
+/** 面向用户的取值展示：RawNumber 显示数字原文，避免泄漏 {"raw":…} */
+function show(v: unknown): string {
+  if (isRawNumber(v)) return v.raw
+  return JSON.stringify(v)
+}
 
 export interface SchemaError {
   /** 实例位置，JSONPath 写法 */
@@ -32,6 +57,7 @@ export interface InferOptions {
 function typeOf(v: unknown): string {
   if (v === null) return 'null'
   if (Array.isArray(v)) return 'array'
+  if (isRawNumber(v)) return RAW_INTEGER_RE.test(v.raw) ? 'integer' : 'number'
   if (typeof v === 'number') return Number.isInteger(v) ? 'integer' : 'number'
   return typeof v
 }
@@ -39,6 +65,7 @@ function typeOf(v: unknown): string {
 function actualType(v: unknown): string {
   if (v === null) return 'null'
   if (Array.isArray(v)) return 'array'
+  if (isRawNumber(v)) return RAW_INTEGER_RE.test(v.raw) ? 'integer' : 'number'
   return typeof v
 }
 
@@ -94,6 +121,8 @@ export function validateInstance(
   const warnings: string[] = []
   const max = opts.maxErrors ?? 50
   let checked = 0
+  /** 深度上限告警只提示一次，避免深层结构刷屏 */
+  let depthWarned = false
   /** 当前收集器：组合关键字在隔离收集器里试算，避免失败分支的错误污染最终结果 */
   let sink: SchemaError[] = errors
 
@@ -144,11 +173,29 @@ export function validateInstance(
   }
 
   function eq(a: unknown, b: unknown): boolean {
+    // RawNumber 与普通值（或另一个 RawNumber）比较：数字按数值、大整数按原文
+    if (isRawNumber(a) || isRawNumber(b)) {
+      const rawA = isRawNumber(a) ? a.raw : null
+      const rawB = isRawNumber(b) ? b.raw : null
+      if (rawA !== null && rawB !== null) return rawA === rawB
+      const raw = (rawA ?? rawB) as string
+      const other = rawA !== null ? b : a
+      if (typeof other === 'number') return Number(raw) === other
+      if (typeof other === 'string') return raw === other
+      return false
+    }
     return JSON.stringify(a) === JSON.stringify(b)
   }
 
   function walk(inst: unknown, sch: unknown, pointer: string, spath: string, depth: number) {
-    if (sink.length >= max || depth > 64) return
+    if (depth > 64) {
+      if (!depthWarned) {
+        depthWarned = true
+        warnings.push('校验深度超过上限（64），更深的节点未校验，结果可能不完整')
+      }
+      return
+    }
+    if (sink.length >= max) return
     if (sch === true || sch === undefined) return
     if (sch === false) {
       push(pointer, spath, 'false', '该位置不允许出现任何值（schema 为 false）')
@@ -215,7 +262,7 @@ export function validateInstance(
     // type
     if (typeof s.type === 'string' || Array.isArray(s.type)) {
       const want = Array.isArray(s.type) ? (s.type as string[]) : [s.type as string]
-      const ok = want.some((w) => (w === 'integer' ? Number.isInteger(inst) : w === 'number' ? typeof inst === 'number' : typeNameMatch(inst, w)))
+      const ok = want.some((w) => typeNameMatch(inst, w))
       if (!ok) {
         push(pointer, `${spath}/type`, 'type', `应为 ${want.join(' 或 ')}，当前为 ${actualType(inst)}`)
         return
@@ -223,14 +270,14 @@ export function validateInstance(
     }
 
     if ('const' in s && !eq(inst, s.const)) {
-      push(pointer, `${spath}/const`, 'const', `应为常量 ${JSON.stringify(s.const)}，当前为 ${JSON.stringify(inst)}`)
+      push(pointer, `${spath}/const`, 'const', `应为常量 ${show(s.const)}，当前为 ${show(inst)}`)
     }
     if (Array.isArray(s.enum) && !s.enum.some((v) => eq(v, inst))) {
       push(
         pointer,
         `${spath}/enum`,
         'enum',
-        `应为枚举值之一（${s.enum.map((v) => JSON.stringify(v)).join('、')}），当前为 ${JSON.stringify(inst)}`
+        `应为枚举值之一（${s.enum.map((v) => show(v)).join('、')}），当前为 ${show(inst)}`
       )
     }
 
@@ -244,7 +291,7 @@ export function validateInstance(
       if (typeof s.pattern === 'string') {
         // 先做静态风险判定：嵌套量词会在主线程同步 test() 时冻结页面
         if (regexRiskReason(s.pattern)) {
-          throw new Error(`pattern 存在灾难性回溯风险（嵌套量词），可能冻结页面，请简化：/${s.pattern}/`)
+          throw new Error(`pattern 存在灾难性回溯风险（嵌套量词或重叠交替），可能冻结页面，请简化：/${s.pattern}/`)
         }
         let re: RegExp
         try {
@@ -264,21 +311,22 @@ export function validateInstance(
       }
     }
 
-    if (typeof inst === 'number') {
-      if (typeof s.minimum === 'number' && inst < s.minimum) {
-        push(pointer, `${spath}/minimum`, 'minimum', `不得小于 ${s.minimum}，当前 ${inst}`)
+    const num = numericValue(inst)
+    if (num !== null) {
+      if (typeof s.minimum === 'number' && num < s.minimum) {
+        push(pointer, `${spath}/minimum`, 'minimum', `不得小于 ${s.minimum}，当前 ${num}`)
       }
-      if (typeof s.maximum === 'number' && inst > s.maximum) {
-        push(pointer, `${spath}/maximum`, 'maximum', `不得大于 ${s.maximum}，当前 ${inst}`)
+      if (typeof s.maximum === 'number' && num > s.maximum) {
+        push(pointer, `${spath}/maximum`, 'maximum', `不得大于 ${s.maximum}，当前 ${num}`)
       }
-      if (typeof s.exclusiveMinimum === 'number' && inst <= s.exclusiveMinimum) {
-        push(pointer, `${spath}/exclusiveMinimum`, 'exclusiveMinimum', `必须大于 ${s.exclusiveMinimum}，当前 ${inst}`)
+      if (typeof s.exclusiveMinimum === 'number' && num <= s.exclusiveMinimum) {
+        push(pointer, `${spath}/exclusiveMinimum`, 'exclusiveMinimum', `必须大于 ${s.exclusiveMinimum}，当前 ${num}`)
       }
-      if (typeof s.exclusiveMaximum === 'number' && inst >= s.exclusiveMaximum) {
-        push(pointer, `${spath}/exclusiveMaximum`, 'exclusiveMaximum', `必须小于 ${s.exclusiveMaximum}，当前 ${inst}`)
+      if (typeof s.exclusiveMaximum === 'number' && num >= s.exclusiveMaximum) {
+        push(pointer, `${spath}/exclusiveMaximum`, 'exclusiveMaximum', `必须小于 ${s.exclusiveMaximum}，当前 ${num}`)
       }
-      if (typeof s.multipleOf === 'number' && s.multipleOf > 0 && Math.abs(inst / s.multipleOf - Math.round(inst / s.multipleOf)) > 1e-9) {
-        push(pointer, `${spath}/multipleOf`, 'multipleOf', `必须是 ${s.multipleOf} 的整数倍，当前 ${inst}`)
+      if (typeof s.multipleOf === 'number' && s.multipleOf > 0 && Math.abs(num / s.multipleOf - Math.round(num / s.multipleOf)) > 1e-9) {
+        push(pointer, `${spath}/multipleOf`, 'multipleOf', `必须是 ${s.multipleOf} 的整数倍，当前 ${num}`)
       }
     }
 
@@ -315,7 +363,7 @@ export function validateInstance(
       }
     }
 
-    if (inst && typeof inst === 'object' && !Array.isArray(inst)) {
+    if (inst && typeof inst === 'object' && !Array.isArray(inst) && !isRawNumber(inst)) {
       const obj = inst as Record<string, unknown>
       const props = (s.properties ?? {}) as Record<string, unknown>
       const patterns = (s.patternProperties ?? {}) as Record<string, unknown>
@@ -344,7 +392,7 @@ export function validateInstance(
         for (const [pattern, sub] of Object.entries(patterns)) {
           // 同 s.pattern：patternProperties 的键也是用户可控正则，需先做风险判定
           if (regexRiskReason(pattern)) {
-            throw new Error(`patternProperties 里的 /${pattern}/ 存在灾难性回溯风险（嵌套量词），可能冻结页面，请简化`)
+            throw new Error(`patternProperties 里的 /${pattern}/ 存在灾难性回溯风险（嵌套量词或重叠交替），可能冻结页面，请简化`)
           }
           let re: RegExp
           try {
@@ -381,6 +429,11 @@ export function validateInstance(
   }
 
   function typeNameMatch(v: unknown, want: string): boolean {
+    if (isRawNumber(v)) {
+      if (want === 'integer') return RAW_INTEGER_RE.test(v.raw)
+      if (want === 'number') return true
+      return false
+    }
     if (want === 'array') return Array.isArray(v)
     if (want === 'object') return !!v && typeof v === 'object' && !Array.isArray(v)
     if (want === 'null') return v === null

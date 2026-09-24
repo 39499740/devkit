@@ -19,7 +19,9 @@ export interface TidyResult {
 }
 
 export function tidyText(text: string, opts: TidyOptions): TidyResult {
-  const lines = text.split('\n')
+  // 统一换行：CRLF / 单独 CR 都规范为 LF，避免行尾残留的 \r 让重复行无法识别；
+  // 输出也统一用 LF（纯 LF 输入行为不变）。
+  const lines = text.replace(/\r\n?/g, '\n').split('\n')
   const seen = new Set<string>()
   const result: string[] = []
   let dup = 0

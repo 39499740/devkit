@@ -58,10 +58,18 @@ const lastRunAt = ref(0)
 const busy = ref(false)
 
 /**
+ * 运行代际：每次运行开始时自增并记录，await 返回后只有代际未变才允许写回结果。
+ * invalidateResults() 也会自增，于是运行期间任何配置变更都能让进行中的运行作废，
+ * 避免旧配置算出的结果被写回并显示为「成功」。
+ */
+let runGeneration = 0
+
+/**
  * 结果失效：任何会改变计算语义的操作（改输入/参数、增删/移动/复制步骤、写入密钥）
  * 都必须让旧结果作废，否则界面会把上一步的输出贴到另一步名下，并继续显示「全部成功」。
  */
 function invalidateResults() {
+  runGeneration += 1
   results.value = []
 }
 
@@ -144,12 +152,19 @@ async function runAll() {
     toast.warning('请先填写或接收流程输入')
     return
   }
+  // 记录本次运行的代际：运行期间若配置变更（invalidateResults 使代际前进），结果不再对应当前配置
+  const gen = ++runGeneration
   busy.value = true
   try {
     const res = await runWorkflow(current, input.value, {
       stopOnError: stopOnError.value,
       secretOf: (s) => store.stepSecrets(id.value, s.id)
     })
+    // 代际已变：运行期间输入/参数/步骤或密钥被改过，丢弃结果，避免旧配置的结果被当成当前配置的成功
+    if (gen !== runGeneration) {
+      toast.warning('结果已因配置变更作废，请重新运行')
+      return
+    }
     results.value = res.results
     // 运行完成后选中「第一个失败步骤」，全部成功则停在最后一步（不落到流程输出，避免误以为还能单步运行）
     const failedAt = res.results.findIndex((r) => r.status === 'fail')
@@ -182,9 +197,16 @@ async function runOne(i: number) {
     toast.warning('上一步还没有结果：请先运行上一步，或点「运行全部」后再单步运行')
     return
   }
+  // 记录本次运行的代际：运行期间若配置变更（invalidateResults 使代际前进），结果不再对应当前配置
+  const gen = ++runGeneration
   busy.value = true
   try {
     const res = await runStep(step, inputOf(i), i, { secrets: store.stepSecrets(id.value, step.id) })
+    // 代际已变：运行期间输入/参数/步骤或密钥被改过，丢弃结果，避免旧配置的结果被当成当前配置的成功
+    if (gen !== runGeneration) {
+      toast.warning('结果已因配置变更作废，请重新运行')
+      return
+    }
     // 只保留到本步：本步之后基于旧上游算出的结果已失效，必须作废，避免错位显示
     const list = results.value.slice(0, i)
     list[i] = res
@@ -198,6 +220,8 @@ async function runOne(i: number) {
 }
 
 function runSelected() {
+  // 运行中禁止再次触发单步运行，避免并发运行互相覆盖结果
+  if (busy.value) return
   const sel = selection.value
   if (sel.kind !== 'step') {
     toast.warning(
@@ -210,6 +234,8 @@ function runSelected() {
 
 function clearInput() {
   input.value = ''
+  // 清空输入改变了运行语义：让进行中的运行作废，避免它稍后把旧结果写回
+  runGeneration += 1
   results.value = []
   selected.value = -1
   toast.success('已清空流程输入与本次中间结果')
@@ -255,14 +281,28 @@ function moveStep(i: number, dir: -1 | 1) {
   else if (selected.value === i + dir) selected.value = i
 }
 
-/** 修改步骤参数会改变计算结果，旧结果一律作废 */
+/** 修改步骤参数会改变计算结果，旧结果一律作废；运行中禁止修改 */
 function onConfigChange(key: string, value: StepConfigValue) {
+  if (busy.value) return
   store.updateStepConfig(id.value, currentStepIndex.value, key, value)
   invalidateResults()
 }
 
+/** 流程设置开关：运行中禁止切换（DkSwitch 没有 disabled 属性，这里用守卫挡住） */
+function toggleStopOnError() {
+  if (busy.value) return
+  stopOnError.value = !stopOnError.value
+}
+
+function toggleClearAfterRun() {
+  if (busy.value) return
+  clearAfterRun.value = !clearAfterRun.value
+}
+
 function removeStep(i: number) {
   store.removeStep(id.value, i)
+  // 删除改变了步骤链：让进行中的运行作废（这里保留删除点之前的结果，所以不调用 invalidateResults）
+  runGeneration += 1
   // 删除会改变其后所有步骤的输入：删除点之前的结果仍有效，下游一律作废，避免显示错位的成功
   results.value = results.value.slice(0, i)
   if (selected.value >= i) selected.value = Math.max(-1, selected.value - 1)
@@ -516,7 +556,7 @@ function downloadOutput() {
       <DkButton size="sm" variant="primary" :loading="busy" @click="runAll">
         <DkIcon name="play" :size="12" />运行全部
       </DkButton>
-      <DkButton size="sm" :disabled="selected < 0" @click="runSelected">
+      <DkButton size="sm" :disabled="selected < 0 || busy" @click="runSelected">
         <DkIcon name="arrow-down" :size="12" />单步运行
       </DkButton>
       <DkButton size="sm" variant="ghost" @click="clearInput">
@@ -541,6 +581,7 @@ function downloadOutput() {
         placeholder="粘贴 Base64 / JSON / URL 编码文本，作为第一个步骤的输入"
         height="140px"
         filename="workflow-input.txt"
+        :readonly="busy"
         @update:model-value="onInputChange"
       />
     </section>
@@ -560,7 +601,13 @@ function downloadOutput() {
           </label>
         </div>
         <div class="wfe__lib-list">
-          <button v-for="s in filtered" :key="s.type" class="wfe__lib-item" @click="addWithConsent(s.type)">
+          <button
+            v-for="s in filtered"
+            :key="s.type"
+            class="wfe__lib-item"
+            :disabled="busy"
+            @click="addWithConsent(s.type)"
+          >
             <span class="wfe__lib-icon">
               <DkIcon :name="s.type === 'download' ? 'download' : 'sparkles'" :size="14" />
             </span>
@@ -577,11 +624,11 @@ function downloadOutput() {
         <div class="wfe__settings">
           <span class="wfe__card-title">流程设置</span>
           <label class="wfe__switch">
-            <DkSwitch :on="stopOnError" label="失败时中断流程" @toggle="stopOnError = !stopOnError" />
+            <DkSwitch :on="stopOnError" label="失败时中断流程" @toggle="toggleStopOnError" />
             <span>失败时中断流程</span>
           </label>
           <label class="wfe__switch">
-            <DkSwitch :on="clearAfterRun" label="运行后自动清空输入" @toggle="clearAfterRun = !clearAfterRun" />
+            <DkSwitch :on="clearAfterRun" label="运行后自动清空输入" @toggle="toggleClearAfterRun" />
             <span>运行后自动清空输入</span>
           </label>
         </div>
@@ -660,21 +707,21 @@ function downloadOutput() {
               >
                 <DkIcon name="play" :size="12" />
               </button>
-              <button class="wfe__node-act" title="复制该步骤（不复制密钥）" @click.stop="duplicateStep(i)">
+              <button class="wfe__node-act" title="复制该步骤（不复制密钥）" :disabled="busy" @click.stop="duplicateStep(i)">
                 <DkIcon name="copy" :size="12" />
               </button>
-              <button class="wfe__node-act" title="上移" :disabled="i === 0" @click.stop="moveStep(i, -1)">
+              <button class="wfe__node-act" title="上移" :disabled="i === 0 || busy" @click.stop="moveStep(i, -1)">
                 <DkIcon name="chevron-up" :size="12" />
               </button>
               <button
                 class="wfe__node-act"
                 title="下移"
-                :disabled="i === steps.length - 1"
+                :disabled="i === steps.length - 1 || busy"
                 @click.stop="moveStep(i, 1)"
               >
                 <DkIcon name="chevron-down" :size="12" />
               </button>
-              <button class="wfe__node-act" title="删除该步骤" @click.stop="removeStep(i)">
+              <button class="wfe__node-act" title="删除该步骤" :disabled="busy" @click.stop="removeStep(i)">
                 <DkIcon name="trash" :size="12" />
               </button>
             </div>
@@ -752,7 +799,7 @@ function downloadOutput() {
               :help="f.help"
               :placeholder="f.placeholder"
               :updated-at="store.secretUpdatedAt(id, currentStep.id)"
-              :disabled="!currentConsentOk"
+              :disabled="!currentConsentOk || busy"
               @update:model-value="onSecretInput(currentStep, f.key, $event)"
               @blur="flushSecret(currentStep, f.key)"
             />
@@ -770,6 +817,7 @@ function downloadOutput() {
                 :model-value="String(currentStep.config[f.key] ?? f.default ?? '')"
                 :options="f.options ?? []"
                 :aria-label="f.label"
+                :disabled="busy"
                 @update:model-value="onConfigChange(f.key, $event)"
               />
               <span v-if="f.help" class="wfe__field-help">{{ f.help }}</span>
@@ -782,6 +830,7 @@ function downloadOutput() {
                 :placeholder="f.placeholder"
                 :aria-label="f.label"
                 rows="4"
+                :disabled="busy"
                 @input="onConfigChange(f.key, ($event.target as HTMLTextAreaElement).value)"
               ></textarea>
               <span v-if="f.help" class="wfe__field-help">{{ f.help }}</span>
@@ -793,6 +842,7 @@ function downloadOutput() {
                 :value="String(currentStep.config[f.key] ?? '')"
                 :placeholder="f.placeholder"
                 :aria-label="f.label"
+                :disabled="busy"
                 @input="onConfigChange(f.key, ($event.target as HTMLInputElement).value)"
               />
               <span v-if="f.help" class="wfe__field-help">{{ f.help }}</span>
@@ -800,7 +850,7 @@ function downloadOutput() {
           </template>
 
           <label class="wfe__switch">
-            <DkSwitch :on="stopOnError" label="失败时中断流程" @toggle="stopOnError = !stopOnError" />
+            <DkSwitch :on="stopOnError" label="失败时中断流程" @toggle="toggleStopOnError" />
             <span>失败时中断流程</span>
           </label>
         </div>
@@ -1094,6 +1144,10 @@ function downloadOutput() {
 .wfe__lib-item:hover {
   background: var(--surface-hover);
 }
+.wfe__lib-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .wfe__lib-icon {
   display: inline-flex;
   align-items: center;
@@ -1291,6 +1345,11 @@ function downloadOutput() {
 .wfe__field-input[readonly] {
   background: var(--surface-subtle);
   color: var(--text-secondary);
+}
+.wfe__field-input:disabled {
+  background: var(--surface-subtle);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
 }
 .wfe__console-head {
   display: flex;

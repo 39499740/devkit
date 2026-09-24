@@ -9,13 +9,14 @@ import { errMessage } from '../../utils/errors'
 import { applyYamlRawMap, detectDuplicateKeys, hasUnsafeRawNumber, jsonErrorPosition, loadYamlPreservingNumbers, localizeJsonMessage, minifyJson, parseJson, RawNumber, stringifyJson, toPlainJson, toYamlJsonable } from '../../utils/json'
 import { evalJmesPath } from '../../utils/jmespath'
 import { evalJsonPath } from '../../utils/jsonpath'
-import { inferSchema, validateInstance, type Draft } from '../../utils/jsonschema'
+import { inferSchema, validateInstance, type Draft, type ValidateResult } from '../../utils/jsonschema'
 import { execRegexWithTimeout, localizeRegexMessage, validateFlags } from '../../utils/regex'
 import { formatSql, minifySql, type SqlDialect } from '../../utils/sql'
 import { tidyText } from '../../utils/text'
 import { formatXml, jsonToXml, minifyXml, queryXPath, xmlToJson } from '../../utils/xml'
 import { configBool, configNumber, configText } from '../catalog'
 import { bytesPayload, textPayload } from '../types'
+import { hasWorker, runComputation } from '../workers/run-compute'
 import type { StepExecutor, StepPayload } from '../types'
 
 function byteSize(text: string): string {
@@ -106,7 +107,13 @@ const urlDecode: StepExecutor = (input) => {
 const urlEncode: StepExecutor = (input, config) => {
   const text = requireText(input, 'URL 编码')
   const component = configText(config, 'component', 'component') !== 'uri'
-  const out = component ? encodeURIComponent(text) : encodeURI(text)
+  let out: string
+  try {
+    out = component ? encodeURIComponent(text) : encodeURI(text)
+  } catch {
+    // 孤立代理项（如单独的高/低 surrogate）会让 encodeURIComponent 抛 URIError
+    throw new Error('输入包含非法 Unicode（孤立代理项），无法进行 URL 编码')
+  }
   return {
     payload: textPayload(out),
     note: `按${component ? '组件（encodeURIComponent）' : '整条 URI（encodeURI）'}编码，${text.length} 字符 → ${out.length} 字符`
@@ -196,11 +203,14 @@ const jsonMinify: StepExecutor = (input, config) => {
   }
 }
 
-const jsonpath: StepExecutor = (input, config) => {
+const jsonpath: StepExecutor = async (input, config) => {
   const text = requireText(input, 'JSONPath 提取')
   const expr = configText(config, 'expr', '$').trim() || '$'
   const { value } = parseJsonLocalized(text)
-  const res = evalJsonPath(toPlainJson(value), expr)
+  // 有 Worker 时把原始 JSON 文本交给 Worker 求值，隔离 =~ 正则的灾难性回溯；否则同步回退
+  const res = hasWorker()
+    ? await runComputation<{ matches: { value: unknown }[]; warnings: string[] }>({ fn: 'path', dataText: text, expr })
+    : evalJsonPath(toPlainJson(value), expr)
   if (!res.matches.length) throw new Error('匹配 0 项：检查表达式与字段名（区分大小写）')
   const out = JSON.stringify(
     res.matches.length === 1 ? res.matches[0]!.value : res.matches.map((m) => m.value),
@@ -260,7 +270,7 @@ const jsonYaml: StepExecutor = (input, config) => {
   }
 }
 
-const schemaValidate: StepExecutor = (input, config) => {
+const schemaValidate: StepExecutor = async (input, config) => {
   const text = requireText(input, 'JSON Schema 校验')
   const schemaText = configText(config, 'schema')
   if (!schemaText.trim()) throw new Error('该步骤还没有配置 Schema')
@@ -269,16 +279,19 @@ const schemaValidate: StepExecutor = (input, config) => {
   if (schemaRaw instanceof RawNumber || schemaRaw === null || Array.isArray(schemaRaw) || (typeof schemaRaw !== 'object' && typeof schemaRaw !== 'boolean')) {
     throw new Error('Schema 必须是对象或布尔值（true/false），当前不是合法的 JSON Schema')
   }
-  // Schema 里的数字同样要还原成普通 number，否则 const/enum 比较会把 {"raw":"1"} 暴露给用户，
-  // 且 minLength / maximum / minItems 等数值关键字会因类型不是 number 被静默跳过。
-  const schema = toPlainJson(schemaRaw)
-  const res = validateInstance(toPlainJson(value), schema, { strict: true })
+  // 实例 / Schema 里的数字超出安全范围时给出告警（成功与失败路径都要给）
+  const unsafeNote = hasUnsafeRawNumber(value) || hasUnsafeRawNumber(schemaRaw) ? UNSAFE_NUMBER_NOTE : ''
+  // 有 Worker 时把原始 JSON 文本交给 Worker：实例保留 RawNumber 大整数语义，schema 侧还原普通值；
+  // 否则维持同步实现（Node / 测试）。Schema 里的数字要还原成普通 number，否则 const/enum 会暴露 {"raw":…}。
+  const res = hasWorker()
+    ? await runComputation<ValidateResult>({ fn: 'validate', instanceText: text, schemaText, strict: true })
+    : validateInstance(toPlainJson(value), toPlainJson(schemaRaw), { strict: true })
+  const warn = warnNote(res.warnings)
   if (res.valid) {
-    const unsafeNote = hasUnsafeRawNumber(value) || hasUnsafeRawNumber(schemaRaw) ? UNSAFE_NUMBER_NOTE : ''
-    return { payload: textPayload(text, 'json'), note: `校验通过，检查了 ${res.checked} 个节点${unsafeNote}` }
+    return { payload: textPayload(text, 'json'), note: `校验通过，检查了 ${res.checked} 个节点${warn}${unsafeNote}` }
   }
   const lines = res.errors.map((e) => `${e.path} [${e.keyword}] ${e.message}`)
-  throw new Error(`校验失败 · ${res.errors.length} 个错误：${lines.slice(0, 2).join('；')}`)
+  throw new Error(`校验失败 · ${res.errors.length} 个错误：${lines.slice(0, 2).join('；')}${warn}${unsafeNote}`)
 }
 
 const jsonSchemaGen: StepExecutor = (input, config) => {
@@ -377,8 +390,13 @@ const xmlStep: StepExecutor = (input, config) => {
   return { payload: textPayload(res.xml), note: `格式化完成，${res.nodes} 个节点 / ${res.lines} 行${warnNote(res.warnings)}` }
 }
 
+/** 文件名清理：与流程页 outputFilename 一致，去掉首尾空白与路径分隔符 / 非法字符 */
+function sanitizeFilename(name: string): string {
+  return name.trim().replace(/[/\\:*?"<>|]/g, '')
+}
+
 const download: StepExecutor = (input, config) => {
-  const name = configText(config, 'filename', 'result.txt').trim() || 'result.txt'
+  const name = sanitizeFilename(configText(config, 'filename', 'result.txt')) || 'result.txt'
   return { payload: input, note: `将导出为 ${name}，${byteSize(input.text)}` }
 }
 

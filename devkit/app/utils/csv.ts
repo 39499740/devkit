@@ -84,8 +84,32 @@ export function csvCell(value: string, separator: string): string {
   return value
 }
 
-/** 类型推断（开启后）：布尔 / null / 数字；前导零（007）始终保持字符串 */
-export function inferCsvValue(s: string): unknown {
+/** 小数的有效数字位数：去掉符号、小数点与前导零后的位数（末尾零计入有效位） */
+function decimalSignificantDigits(s: string): number {
+  return s.replace(/^[+-]/, '').replace('.', '').replace(/^0+/, '').length
+}
+
+/**
+ * Number(s) 的字符串形式与原值在有效精度内是否一致。
+ * 只忽略格式差异（前导零、小数末尾多余的 0、`.5` 的省略 0），
+ * 数字本身发生变化（精度丢失）时返回 false。
+ */
+function decimalRoundTrips(s: string, n: number): boolean {
+  const canonical = (v: string): string => {
+    let x = v.replace(/^[+-]/, '')
+    if (x.includes('.')) x = x.replace(/0+$/, '').replace(/\.$/, '')
+    x = x.replace(/^0+(?=\d)/, '')
+    return x || '0'
+  }
+  return canonical(s) === canonical(String(n))
+}
+
+/**
+ * 类型推断（开启后）：布尔 / null / 数字；前导零（007）始终保持字符串。
+ * 小数只在能保证不丢精度时才转 number：有效数字 ≤ 15 位（double 可精确往返的保证），
+ * 或 Number(s) 再 String 与原值仅有格式差异。超出精度的值保持字符串，并可收集告警。
+ */
+export function inferCsvValue(s: string, warnings?: string[]): unknown {
   if (s === 'true') return true
   if (s === 'false') return false
   if (s === 'null') return null
@@ -95,7 +119,13 @@ export function inferCsvValue(s: string): unknown {
   }
   if (/^-?(?:[1-9][0-9]*\.[0-9]*|0?\.[0-9]+)$/.test(s)) {
     const n = Number(s)
-    if (Number.isFinite(n)) return n
+    if (Number.isFinite(n)) {
+      if (decimalSignificantDigits(s) <= 15 || decimalRoundTrips(s, n)) return n
+      if (warnings) {
+        const msg = `小数 ${s} 超出可精确表示的精度，已保持字符串以免丢失精度`
+        if (!warnings.includes(msg)) warnings.push(msg)
+      }
+    }
   }
   return s
 }
@@ -163,7 +193,8 @@ export interface Csv2JsonResult {
 export function csvToJson(text: string, opts: Csv2JsonOptions): Csv2JsonResult {
   const { rows, warns } = parseCsv(text, opts.separator)
   const warnings = [...warns]
-  const conv = (s: string) => (opts.infer ? inferCsvValue(s) : s)
+  // 推断超精度小数被保留为字符串时，把告警一并收进结果（去重）
+  const conv = (s: string) => (opts.infer ? inferCsvValue(s, warnings) : s)
   const header: string[] | null = opts.header ? (rows.length ? rows[0]! : []) : null
   const data = opts.header ? rows.slice(1) : rows
   if (!rows.length) {

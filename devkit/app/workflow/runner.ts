@@ -23,9 +23,14 @@ export interface RunWorkflowOptions {
 export const MISSING_SECRET_HINT =
   '提示：加解密步骤的密钥保存在本机浏览器 localStorage，可在「偏好设置 → 清空已保存密钥」里一次性清除'
 
-function byteSize(text: string): string {
-  const bytes = new TextEncoder().encode(text).length
+function formatByteSize(bytes: number): string {
   return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`
+}
+
+/** 字节数：bytes 载荷按真实字节数（Hex 视图长度是两倍），文本载荷按 UTF-8 编码长度 */
+function payloadByteLength(payload: StepPayload): number {
+  if (payload.kind === 'bytes' && payload.bytes) return payload.bytes.length
+  return new TextEncoder().encode(payload.text).length
 }
 
 export async function runStep(
@@ -40,7 +45,7 @@ export async function runStep(
   const secrets = opts.secrets ?? {}
   const logs: string[] = [
     `运行步骤 ${index + 1} · ${def.name}`,
-    `输入 ${byteSize(payload.text)}${payload.kind === 'bytes' ? '（二进制，按 Hex 传递）' : ''}`
+    `输入 ${formatByteSize(payloadByteLength(payload))}${payload.kind === 'bytes' ? '（二进制，按 Hex 传递）' : ''}`
   ]
   const finish = (
     status: StepResult['status'],
@@ -87,7 +92,7 @@ export async function runStep(
 
   try {
     const res = await exec(payload, step.config, secrets)
-    logs.push(`输出 ${byteSize(res.payload.text)}${res.payload.kind === 'bytes' ? '（二进制结果，界面按 Hex 展示）' : ''}`)
+    logs.push(`输出 ${formatByteSize(payloadByteLength(res.payload))}${res.payload.kind === 'bytes' ? '（二进制结果，界面按 Hex 展示）' : ''}`)
     return finish('ok', res.payload, res.note)
   } catch (e) {
     return finish('fail', textPayload(''), errMessage(e))

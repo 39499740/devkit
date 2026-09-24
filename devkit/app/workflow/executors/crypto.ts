@@ -99,7 +99,15 @@ const aesGcm: StepExecutor = async (input, config, secrets) => {
   const enc = outputEncoding(config)
 
   if (operation === 'encrypt') {
-    const out = await aesGcmEncrypt(payloadBytes(input, inputEncoding(config)), opts)
+    const plain = payloadBytes(input, inputEncoding(config))
+    let out: Uint8Array
+    try {
+      out = await aesGcmEncrypt(plain, opts)
+    } catch {
+      // WebCrypto 抛出的英文错误（如 operation-specific reason）不回显，
+      // 统一映射成中文用法提示：加密阶段的失败基本都是参数不合法。
+      throw new Error('AES-GCM 加密失败：密钥/IV/AAD 或标签长度参数不合法')
+    }
     const { ciphertext, tag } = splitCombined(out, tagLength)
     return {
       payload: textPayload(encodeOutput(out, enc)),

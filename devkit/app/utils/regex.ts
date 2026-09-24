@@ -62,8 +62,174 @@ export function localizeRegexMessage(msg: string, pattern?: string): string {
   return `${head}语法不正确，请检查括号、量词与转义`
 }
 
+/** 去掉分组开头的前缀（?: / ?<name> / ?= / ?! / ?<= / ?<!），只保留分组体 */
+function stripGroupPrefix(body: string): string {
+  if (body.startsWith('?:')) return body.slice(2)
+  if (body.startsWith('?=') || body.startsWith('?!')) return body.slice(2)
+  if (body.startsWith('?<=') || body.startsWith('?<!')) return body.slice(3)
+  if (body.startsWith('?<')) {
+    const close = body.indexOf('>')
+    return close === -1 ? body : body.slice(close + 1)
+  }
+  return body
+}
+
+/** 在顶层（跳过转义、字符类、嵌套分组）按 | 拆分交替分支 */
+function splitAlternation(body: string): string[] {
+  const parts: string[] = []
+  let depth = 0
+  let inClass = false
+  let cur = ''
+  for (let i = 0; i < body.length; i += 1) {
+    const ch = body[i]!
+    if (ch === '\\') {
+      cur += ch + (body[i + 1] ?? '')
+      i += 1
+      continue
+    }
+    if (inClass) {
+      cur += ch
+      if (ch === ']') inClass = false
+      continue
+    }
+    if (ch === '[') {
+      inClass = true
+      cur += ch
+      continue
+    }
+    if (ch === '(') {
+      depth += 1
+      cur += ch
+      continue
+    }
+    if (ch === ')') {
+      depth -= 1
+      cur += ch
+      continue
+    }
+    if (ch === '|' && depth === 0) {
+      parts.push(cur)
+      cur = ''
+      continue
+    }
+    cur += ch
+  }
+  parts.push(cur)
+  return parts
+}
+
+interface BranchToken {
+  /** 规范化后的原子标识：字面字符 / \d / [a-z] / 整个嵌套分组 */
+  key: string
+  /** 该原子是否可省略（后跟 ? / * / {0,n}） */
+  optional: boolean
+  /** 是否为通配原子（. 或 \d/\w/\s 等），与任意同类原子视为前缀重合 */
+  any: boolean
+}
+
+/** 把一个交替分支拆成原子序列，并记录每个原子是否可省略 */
+function branchTokens(branch: string): BranchToken[] {
+  const toks: BranchToken[] = []
+  let i = 0
+  while (i < branch.length) {
+    const ch = branch[i]!
+    if (ch === '^' || ch === '$') {
+      i += 1 // 锚点不消费字符
+      continue
+    }
+    let key: string
+    let any = false
+    let end: number
+    if (ch === '\\') {
+      const nxt = branch[i + 1] ?? ''
+      key = `\\${nxt}`
+      end = i + 2
+    } else if (ch === '[') {
+      let j = i + 1
+      if (branch[j] === '^') j += 1
+      if (branch[j] === ']') j += 1
+      while (j < branch.length && branch[j] !== ']') j += 1
+      key = branch.slice(i, j + 1)
+      end = j + 1
+    } else if (ch === '(') {
+      let depth = 0
+      let j = i
+      for (; j < branch.length; j += 1) {
+        if (branch[j] === '\\') {
+          j += 1
+          continue
+        }
+        if (branch[j] === '(') depth += 1
+        else if (branch[j] === ')') {
+          depth -= 1
+          if (depth === 0) break
+        }
+      }
+      key = branch.slice(i, j + 1)
+      end = j + 1
+    } else if (ch === '.') {
+      key = '.'
+      any = true
+      end = i + 1
+    } else {
+      key = ch
+      end = i + 1
+    }
+    let optional = false
+    const q = branch[end]
+    if (q === '?' || q === '*') {
+      optional = true
+      end += 1
+    } else if (q === '+') {
+      end += 1
+    } else if (q === '{') {
+      const m = /^\{(\d+)(,(\d*))?\}/.exec(branch.slice(end))
+      if (m) {
+        if (Number(m[1]) === 0) optional = true
+        end += m[0].length
+      }
+    }
+    toks.push({ key, optional, any })
+    i = end
+  }
+  return toks
+}
+
+/** 分支是否可匹配空串（所有原子都可省略，或本身为空） */
+function isNullable(toks: BranchToken[]): boolean {
+  return toks.every((t) => t.optional)
+}
+
+/** 两段原子序列是否「前缀重合」：较短者能作为较长者的前缀（含完全相等） */
+function sharesPrefix(a: BranchToken[], b: BranchToken[]): boolean {
+  const n = Math.min(a.length, b.length)
+  for (let i = 0; i < n; i += 1) {
+    if (!(a[i]!.key === b[i]!.key || a[i]!.any || b[i]!.any)) return false
+  }
+  return true
+}
+
 /**
- * 静态风险判定：识别经典「嵌套无界量词」导致的灾难性回溯（ReDoS）。
+ * 交替分支风险判定：当分组被无界量词重复时，若分支集合不是「前缀无关」的
+ * （某分支是另一分支的前缀、存在相等分支，或某分支可匹配空串），引擎在匹配失败
+ * 时会产生指数级回溯，例如 `(a|aa)+`、`(a|ab)*`、`(a|a?)+`。
+ * 前缀无关的安全交替（`(a|b)+`、`(ab|ac)+`）不会误判。
+ */
+function alternationRisk(body: string): boolean {
+  const branches = splitAlternation(body)
+  if (branches.length < 2) return false
+  const toks = branches.map(branchTokens)
+  for (let i = 0; i < toks.length; i += 1) {
+    if (isNullable(toks[i]!)) return true
+    for (let j = i + 1; j < toks.length; j += 1) {
+      if (sharesPrefix(toks[i]!, toks[j]!)) return true
+    }
+  }
+  return false
+}
+
+/**
+ * 静态风险判定：识别经典「嵌套无界量词」与「重叠交替分支」导致的灾难性回溯（ReDoS）。
  *
  * 原理：匹配失败时正则引擎会尝试不同的回溯路径；若一个分组内部含无界量词
  * （`+`、`*`、`{m,}`），而该分组本身又被无界量词重复，回溯路径会随输入长度
@@ -73,8 +239,12 @@ export function localizeRegexMessage(msg: string, pattern?: string): string {
  *   3. 分组闭合时若紧跟一个无界量词，且组内出现过无界量词，即判定危险；
  *   4. 分组的无界性会向上传播（如 `((ab)+)+` 同样危险）。
  *
- * 只覆盖「嵌套量词」这一经典形态：安全结构（`(?:ab)+`、`\d+`、`(a|b)+`、
- * `[0-9]{2,4}`、`(?<y>\d{4})` 等）与无法判定的情况一律返回 null，避免误伤。
+ * 除嵌套量词外，还识别「交替分支重叠」形态：分组被无界量词重复，且其顶层
+ * 交替分支中存在可空前缀 / 相等分支 / 前缀关系（`(a|aa)+`、`(a|ab)*`、`(a|a?)+`）。
+ * 该风险同样会向上传播（如 `((a|aa))+`）。
+ *
+ * 安全结构（`(?:ab)+`、`\d+`、`(a|b)+`、`[0-9]{2,4}`、`(?<y>\d{4})` 等）与无法
+ * 判定的情况一律返回 null，避免误伤。即使静态判定漏判，调用方也会用 Worker 超时兜底。
  *
  * @returns 危险时返回中文原因；安全或无法判定返回 null。
  */
@@ -96,8 +266,8 @@ export function regexRiskReason(pattern: string): string | null {
     return null
   }
 
-  /** 每个未闭合分组是否已包含无界量词 */
-  const stack: { hasUnbounded: boolean }[] = []
+  /** 每个未闭合分组：是否已含无界量词、是否含重叠交替风险、以及分组体起始位置 */
+  const stack: { hasUnbounded: boolean; hasAltRisk: boolean; start: number }[] = []
   let inClass = false
   let i = 0
   while (i < pattern.length) {
@@ -120,7 +290,7 @@ export function regexRiskReason(pattern: string): string | null {
       continue
     }
     if (ch === '(') {
-      stack.push({ hasUnbounded: false })
+      stack.push({ hasUnbounded: false, hasAltRisk: false, start: i })
       i += 1
       continue
     }
@@ -128,11 +298,14 @@ export function regexRiskReason(pattern: string): string | null {
       const frame = stack.pop()
       const parent = stack[stack.length - 1]
       const q = quantifierAt(i + 1)
-      if (frame && frame.hasUnbounded && q && q.unbounded) {
-        return '检测到嵌套的无界量词（如 (a+)+、(a*)*），会触发灾难性回溯并冻结页面'
+      const inner = frame ? stripGroupPrefix(pattern.slice(frame.start + 1, i)) : ''
+      const alt = frame ? frame.hasAltRisk || alternationRisk(inner) : false
+      if (frame && (frame.hasUnbounded || alt) && q && q.unbounded) {
+        return '检测到可导致灾难性回溯的结构（嵌套无界量词或重叠交替分支），会冻结页面，请简化表达式'
       }
-      // 组内含无界量词，或分组本身被无界量词重复，都会让父分组具备无界性
+      // 组内含无界量词 / 重叠交替，或分组本身被无界量词重复，都会向上传播
       if (parent && ((frame && frame.hasUnbounded) || (q && q.unbounded))) parent.hasUnbounded = true
+      if (parent && alt) parent.hasAltRisk = true
       if (q) {
         i = q.end
         if (pattern[i] === '?') i += 1 // 惰性量词后缀，不改变无界性

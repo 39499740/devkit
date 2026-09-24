@@ -3,8 +3,6 @@
  * 使用浏览器原生 DOMParser / document.evaluate，不做自研 XML 解析器。
  */
 
-import { errMessage } from './errors'
-
 export interface XmlResult {
   xml: string
   warnings: string[]
@@ -13,12 +11,26 @@ export interface XmlResult {
   chars: number
 }
 
+/**
+ * 把浏览器的 XML 解析错误统一翻成中文：保留可得的「第 X 行第 Y 列附近」，
+ * 不回显 Chromium/Firefox 的英文原文（parsererror 文本是英文的，直接抛给用户不友好）。
+ */
+function localizeXmlParseError(text: string): string {
+  const msg = (text || '').replace(/\s+/g, ' ').trim()
+  // Chromium：error on line 2 at column 5；Firefox：Line number 1, column 5
+  const at = /line\s*(?:number\s*)?(\d+)(?:\s*(?:,|at)?\s*column\s*(\d+))?/i.exec(msg)
+  if (at) {
+    const col = at[2] ? `第 ${at[2]} 列` : ''
+    return `XML 解析失败：第 ${at[1]} 行${col}附近存在语法错误（常见于标签未闭合、属性缺引号或非法字符）`
+  }
+  return 'XML 解析失败：文档格式不正确（常见于标签未闭合、属性缺引号或非法字符）'
+}
+
 function parse(text: string): { doc: Document; warnings: string[] } {
   const doc = new DOMParser().parseFromString(text, 'application/xml')
   const err = doc.querySelector('parsererror')
   if (err) {
-    const msg = (err.textContent || 'XML 解析失败').replace(/\s+/g, ' ').trim()
-    throw new Error(msg.length > 200 ? `${msg.slice(0, 200)}…` : msg)
+    throw new Error(localizeXmlParseError(err.textContent ?? ''))
   }
   const warnings: string[] = []
   if (/^\s*<\?xml[\s\S]*?encoding=/i.test(text) && !/encoding=["']utf-8["']/i.test(text)) {
@@ -463,8 +475,11 @@ export function queryXPath(
   let result: XPathResult
   try {
     result = doc.evaluate(expr, doc, resolver as never, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null)
-  } catch (e) {
-    throw new Error(`XPath 表达式无效：${errMessage(e)}`)
+  } catch {
+    const shown = expr.length > 60 ? `${expr.slice(0, 60)}…` : expr
+    throw new Error(
+      `XPath 表达式无效：请检查路径语法、括号与引号是否配对（表达式：${shown}）`
+    )
   }
   if (!result.snapshotLength) {
     warnings.push('没有匹配到节点，检查路径大小写与层级')
