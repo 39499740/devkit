@@ -2,7 +2,6 @@
  * T44 JSONPath：支持子属性、下标、通配、递归下降、切片、联合与过滤表达式。
  * 未实现的语法会给出明确错误，不会静默返回空结果。
  */
-import { regexRiskReason } from './regex'
 
 export interface PathMatch {
   /** 规范化路径，如 $.store.book[0].title */
@@ -224,10 +223,7 @@ export function evalFilter(node: FilterNode, current: unknown, root: unknown): b
       const b = evalFilterValue(node.b, current, root)
       if (node.op === '=~') {
         if (typeof a !== 'string' || typeof b !== 'string') return false
-        // =~ 的右值也是用户可控正则：编译前先做风险判定，避免主线程 test() 冻结
-        if (regexRiskReason(b)) {
-          throw new Error(`=~ 右侧正则存在灾难性回溯风险（嵌套量词），可能冻结页面，请简化：/${b}/`)
-        }
+        // 不做静态风险硬门禁：右值正则在 Worker 中执行并带超时保护，静态启发式会误伤合法表达式
         try {
           return new RegExp(b).test(a)
         } catch {

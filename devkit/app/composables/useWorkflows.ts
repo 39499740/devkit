@@ -49,6 +49,22 @@ import {
 
 const MAX_RUNS = 50
 
+/**
+ * 读取 localStorage 项：getter 本身抛异常（隐私模式 / 权限被拒 / 存储被禁用）时，
+ * 返回 null 与可读错误，而不是让异常冒泡中断组件挂载（与 loadSecrets 的容错一致）。
+ */
+export function readStoredItem(
+  kv: { getItem(key: string): string | null } | null,
+  key: string,
+  label: string
+): { raw: string | null; error?: string } {
+  try {
+    return { raw: kv?.getItem(key) ?? null }
+  } catch {
+    return { raw: null, error: `读取本地${label}失败：浏览器本地存储不可用（可能处于隐私模式），已使用默认数据` }
+  }
+}
+
 export function useWorkflows() {
   const workflows = useState<Workflow[]>('devkit-workflows', () => defaultWorkflows())
   const runs = useState<RunRecord[]>('devkit-workflow-runs', () => [])
@@ -82,11 +98,14 @@ export function useWorkflows() {
   function hydrate() {
     if (hydrated.value || import.meta.server) return
     const kv = browserKv()
-    const wfLoad = parseWorkflows(kv?.getItem(WORKFLOWS_KEY) ?? null)
+    // 存储 getter 可能直接抛异常：必须包 try，否则整个挂载都会被中断
+    const wfRaw = readStoredItem(kv, WORKFLOWS_KEY, '流程')
+    const wfLoad = parseWorkflows(wfRaw.raw)
     if (wfLoad.workflows) workflows.value = wfLoad.workflows
-    if (wfLoad.error) {
-      storageError.value = wfLoad.error
-      toast.warning(wfLoad.error)
+    const wfError = wfRaw.error ?? wfLoad.error
+    if (wfError) {
+      storageError.value = wfError
+      toast.warning(wfError)
     }
     const secretLoad = loadSecrets(kv)
     secrets.value = secretLoad.file
@@ -94,9 +113,14 @@ export function useWorkflows() {
       storageError.value = secretLoad.error
       toast.warning(secretLoad.error)
     }
-    const runLoad = parseRuns(kv?.getItem(RUNS_KEY) ?? null)
+    const runRaw = readStoredItem(kv, RUNS_KEY, '运行记录')
+    const runLoad = parseRuns(runRaw.raw)
     runs.value = runLoad.runs
-    if (runLoad.error) toast.warning(runLoad.error)
+    const runError = runRaw.error ?? runLoad.error
+    if (runError) {
+      storageError.value = runError
+      toast.warning(runError)
+    }
     hydrated.value = true
   }
 

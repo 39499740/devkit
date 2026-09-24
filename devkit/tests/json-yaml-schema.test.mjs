@@ -129,6 +129,54 @@ async function buildCases() {
   cases.push(throws('.inf 抛中文 Error', () => loadYamlPreservingNumbers('x: .inf'), /无穷|NaN/))
   cases.push(throws('语法错误抛中文 Error', () => loadYamlPreservingNumbers('a: [1, 2'), /YAML 解析失败/))
 
+  /* ── YAML 合并键 << (merge) 支持 ── */
+  const mergeDoc = 'defaults: &d\n  a: 1\nitem:\n  <<: *d\n  b: 2'
+  const mergedPlain = toPlainJson(loadYamlPreservingNumbers(mergeDoc).value)
+  cases.push(eq('merge 键合并出 a', mergedPlain.item.a, 1))
+  cases.push(eq('merge 键合并出 b', mergedPlain.item.b, 2))
+  cases.push(check('merge 后不残留 << 键', () => !Object.prototype.hasOwnProperty.call(mergedPlain.item, '<<')))
+  cases.push(eq('merge 来源 defaults 保留', mergedPlain.defaults.a, 1))
+
+  const mergeStep = await runStep(createStep('json-yaml', { direction: 'yaml2json' }), mergeDoc, 0)
+  cases.push(eq('merge 端到端 yaml2json 状态 ok', mergeStep.status, 'ok'))
+  cases.push(
+    check('merge 端到端输出已合并且无 <<', () => {
+      const out = JSON.parse(mergeStep.output)
+      return out.item.a === 1 && out.item.b === 2 && !('<<' in out.item)
+    })
+  )
+
+  const mergeSeqPlain = toPlainJson(
+    loadYamlPreservingNumbers('a: &a\n  x: 1\nb: &b\n  y: 2\nc:\n  <<: [*a, *b]\n  z: 3').value
+  )
+  cases.push(
+    check(
+      'merge 键支持别名序列 <<: [*a, *b]',
+      () =>
+        mergeSeqPlain.c.x === 1 &&
+        mergeSeqPlain.c.y === 2 &&
+        mergeSeqPlain.c.z === 3 &&
+        !Object.prototype.hasOwnProperty.call(mergeSeqPlain.c, '<<')
+    )
+  )
+
+  // 普通锚点 / 别名（非 merge）引用仍正常
+  const aliasPlain = toPlainJson(loadYamlPreservingNumbers('base: &a\n  x: 1\nref: *a').value)
+  cases.push(eq('普通别名引用取到相同值', aliasPlain.ref.x, 1))
+  cases.push(check('普通别名引用不引入 <<', () => !Object.prototype.hasOwnProperty.call(aliasPlain.ref, '<<')))
+
+  // 引号包裹的 "<<" 仍是普通键（不触发合并）
+  const quotedMergeKey = toPlainJson(loadYamlPreservingNumbers('"<<": 1').value)
+  cases.push(eq('引号 "<<" 仍按普通键处理', quotedMergeKey['<<'], 1))
+
+  /* ── 回归：合入 merge 类型后不影响既有保真语义 ── */
+  cases.push(eq('回归：日期仍为字符串', toPlainJson(loadYamlPreservingNumbers('date: 2024-01-01').value).date, '2024-01-01'))
+  cases.push(throws('回归：.inf 仍抛中文 Error', () => loadYamlPreservingNumbers('x: .inf'), /无穷|NaN/))
+  cases.push(throws('回归：数字键仍抛中文 Error', () => loadYamlPreservingNumbers('80: http'), /键/))
+  const bigAfterMerge = loadYamlPreservingNumbers('big: 12345678901234567890')
+  cases.push(eq('回归：大整数仍保留原文', bigAfterMerge.value.big.raw, '12345678901234567890'))
+  cases.push(check('回归：大整数仍给出安全提示', () => bigAfterMerge.notes.some((n) => n.includes('安全'))))
+
   return cases
 }
 

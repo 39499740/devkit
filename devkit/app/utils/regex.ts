@@ -403,8 +403,9 @@ export function regexWorkerSource(): string {
 }
 
 /**
- * 主线程安全守卫：能做 Blob Worker 就在 Worker 里执行并加超时，避免灾难性回溯冻结页面；
- * Worker 不可用时（Node / 测试环境）回退到同步 execRegex，返回值语义完全一致。
+ * 主线程安全守卫：能做 Blob Worker 就在 Worker 里执行并加超时，避免灾难性回溯冻结页面。
+ * Worker 不可用或创建失败时，先用 regexRiskReason 做兜底风险判定——命中则直接拒绝执行，
+ * 未命中再回退到同步 execRegex，返回值语义与 Worker 路径完全一致。
  * 超时、Worker 错误、消息反序列化失败都会 settle 成失败结果，绝不悬挂、也不抛出。
  */
 export function execRegexWithTimeout(
@@ -414,8 +415,21 @@ export function execRegexWithTimeout(
   replacement?: string,
   timeoutMs = 2000
 ): Promise<RegexResult> {
+  /** Worker 无法使用时的同步兜底：危险表达式直接拒绝，安全表达式才真正同步执行 */
+  const syncFallback = (): RegexResult => {
+    if (regexRiskReason(source)) {
+      return {
+        ok: false,
+        matches: [],
+        replaced: null,
+        capped: false,
+        error: '当前环境无法使用 Worker 隔离，且该表达式存在灾难性回溯风险，已拒绝执行'
+      }
+    }
+    return execRegex(source, flags, text, replacement)
+  }
   if (typeof Worker === 'undefined' || typeof Blob === 'undefined' || typeof URL === 'undefined') {
-    return Promise.resolve(execRegex(source, flags, text, replacement))
+    return Promise.resolve(syncFallback())
   }
   let worker: Worker
   let url = ''
@@ -423,8 +437,10 @@ export function execRegexWithTimeout(
     url = URL.createObjectURL(new Blob([regexWorkerSource()], { type: 'text/javascript' }))
     worker = new Worker(url)
   } catch {
-    // 创建失败（如浏览器策略限制）时退回同步路径，宁可慢也不能让步骤直接报错
-    return Promise.resolve(execRegex(source, flags, text, replacement))
+    // 创建失败（如浏览器策略禁用 blob worker）时不能无条件同步执行：
+    // 先做兜底风险判定，命中则拒绝，避免灾难性回溯冻结主线程。
+    if (url) URL.revokeObjectURL(url)
+    return Promise.resolve(syncFallback())
   }
   return new Promise<RegexResult>((resolve) => {
     const w = worker
@@ -443,7 +459,7 @@ export function execRegexWithTimeout(
         matches: [],
         replaced: null,
         capped: false,
-        error: `正则执行超时（超过 ${timeoutMs}ms）：表达式可能存在灾难性回溯，请简化表达式或减少输入`
+        error: `执行超时（超过 ${timeoutMs}ms）：可能是输入过大或表达式存在灾难性回溯，请简化表达式或减少输入`
       })
     }, timeoutMs)
     w.onmessage = (ev: MessageEvent<RegexResult>) => settle(ev.data)

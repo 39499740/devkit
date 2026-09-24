@@ -2,7 +2,6 @@
  * T45 JSON Schema：从 JSON 推断 Schema，以及按 Draft 2020-12 子集校验实例。
  * 校验一次收集全部错误（不是遇到第一个就停），并给出 JSONPath 与 Schema 位置。
  */
-import { regexRiskReason } from './regex'
 import { RawNumber } from './json'
 
 export type Draft = '2020-12' | 'draft-07'
@@ -289,10 +288,8 @@ export function validateInstance(
         push(pointer, `${spath}/maxLength`, 'maxLength', `长度至多 ${s.maxLength}，当前 ${inst.length}`)
       }
       if (typeof s.pattern === 'string') {
-        // 先做静态风险判定：嵌套量词会在主线程同步 test() 时冻结页面
-        if (regexRiskReason(s.pattern)) {
-          throw new Error(`pattern 存在灾难性回溯风险（嵌套量词或重叠交替），可能冻结页面，请简化：/${s.pattern}/`)
-        }
+        // 不做静态风险硬门禁：schema.pattern 由调用方在 Worker 中执行并带超时保护，
+        // 静态启发式会误伤合法表达式（如 ^[a-z]+(\.[a-z]+)*$），这里只校验语法是否合法。
         let re: RegExp
         try {
           re = new RegExp(s.pattern)
@@ -390,10 +387,7 @@ export function validateInstance(
           handled = true
         }
         for (const [pattern, sub] of Object.entries(patterns)) {
-          // 同 s.pattern：patternProperties 的键也是用户可控正则，需先做风险判定
-          if (regexRiskReason(pattern)) {
-            throw new Error(`patternProperties 里的 /${pattern}/ 存在灾难性回溯风险（嵌套量词或重叠交替），可能冻结页面，请简化`)
-          }
+          // 同 s.pattern：不做静态风险硬门禁，交由调用方的 Worker + 超时保护，只校验语法
           let re: RegExp
           try {
             re = new RegExp(pattern)

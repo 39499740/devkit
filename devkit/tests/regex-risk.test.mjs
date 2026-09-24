@@ -1,11 +1,12 @@
 /**
  * P1-5 / P3 回归：
- * - regexRiskReason：静态识别嵌套无界量词（灾难性回溯），不误伤常见安全结构；
- * - jsonschema：pattern / patternProperties 的危险正则在编译前就抛中文错误（不冻结）；
- * - jsonpath：`=~` 右值危险正则同样抛中文错误；
+ * - regexRiskReason：静态识别嵌套无界量词（灾难性回溯），不误伤明确的常见安全结构；
+ * - jsonschema：pattern / patternProperties 不再用静态风险做硬门禁（Worker + 超时才是执行期保护），
+ *   合法表达式（含会被静态启发式误伤的 ^[a-z]+(\.[a-z]+)*$）可正常校验，非法正则仍报中文错误；
+ * - jsonpath：`=~` 右值同样不再硬门禁，合法/非法正则行为保持；
  * - 回归：正常 schema 校验、jsonpath 匹配、SM4 去填充失败文案保持中文。
  *
- * 注意：危险样例只用静态判定与「短输入」验证抛出，绝不真正触发灾难性回溯。
+ * 注意：危险样例只用静态判定与「短输入」验证，绝不真正触发灾难性回溯。
  */
 import { regexRiskReason } from '../app/utils/regex.ts'
 import { validateInstance } from '../app/utils/jsonschema.ts'
@@ -52,20 +53,32 @@ for (const p of safe) {
 cases.push(eq('空串不判定为危险', regexRiskReason(''), null))
 cases.push(eq('非字符串不判定为危险', regexRiskReason(undefined), null))
 
-/* ─────────────── 2. jsonschema pattern 守卫 ─────────────── */
+/* ─────────────── 2. jsonschema pattern：不再硬门禁 ─────────────── */
 
+// H1 回归：静态启发式会误伤的合法表达式不得阻断校验
 cases.push(
-  throws(
-    'schema.pattern 嵌套量词抛中文错误（不冻结）',
-    () => validateInstance('aaaa', { type: 'string', pattern: '^(a+)+$' }, { strict: true }),
-    /灾难性回溯/
-  )
+  check('schema.pattern 合法表达式不再被静态风险误伤（H1 回归）', () => {
+    const r = validateInstance('abc.def', { type: 'string', pattern: String.raw`^[a-z]+(\.[a-z]+)*$` }, { strict: true })
+    return r.valid === true && r.errors.length === 0
+  })
+)
+cases.push(
+  check('schema.pattern 嵌套量词在短输入上正常校验（不再抛错）', () => {
+    const r = validateInstance('aaaa', { type: 'string', pattern: '^(a+)+$' }, { strict: true })
+    return r.valid === true && r.errors.length === 0
+  })
+)
+cases.push(
+  check('patternProperties 在短输入上正常校验（不再抛错）', () => {
+    const r = validateInstance({ aaaa: 1 }, { type: 'object', patternProperties: { '^(a+)+$': { type: 'number' } } }, { strict: true })
+    return r.valid === true && r.errors.length === 0
+  })
 )
 cases.push(
   throws(
-    'patternProperties 危险正则抛中文错误',
-    () => validateInstance({ aaaa: 1 }, { type: 'object', patternProperties: { '^(a+)+$': { type: 'number' } } }, { strict: true }),
-    /灾难性回溯/
+    'schema.pattern 非法正则仍报中文错误',
+    () => validateInstance('x', { type: 'string', pattern: '(' }, { strict: true }),
+    /不是合法正则/
   )
 )
 cases.push(
@@ -81,16 +94,22 @@ cases.push(
   })
 )
 
-/* ─────────────── 3. jsonpath `=~` 守卫 ─────────────── */
+/* ─────────────── 3. jsonpath `=~`：不再硬门禁 ─────────────── */
 
 const jpData = { list: [{ name: 'abc123' }, { name: 'xyz' }, { name: 'a1' }] }
 
 cases.push(
-  throws(
-    'jsonpath =~ 危险正则抛中文错误',
-    () => evalJsonPath(jpData, "$.list[?(@.name =~ '^(a+)+$')]"),
-    /灾难性回溯/
-  )
+  check('jsonpath =~ 合法表达式不再被静态风险误伤（H1 回归）', () => {
+    const data = { list: [{ name: 'abc.def' }, { name: 'ABC' }, { name: 'x y' }] }
+    const got = evalJsonPath(data, "$.list[?(@.name =~ '^[a-z]+(\\.[a-z]+)*$')].name").matches.map((m) => m.value)
+    return got.length === 1 && got[0] === 'abc.def'
+  })
+)
+cases.push(
+  check('jsonpath =~ 嵌套量词短输入正常执行（不再抛错）', () => {
+    const got = evalJsonPath(jpData, "$.list[?(@.name =~ '^(a+)+$')].name").matches
+    return Array.isArray(got)
+  })
 )
 cases.push(
   eq(

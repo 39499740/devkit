@@ -85,11 +85,15 @@ const hmac: StepExecutor = async (input, config, secrets) => {
 
 const aesGcm: StepExecutor = async (input, config, secrets) => {
   const operation = configText(config, 'operation', 'encrypt')
+  // 非法枚举必须报错：否则 operation 会静默走 decrypt 分支，用户以为在加密
+  if (operation !== 'encrypt' && operation !== 'decrypt') throw new Error(`不支持的操作：${operation}`)
   const bits = Number(configText(config, 'keyBits', '256')) as AesKeyBits
   if (![128, 192, 256].includes(bits)) throw new Error(`不支持的密钥长度：${bits}`)
   const tagLength = Number(configText(config, 'tagLength', '128')) as AesTagBits
   if (![96, 112, 128].includes(tagLength)) throw new Error(`不支持的认证标签长度：${tagLength}`)
-  const keyEnc = configText(config, 'keyEncoding', 'hex') as InputEncoding
+  const keyEnc = configText(config, 'keyEncoding', 'hex')
+  // 非法密钥编码必须报错：否则 decodeInput 的 default 分支会静默按 UTF-8 解码
+  if (keyEnc !== 'hex' && keyEnc !== 'utf8' && keyEnc !== 'base64') throw new Error(`不支持的密钥编码：${keyEnc}`)
   const key = decodeInput(secrets.key ?? '', keyEnc, '密钥')
   assertAesKey(key, bits)
   const iv = decodeInput(secrets.iv ?? '', 'hex', 'IV')
@@ -236,7 +240,9 @@ const sm2Exec: StepExecutor = (input, config, secrets) => {
     return cleanHex(privateKey)
   }
   const inputBytes = (label: string): string => {
-    if (input.bytes && input.kind === 'bytes') return bytesToHex(input.bytes)
+    // 与 AES/SM4 的 payloadBytes(input,'auto') 一致：只要带 bytes 就用原始字节，
+    // 不看 kind——text 载荷也可能携带 bytes（bytes 是可信来源，text 只是给界面的 Hex/文本视图）。
+    if (input.bytes) return bytesToHex(input.bytes)
     return bytesToHex(decodeInput(input.text.trim(), enc === 'base64' ? 'base64' : 'hex', label))
   }
   /**

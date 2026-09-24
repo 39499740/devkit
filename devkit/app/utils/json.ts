@@ -505,7 +505,9 @@ function mapYamlReason(reason: string): string {
 
 /**
  * 保真加载 YAML：
- * - 用 yaml.JSON_SCHEMA，日期等不会被自动转成对象；数字用自定义 Type 覆盖；
+ * - 用 yaml.JSON_SCHEMA（日期等不会被自动转成对象），并补上 merge 类型，
+ *   使 `<<: *anchor` 按 YAML 合并语义展开（否则会变成一个普通的 "<<" 键，静默出错）；
+ * - 数字用自定义 Type 覆盖；
  * - 不是 JSON 数字字面量的标量（如 007、0x1f）按字符串保留原文；
  * - 超出 JS 安全范围的数值用 RawNumber 保留原文；
  * - 非字符串键、.inf / .nan 等无法映射的情况抛出中文 Error。
@@ -532,8 +534,14 @@ export function loadYamlPreservingNumbers(text: string): { value: unknown; notes
       resolve: (d: unknown) => typeof d === 'string' && (YAML_NUM_TEXT.test(d) || YAML_INF_NAN_TEXT.test(d)),
       construct: (d: unknown) => numberValue(String(d))
     })
+  // JSON_SCHEMA 不含 merge 类型，`<<: *anchor` 会被当成普通键（键名 "<<"）静默保留。
+  // 补一个与 js-yaml 内置等价的 merge 类型，让合并键按 YAML 语义真正展开、且不残留 "<<"。
+  const mergeType = new yaml.Type('tag:yaml.org,2002:merge', {
+    kind: 'scalar',
+    resolve: (d: unknown) => d === '<<' || d === null
+  })
   const schema = yaml.JSON_SCHEMA.extend({
-    implicit: [numberType('tag:yaml.org,2002:int'), numberType('tag:yaml.org,2002:float')]
+    implicit: [numberType('tag:yaml.org,2002:int'), numberType('tag:yaml.org,2002:float'), mergeType]
   })
   let value: unknown
   try {

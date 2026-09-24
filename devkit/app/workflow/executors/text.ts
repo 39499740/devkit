@@ -16,7 +16,7 @@ import { tidyText } from '../../utils/text'
 import { formatXml, jsonToXml, minifyXml, queryXPath, xmlToJson } from '../../utils/xml'
 import { configBool, configNumber, configText } from '../catalog'
 import { bytesPayload, textPayload } from '../types'
-import { hasWorker, runComputation } from '../workers/run-compute'
+import { runComputation } from '../workers/run-compute'
 import type { StepExecutor, StepPayload } from '../types'
 
 function byteSize(text: string): string {
@@ -48,6 +48,12 @@ function duplicateNote(dups: string[]): string {
 
 /** 大整数精度告警文案：仅提示，不改变输出（实例 / schema 含超范围整数时追加） */
 const UNSAFE_NUMBER_NOTE = '；检测到超出安全整数范围的数字，已按字符串处理，数值类型/比较可能不精确'
+
+/**
+ * 大整数告警文案（schema-validate 专用）：实例侧保留 RawNumber 原文做 integer 判定，
+ * 不谎称已转字符串，避免与 Worker 分支语义不一致。
+ */
+const UNSAFE_NUMBER_RAW_NOTE = '；检测到超出安全整数范围的数字，按原文保真处理，数值类型/比较可能不精确'
 
 /** 值中含超出安全范围的 RawNumber 时返回告警文案，否则空串 */
 function unsafeNumberNote(v: unknown): string {
@@ -207,10 +213,11 @@ const jsonpath: StepExecutor = async (input, config) => {
   const text = requireText(input, 'JSONPath 提取')
   const expr = configText(config, 'expr', '$').trim() || '$'
   const { value } = parseJsonLocalized(text)
-  // 有 Worker 时把原始 JSON 文本交给 Worker 求值，隔离 =~ 正则的灾难性回溯；否则同步回退
-  const res = hasWorker()
-    ? await runComputation<{ matches: { value: unknown }[]; warnings: string[] }>({ fn: 'path', dataText: text, expr })
-    : evalJsonPath(toPlainJson(value), expr)
+  // 有 Worker 时把原始 JSON 文本交给 Worker 求值，隔离 =~ 正则的灾难性回溯；无 Worker 时用同步回退
+  const res = await runComputation<{ matches: { value: unknown }[]; warnings: string[] }>(
+    { fn: 'path', dataText: text, expr },
+    () => evalJsonPath(toPlainJson(value), expr)
+  )
   if (!res.matches.length) throw new Error('匹配 0 项：检查表达式与字段名（区分大小写）')
   const out = JSON.stringify(
     res.matches.length === 1 ? res.matches[0]!.value : res.matches.map((m) => m.value),
@@ -280,12 +287,13 @@ const schemaValidate: StepExecutor = async (input, config) => {
     throw new Error('Schema 必须是对象或布尔值（true/false），当前不是合法的 JSON Schema')
   }
   // 实例 / Schema 里的数字超出安全范围时给出告警（成功与失败路径都要给）
-  const unsafeNote = hasUnsafeRawNumber(value) || hasUnsafeRawNumber(schemaRaw) ? UNSAFE_NUMBER_NOTE : ''
+  const unsafeNote = hasUnsafeRawNumber(value) || hasUnsafeRawNumber(schemaRaw) ? UNSAFE_NUMBER_RAW_NOTE : ''
   // 有 Worker 时把原始 JSON 文本交给 Worker：实例保留 RawNumber 大整数语义，schema 侧还原普通值；
-  // 否则维持同步实现（Node / 测试）。Schema 里的数字要还原成普通 number，否则 const/enum 会暴露 {"raw":…}。
-  const res = hasWorker()
-    ? await runComputation<ValidateResult>({ fn: 'validate', instanceText: text, schemaText, strict: true })
-    : validateInstance(toPlainJson(value), toPlainJson(schemaRaw), { strict: true })
+  // 无 Worker（Node / SSR / 测试）时用同步回退，实例同样保留 RawNumber，与 Worker 分支语义一致。
+  const res = await runComputation<ValidateResult>(
+    { fn: 'validate', instanceText: text, schemaText, strict: true },
+    () => validateInstance(value, toPlainJson(schemaRaw), { strict: true })
+  )
   const warn = warnNote(res.warnings)
   if (res.valid) {
     return { payload: textPayload(text, 'json'), note: `校验通过，检查了 ${res.checked} 个节点${warn}${unsafeNote}` }

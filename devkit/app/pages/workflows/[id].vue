@@ -466,8 +466,10 @@ function sizeText(text: string): string {
 function exportJson() {
   const current = wf.value
   if (!current) return
+  // 流程名可能含路径分隔符等非法字符，先清洗；清洗后为空则回退 workflow
+  const name = sanitizeFilename(current.name) || 'workflow'
   // 走 store 的导出：密钥、私钥、IV、AAD 一律不落进文件
-  downloadText(`${current.name || 'workflow'}.json`, store.exportText(id.value), 'application/json')
+  downloadText(`${name}.json`, store.exportText(id.value), 'application/json')
 }
 
 /** 文件名清理：去掉首尾空白与路径分隔符/非法字符，避免下载名带目录或被系统拒绝 */
@@ -487,7 +489,9 @@ function outputFilename(binary: boolean): string {
     if (configured) return configured
     break
   }
-  const base = wf.value?.name ? `${wf.value.name}.out` : 'workflow-output'
+  // 流程名同样要清洗（非法字符会被系统拒绝或拼成目录），清洗后为空则回退 workflow-output
+  const safeName = sanitizeFilename(wf.value?.name ?? '')
+  const base = safeName ? `${safeName}.out` : 'workflow-output'
   return `${base}${binary ? '.bin' : '.txt'}`
 }
 

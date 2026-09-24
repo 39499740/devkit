@@ -3,7 +3,8 @@
  *
  * - hasWorker()：当前环境能否创建 Worker（浏览器为 true，Node / 测试为 false）；
  * - runComputation()：把一次纯计算（schema 校验 / JSONPath 求值）丢进 Worker 并加超时，
- *   超时后 terminate() 并 reject 中文错误，绝不悬挂主线程。
+ *   超时后 terminate() 并 reject 中文错误，绝不悬挂主线程；
+ *   无 Worker 或构造失败时使用调用方提供的同步回退 fallback()，保证 Node / SSR / 测试下功能可用。
  *
  * Worker 用 Vite 标准的 `new URL('./compute.worker.ts', import.meta.url)` 形式创建
  * （module worker），构建时会被 Vite 自动识别、打包并改写为正确的产物 URL。
@@ -18,13 +19,16 @@ interface ComputeReply<T> {
   error?: unknown
 }
 
-export function runComputation<T>(data: unknown, timeoutMs = 2000): Promise<T> {
+export function runComputation<T>(data: unknown, fallback: () => T, timeoutMs = 2000): Promise<T> {
+  // 无 Worker 环境（Node / SSR / 测试）：直接走调用方提供的同步回退，保证功能可用
+  if (!hasWorker()) return Promise.resolve().then(fallback)
   return new Promise<T>((resolve, reject) => {
     let worker: Worker
     try {
       worker = new Worker(new URL('./compute.worker.ts', import.meta.url), { type: 'module' })
-    } catch (e) {
-      reject(e instanceof Error ? e : new Error(String(e)))
+    } catch {
+      // Worker 构造失败（如 CSP 限制 module worker）时退回同步实现，而不是让步骤直接报错
+      resolve(fallback())
       return
     }
 
