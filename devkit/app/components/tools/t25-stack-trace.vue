@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
-import { localizeRegexMessage } from '~/utils/regex'
 
 const props = defineProps<{ tool: ToolMeta }>()
 const clipboard = useClipboard()
 
 const input = ref('')
-const bizPrefix = ref('^com\\.example\\.')
-const bizErr = ref('')
+// 字面前缀（非正则）：默认 com.example.，多个前缀用逗号或空白分隔
+const bizPrefix = ref('com.example.')
 const errDetail = ref('')
 
 const FRAMEWORK_PREFIXES = [
@@ -47,6 +46,23 @@ const CAUSED_RE = /^Caused by:\s*/
 function stripModule(fq: string): string {
   const i = fq.indexOf('/')
   return i >= 0 ? fq.slice(i + 1) : fq
+}
+
+/** 解析「业务包前缀」：按逗号 / 空白分隔的字面前缀（非正则），忽略空项 */
+function parseBizPrefixes(raw: string): string[] {
+  return raw
+    .split(/[,\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+/**
+ * 帧是否属于业务代码：按字面前缀匹配（startsWith 或包含），全程不做正则求值。
+ * 旧实现把用户可控的前缀编译成正则并对每一帧 test()，`^(a+)+$` 之类输入会冻结主线程；
+ * 改为字面匹配后不存在灾难性回溯。
+ */
+function isBusinessFrame(fqcn: string, prefixes: string[]): boolean {
+  return prefixes.some((p) => fqcn.startsWith(p) || fqcn.includes(p))
 }
 
 function looksLikeStackContination(line: string): boolean {
@@ -181,13 +197,13 @@ function parseTrace(text: string): Segment[] {
 }
 
 /** 帧分类 + 相邻同类型帧合并成组（框架组默认折叠） */
-function classifyAndGroup(chain: ExcInfo[], bizRe: RegExp, st: { business: number; framework: number; other: number }) {
+function classifyAndGroup(chain: ExcInfo[], bizPrefixes: string[], st: { business: number; framework: number; other: number }) {
   for (const exc of chain) {
     const flat: Frame[] = []
     for (const g of exc.groups) flat.push(...g.frames)
     const groups: FrameGroup[] = []
     for (const f of flat) {
-      if (bizRe.test(f.fqcn)) f.kind = 'business'
+      if (isBusinessFrame(f.fqcn, bizPrefixes)) f.kind = 'business'
       else if (FRAMEWORK_PREFIXES.some((p) => f.fqcn.startsWith(p))) f.kind = 'framework'
       else f.kind = 'other'
       st[f.kind]++
@@ -196,7 +212,7 @@ function classifyAndGroup(chain: ExcInfo[], bizRe: RegExp, st: { business: numbe
       else groups.push({ kind: f.kind, frames: [f], expanded: f.kind !== 'framework' })
     }
     exc.groups = groups
-    classifyAndGroup(exc.suppressed, bizRe, st)
+    classifyAndGroup(exc.suppressed, bizPrefixes, st)
   }
 }
 
@@ -254,7 +270,6 @@ const sig = () => JSON.stringify([input.value, bizPrefix.value])
 const run = useToolRun(sig)
 
 function execute() {
-  bizErr.value = ''
   errDetail.value = ''
   if (!input.value.trim()) {
     run.markIdle()
@@ -262,14 +277,7 @@ function execute() {
     stats.value = { excs: 0, biz: 0, framework: 0, other: 0, traces: 0, logs: 0 }
     return
   }
-  let bizRe: RegExp
-  try {
-    bizRe = new RegExp(bizPrefix.value)
-  } catch (e) {
-    bizErr.value = `业务包前缀不是合法正则：${localizeRegexMessage(errMessage(e), bizPrefix.value)}`
-    run.markFail(bizErr.value)
-    return
-  }
+  const bizPrefixes = parseBizPrefixes(bizPrefix.value)
   const segs = parseTrace(input.value)
   const st = { business: 0, framework: 0, other: 0 }
   let excs = 0
@@ -284,7 +292,7 @@ function execute() {
     if (seg.type === 'trace') {
       traces++
       countExc(seg.chain)
-      classifyAndGroup(seg.chain, bizRe, st)
+      classifyAndGroup(seg.chain, bizPrefixes, st)
     }
   }
   const logCount = segs.filter((s) => s.type === 'log').reduce((n, s) => n + (s as { lines: string[] }).lines.length, 0)
@@ -326,9 +334,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   <div class="t25">
     <div class="t25__toolbar">
       <div class="t25__biz">
-        <span class="t25__opt-label">业务包前缀（正则）</span>
-        <DkInput v-model="bizPrefix" mono placeholder="^com\.example\." :error="!!bizErr" />
-        <span v-if="bizErr" class="t25__biz-err">{{ bizErr }}</span>
+        <span class="t25__opt-label">业务包前缀（字面匹配）</span>
+        <DkInput v-model="bizPrefix" mono placeholder="com.example., org.mycompany." />
+        <span class="t25__hint tertiary">非正则，多个用逗号分隔</span>
       </div>
       <span class="grow"></span>
       <DkButton size="sm" variant="ghost" title="载入示例堆栈（业务异常 + Caused by + Suppressed + ... N more）" @click="input = SAMPLE; execute()">
@@ -456,7 +464,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
     <DkCollapse title="用法说明">
       <ul>
         <li>识别的堆栈元素：异常链头行、<code>at</code> 调用帧、<code>Caused by:</code>、<code>Suppressed:</code>、<code>... N more</code> 公共帧省略标记；混入的普通日志行标注「非堆栈内容」原样保留。</li>
-        <li>「业务包前缀」支持正则（默认 <code>^com\.example\.</code>），命中的帧高亮；java. / javax. / jdk. / sun. / org.springframework. / org.apache. / io.netty. 等常见框架帧默认折叠为一行，点击可展开。</li>
+        <li>「业务包前缀」按字面前缀匹配（非正则，默认 <code>com.example.</code>），多个前缀用逗号或空格分隔；命中前缀的帧高亮为业务帧。java. / javax. / jdk. / sun. / org.springframework. / org.apache. / io.netty. 等常见框架帧默认折叠为一行，点击可展开。</li>
         <li>复制整理文本 = 完整原文，但被折叠的框架帧替换为 <code>... N more (collapsed)</code> 行；复制原文 = 输入内容一字不动。</li>
         <li>Caused by 最深处通常接近根因，但需人工判断；本工具不自动定位根因，也不修改任何堆栈内容。</li>
       </ul>
@@ -485,9 +493,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   min-width: 320px;
   flex: 0 1 420px;
 }
-.t25__biz-err {
-  font-size: 12px;
-  color: var(--error);
+.t25__hint {
+  font-size: 11px;
+  white-space: nowrap;
 }
 .t25__opt-label {
   font-size: 12px;

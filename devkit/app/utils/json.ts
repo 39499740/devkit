@@ -86,7 +86,16 @@ export function toPlainJson(v: unknown): unknown {
   if (Array.isArray(v)) return v.map(toPlainJson)
   if (v && typeof v === 'object') {
     const out: Record<string, unknown> = {}
-    for (const [k, val] of Object.entries(v as Record<string, unknown>)) out[k] = toPlainJson(val)
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      // defineProperty：JSON 里字面量 "__proto__" 键必须保留为普通自有键，
+      // 用 out[k] = … 会触发 Object.prototype 的原型 setter，导致该键丢失且结果原型被改写。
+      Object.defineProperty(out, k, {
+        value: toPlainJson(val),
+        enumerable: true,
+        writable: true,
+        configurable: true
+      })
+    }
     return out
   }
   return v
@@ -309,7 +318,15 @@ export function toYamlJsonable(
   }
   if (v !== null && typeof v === 'object') {
     const o: Record<string, unknown> = {}
-    for (const [k, val] of Object.entries(v)) o[k] = toYamlJsonable(val, token, counter, rawMap, unsafe, joinKey(path, k))
+    for (const [k, val] of Object.entries(v)) {
+      // 与 toPlainJson 同理：保留字面量 "__proto__" 键，避免原型 setter 丢键 / 改原型
+      Object.defineProperty(o, k, {
+        value: toYamlJsonable(val, token, counter, rawMap, unsafe, joinKey(path, k)),
+        enumerable: true,
+        writable: true,
+        configurable: true
+      })
+    }
     return o
   }
   return v

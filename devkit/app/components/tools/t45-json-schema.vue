@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
 import { inferSchema, validateInstance, type Draft, type SchemaError } from '~/utils/jsonschema'
-import { toPlainJson } from '~/utils/json'
+import { jsonErrorPosition, localizeJsonMessage, toPlainJson } from '~/utils/json'
 import { runComputation } from '~/workflow/workers/run-compute'
 
 defineProps<{ tool: ToolMeta }>()
@@ -21,6 +21,8 @@ const errors = ref<SchemaError[]>([])
 const warnings = ref<string[]>([])
 const elapsed = ref(0)
 const status = ref<'idle' | 'pass' | 'fail'>('idle')
+/** 超时 / 求值异常时置位：状态栏显示「已中断」，不残留误导性的「耗时 0 ms」 */
+const interrupted = ref(false)
 
 const SAMPLE_DOC = `{
   "user": {
@@ -85,29 +87,61 @@ onMounted(() => {
   }
 })
 
+/** JSON 语法错误中文化：给出「第 X 行第 Y 列附近：<中文>」，不回显 V8 英文原文 */
+function localizeJsonParseError(e: unknown, text: string, what = 'JSON'): string {
+  const pos = jsonErrorPosition(e, text)
+  return pos
+    ? `${what} 解析失败：第 ${pos.line} 行第 ${pos.column} 列附近：${pos.message}`
+    : `${what} 解析失败：${localizeJsonMessage(errMessage(e))}`
+}
+
+/** 解析 JSON，语法错误时抛出已中文化的 Error */
+function parseJsonLocalized(text: string, what = 'JSON') {
+  try {
+    return parseJson(text)
+  } catch (e) {
+    throw new Error(localizeJsonParseError(e, text, what))
+  }
+}
+
+/**
+ * 求值异常中文化：已有中文错误原样保留；栈溢出给出深层嵌套提示；
+ * 其它无 CJK 的英文错误统一映射为中性中文。
+ */
+function localizeEvalError(e: unknown): string {
+  const msg = errMessage(e)
+  if (/[\u4e00-\u9fa5]/.test(msg)) return msg
+  if (/Maximum call stack/i.test(msg)) return '嵌套层级过深，超出计算上限，请减少嵌套层级'
+  return '表达式求值失败：请检查表达式与输入'
+}
+
 function generate() {
   runToken += 1
   busy.value = false
   if (!doc.value.trim()) {
     run.markIdle()
     status.value = 'idle'
+    interrupted.value = false
     return
   }
   const t0 = performance.now()
   try {
-    const { value } = parseJson(doc.value)
+    const { value } = parseJsonLocalized(doc.value)
     const schema = inferSchema(toPlainJson(value), { draft: draft.value, strict: strict.value })
     schemaText.value = JSON.stringify(schema, null, 2)
     errors.value = []
     warnings.value = strict.value ? ['严格模式已开启：生成了 additionalProperties: false'] : []
     status.value = 'pass'
+    interrupted.value = false
     elapsed.value = Math.round(performance.now() - t0)
     run.markOk(strict.value ? '已生成（严格模式）' : '已生成')
   } catch (e) {
     errors.value = []
     warnings.value = []
     status.value = 'idle'
-    run.markFail(errMessage(e))
+    // 解析 / 生成异常：状态栏显示「已中断」，不残留误导性耗时
+    interrupted.value = true
+    run.markFail(localizeEvalError(e))
   }
 }
 
@@ -118,29 +152,43 @@ async function validate() {
     run.markIdle()
     status.value = 'idle'
     errors.value = []
+    interrupted.value = false
     return
   }
   // 快照入参：Worker 消息与同步回退读到同一份输入
   const instanceText = doc.value
   const currentSchema = schemaText.value
   const useStrict = strict.value
+  // 先本地解析：语法错误直接给出中文定位，避免 Worker 回传 V8 英文
+  let instance: unknown
+  let schema: unknown
+  try {
+    instance = parseJsonLocalized(instanceText, 'JSON 文档').value
+    schema = parseJsonLocalized(currentSchema, 'JSON Schema').value
+  } catch (e) {
+    if (token !== runToken) return
+    busy.value = false
+    errors.value = []
+    warnings.value = []
+    status.value = 'idle'
+    interrupted.value = true
+    run.markFail(localizeEvalError(e))
+    return
+  }
   busy.value = true
   const t0 = performance.now()
   try {
     // 走 Worker + 超时，隔离用户 schema 里 pattern 的灾难性回溯；无 Worker 时同步回退。
     const res = await runComputation(
       { fn: 'validate', instanceText, schemaText: currentSchema, strict: useStrict },
-      () => {
-        const { value: instance } = parseJson(instanceText)
-        const { value: schema } = parseJson(currentSchema)
-        return validateInstance(toPlainJson(instance), toPlainJson(schema), { strict: useStrict })
-      },
+      () => validateInstance(toPlainJson(instance), toPlainJson(schema), { strict: useStrict }),
       2000
     )
     if (token !== runToken) return
     errors.value = res.errors
     warnings.value = res.warnings
     status.value = res.valid ? 'pass' : 'fail'
+    interrupted.value = false
     elapsed.value = Math.round(performance.now() - t0)
     if (res.valid) run.markOk(`校验通过，检查了 ${res.checked} 个 schema 节点`)
     else run.markFail(`校验失败 · ${res.errors.length} 个错误`)
@@ -149,7 +197,9 @@ async function validate() {
     errors.value = []
     warnings.value = []
     status.value = 'idle'
-    run.markFail(errMessage(e))
+    // 超时 / 求值异常：保留上次耗时，状态栏改显示「已中断」
+    interrupted.value = true
+    run.markFail(localizeEvalError(e))
   } finally {
     if (token === runToken) busy.value = false
   }
@@ -161,7 +211,7 @@ function formatSchema() {
     schemaText.value = JSON.stringify(value, null, 2)
     toast.success('Schema 已格式化')
   } catch (e) {
-    toast.warning(errMessage(e))
+    toast.warning(localizeJsonParseError(e, schemaText.value, 'Schema'))
   }
 }
 
@@ -180,7 +230,8 @@ const meta = computed(() => {
   const list: string[] = []
   if (doc.value) list.push(`JSON ${lineCount(doc.value)} 行`)
   if (schemaText.value) list.push(`Schema ${lineCount(schemaText.value)} 行`)
-  if (run.status.value === 'ok' || run.status.value === 'error') list.push(`耗时 ${elapsed.value} ms`)
+  if (run.status.value === 'ok') list.push(`耗时 ${elapsed.value} ms`)
+  else if (run.status.value === 'error') list.push(interrupted.value ? '已中断' : `耗时 ${elapsed.value} ms`)
   return list
 })
 
@@ -333,7 +384,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
                 </div>
               </div>
               <div class="t45__panelfoot">
-                <span v-if="status !== 'idle'">共 {{ errors.length }} 个错误 · 校验耗时 {{ elapsed }} ms</span>
+                <span v-if="interrupted">已中断 · 共 {{ errors.length }} 个错误</span>
+                <span v-else-if="status !== 'idle'">共 {{ errors.length }} 个错误 · 校验耗时 {{ elapsed }} ms</span>
                 <span v-else>尚未执行校验</span>
                 <span class="grow"></span>
                 <span>{{ strict ? '严格模式已开启' : '严格模式已关闭（format 仅提示）' }}</span>

@@ -410,10 +410,13 @@ function evalChain(base: unknown, ops: Op[], root: unknown): unknown {
   for (let i = 0; i < ops.length; i += 1) {
     const op = ops[i]!
     if (op.kind === 'field') {
-      out =
-        out && typeof out === 'object' && !Array.isArray(out)
-          ? (out as Record<string, unknown>)[op.name]
-          : null
+      if (out && typeof out === 'object' && !Array.isArray(out)) {
+        const rec = out as Record<string, unknown>
+        // 仅自身成员：不穿透到 toString/constructor/__proto__ 等原型成员
+        out = Object.prototype.hasOwnProperty.call(rec, op.name) ? rec[op.name] : null
+      } else {
+        out = null
+      }
       continue
     }
     if (op.kind === 'index') {
@@ -516,7 +519,15 @@ export function evalNode(node: Node, value: unknown, root: unknown): unknown {
       return node.items.map((it) => evalNode(it, value, root))
     case 'hash': {
       const obj: Record<string, unknown> = {}
-      for (const e of node.entries) obj[e.key] = evalNode(e.value, value, root)
+      // defineProperty：避免 JSON 字面量键 "__proto__" 触发原型 setter 而丢失该键
+      for (const e of node.entries) {
+        Object.defineProperty(obj, e.key, {
+          value: evalNode(e.value, value, root),
+          enumerable: true,
+          writable: true,
+          configurable: true
+        })
+      }
       return obj
     }
     case 'exprref':
@@ -664,8 +675,11 @@ function callFn(name: string, argNodes: Node[], value: unknown, root: unknown): 
     case 'merge': {
       const out: Record<string, unknown> = {}
       for (const a of args) {
-        if (a && typeof a === 'object' && !Array.isArray(a)) Object.assign(out, a)
-        else return null
+        if (a && typeof a === 'object' && !Array.isArray(a)) {
+          for (const [k, v] of Object.entries(a as Record<string, unknown>)) {
+            Object.defineProperty(out, k, { value: v, enumerable: true, writable: true, configurable: true })
+          }
+        } else return null
       }
       return out
     }

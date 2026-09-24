@@ -135,10 +135,22 @@ function stepStatus(i: number): StepResult['status'] | 'pending' {
   return results.value[i]?.status ?? 'pending'
 }
 
-/** 上游的完整载荷优先：二进制结果必须把 bytes 传下去，只传 Hex 文本会让下一步解不出来 */
-function inputOf(i: number) {
+/**
+ * 上游载荷：必须与 runner 的「失败继续」语义保持一致。
+ *
+ * runWorkflow 在 stopOnError=false 时，某步失败后 cur 不前进，下一步拿到的是
+ * 「最近一个成功步骤的输出」；找不到任何成功步骤时用流程输入。这里同样向前回溯
+ * 最近一个 status==='ok' 的上游结果，而不是机械地取 results[i-1]——失败步骤的
+ * payload 是空文本，直接取它会让「单步运行」与「运行全部」算出不同结果。
+ * 完整载荷优先：二进制结果必须把 bytes 传下去，只传 Hex 文本会让下一步解不出来。
+ */
+function inputOf(i: number): string | StepResult['payload'] {
   if (i === 0) return input.value
-  return results.value[i - 1]?.payload ?? input.value
+  for (let j = i - 1; j >= 0; j -= 1) {
+    const r = results.value[j]
+    if (r?.status === 'ok') return r.payload
+  }
+  return input.value
 }
 
 async function runAll() {
@@ -192,9 +204,12 @@ async function runOne(i: number) {
     toast.warning('该位置没有步骤可运行')
     return
   }
-  // 上游未运行就单步运行，会拿「流程输入」当上游，算出一个与链路不符的结果
+  // 上游完全没运行过时，run-all 会先算上游、再把它喂给本步；单步运行若直接拿流程输入
+  // 就会算出与链路不符的结果，所以这里拒绝。注意：上游「跑过但失败」不在此列——
+  // 那种情况下 run-all 也是回退到流程输入，inputOf() 回溯不到成功步骤时同样回退，
+  // 两者结果一致，允许单步运行才能复现 run-all 的结果。
   if (i > 0 && !results.value[i - 1]) {
-    toast.warning('上一步还没有结果：请先运行上一步，或点「运行全部」后再单步运行')
+    toast.warning('上游步骤还没有结果：请先运行上一步，或点「运行全部」后再单步运行')
     return
   }
   // 记录本次运行的代际：运行期间若配置变更（invalidateResults 使代际前进），结果不再对应当前配置

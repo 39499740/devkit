@@ -33,6 +33,34 @@ function payloadByteLength(payload: StepPayload): number {
   return new TextEncoder().encode(payload.text).length
 }
 
+/** 是否包含中文（CJK 统一表意文字） */
+function hasCJK(text: string): boolean {
+  return /[\u4e00-\u9fa5]/.test(text)
+}
+
+/**
+ * 步骤执行错误的兜底中文化：
+ * - 执行器主动抛出的中文错误（占绝大多数）原样保留，不吞掉其中的可读信息；
+ * - 引擎层英文错误（栈溢出、内存不足等）按已知模式翻成中性中文；
+ * - 其余「无中文且含拉丁字母」的未知英文错误统一兜底为中性中文，不再把引擎原文透传给用户。
+ */
+export function localizeRunError(e: unknown): string {
+  const msg = errMessage(e)
+  if (hasCJK(msg)) return msg
+  if (/maximum call stack/i.test(msg)) return '嵌套层级过深，超出计算上限，请减少嵌套层级'
+  if (/out of memory|allocation failed|array buffer allocation/i.test(msg)) {
+    return '数据规模过大，内存不足，请减小输入或分批处理'
+  }
+  if (/invalid (?:array )?length|invalid string length/i.test(msg)) {
+    return '数据长度超出计算上限，请减小输入后重试'
+  }
+  if (/is not a function|is not defined|null is not an object|undefined is not/i.test(msg)) {
+    return '执行器内部错误：请反馈该步骤类型与输入内容'
+  }
+  if (/[A-Za-z]/.test(msg)) return '执行失败：步骤执行时出现未预期的错误，请检查输入与参数后重试'
+  return msg
+}
+
 export async function runStep(
   step: WorkflowStep,
   input: string | StepPayload,
@@ -95,7 +123,7 @@ export async function runStep(
     logs.push(`输出 ${formatByteSize(payloadByteLength(res.payload))}${res.payload.kind === 'bytes' ? '（二进制结果，界面按 Hex 展示）' : ''}`)
     return finish('ok', res.payload, res.note)
   } catch (e) {
-    return finish('fail', textPayload(''), errMessage(e))
+    return finish('fail', textPayload(''), localizeRunError(e))
   }
 }
 
@@ -107,6 +135,9 @@ export async function runWorkflow(
 ): Promise<WorkflowRunResult> {
   const t0 = Date.now()
   const results: StepResult[] = []
+  // cur 只在步骤成功时前进：失败继续（stopOnError=false）时，后续步骤拿到的是
+  // 「最近一个成功步骤的输出」，没有任何成功步骤时回退到流程输入。
+  // 页面单步运行的 inputOf() 必须与这里保持一致，否则两者会算出不同结果。
   let cur = asPayload(input)
   let status: 'ok' | 'fail' = 'ok'
   const start = Math.max(0, opts.onlyFrom ?? 0)

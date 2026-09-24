@@ -191,6 +191,11 @@ function parseFilter(src: string): FilterNode {
   return out
 }
 
+/** 仅当属性是对象自身（非原型链）成员时才视为存在，避免穿透到 toString/constructor/__proto__ 等 */
+function hasOwn(rec: object, name: string): boolean {
+  return Object.prototype.hasOwnProperty.call(rec, name)
+}
+
 function getPath(current: unknown, root: unknown, node: { path: (string | number)[]; root: boolean }): unknown {
   let cur: unknown = node.root ? root : current
   for (const key of node.path) {
@@ -200,7 +205,9 @@ function getPath(current: unknown, root: unknown, node: { path: (string | number
       cur = cur[key]
     } else {
       if (typeof cur !== 'object') return undefined
-      cur = (cur as Record<string, unknown>)[key]
+      const rec = cur as Record<string, unknown>
+      if (!hasOwn(rec, key)) return undefined
+      cur = rec[key]
     }
   }
   return cur
@@ -387,7 +394,7 @@ export function evalJsonPath(data: unknown, expr: string): { matches: PathMatch[
             else if (seg.kind === 'name') {
               if (v && typeof v === 'object' && !Array.isArray(v)) {
                 const rec = v as Record<string, unknown>
-                if (seg.name in rec) next.push({ path: [...base, seg.name], value: rec[seg.name] })
+                if (hasOwn(rec, seg.name)) next.push({ path: [...base, seg.name], value: rec[seg.name] })
               }
             } else if (Array.isArray(v)) {
               const idx = seg.index < 0 ? v.length + seg.index : seg.index
@@ -401,7 +408,7 @@ export function evalJsonPath(data: unknown, expr: string): { matches: PathMatch[
         } else if (seg.kind === 'name') {
           if (item.value && typeof item.value === 'object' && !Array.isArray(item.value)) {
             const rec = item.value as Record<string, unknown>
-            if (seg.name in rec) next.push({ path: [...item.path, seg.name], value: rec[seg.name] })
+            if (hasOwn(rec, seg.name)) next.push({ path: [...item.path, seg.name], value: rec[seg.name] })
           }
         } else {
           if (Array.isArray(item.value)) {
@@ -441,7 +448,7 @@ export function evalJsonPath(data: unknown, expr: string): { matches: PathMatch[
             }
           } else if (item.value && typeof item.value === 'object' && !Array.isArray(item.value)) {
             const rec = item.value as Record<string, unknown>
-            if (it in rec) next.push({ path: [...item.path, it], value: rec[it] })
+            if (hasOwn(rec, it)) next.push({ path: [...item.path, it], value: rec[it] })
           }
         }
         continue

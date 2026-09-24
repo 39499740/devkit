@@ -74,6 +74,97 @@ function countValue(v: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+/** 实例是否为数值（number 或 RawNumber）：数值关键字只对这两类实例生效 */
+function isNumericInstance(v: unknown): v is number | RawNumber {
+  return typeof v === 'number' || isRawNumber(v)
+}
+
+/** 两个 Comparable 是否数值相等（bigint 与 number 混比时按数值，避免 1n === 1 为 false） */
+function comparableEqual(a: Comparable, b: Comparable): boolean {
+  if (typeof a === 'bigint' && typeof b === 'bigint') return a === b
+  if (typeof a === 'bigint' || typeof b === 'bigint') return Number(a) === Number(b)
+  return a === b
+}
+
+/**
+ * 键序无关的深比较，用于 const / enum：
+ * - 对象按键名排序后逐键递归，数组按序递归；
+ * - RawNumber 保留既有语义：与 number 按数值比较、与字符串按原文比较、两个 RawNumber 按数值比较。
+ * 替代原先依赖键顺序的 JSON.stringify 比较。
+ */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (isRawNumber(a) || isRawNumber(b)) {
+    const rawA = isRawNumber(a) ? a.raw : null
+    const rawB = isRawNumber(b) ? b.raw : null
+    if (rawA !== null && rawB !== null) {
+      const ca = rawToComparable(rawA)
+      const cb = rawToComparable(rawB)
+      if (ca !== null && cb !== null) return comparableEqual(ca, cb)
+      return rawA === rawB
+    }
+    const raw = (rawA ?? rawB) as string
+    const other = rawA !== null ? b : a
+    if (typeof other === 'number') {
+      if (!Number.isFinite(other)) return false
+      const c = rawToComparable(raw)
+      return c !== null && comparableEqual(c, Number.isInteger(other) ? BigInt(other) : other)
+    }
+    if (typeof other === 'string') return raw === other
+    return false
+  }
+  if (a === b) return true
+  if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false
+  const aArr = Array.isArray(a)
+  if (aArr !== Array.isArray(b)) return false
+  if (aArr) {
+    const A = a as unknown[]
+    const B = b as unknown[]
+    if (A.length !== B.length) return false
+    for (let i = 0; i < A.length; i += 1) if (!deepEqual(A[i], B[i])) return false
+    return true
+  }
+  const A = a as Record<string, unknown>
+  const B = b as Record<string, unknown>
+  const ak = Object.keys(A)
+  if (ak.length !== Object.keys(B).length) return false
+  for (const k of ak) {
+    if (!Object.prototype.hasOwnProperty.call(B, k)) return false
+    if (!deepEqual(A[k], B[k])) return false
+  }
+  return true
+}
+
+/**
+ * uniqueItems 用的规范键：对象键名排序、RawNumber / number 按数值归一，
+ * 与 deepEqual 的「键序无关」语义一致，但保持 O(n·log n) 的集合判重。
+ */
+function canonicalKey(v: unknown): string {
+  if (isRawNumber(v)) {
+    const c = rawToComparable(v.raw)
+    return 'n:' + (c === null ? v.raw : String(c))
+  }
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v)) return 'n:' + String(v)
+    return 'n:' + (Number.isInteger(v) ? BigInt(v).toString() : String(v))
+  }
+  if (v === null) return 'null'
+  if (typeof v === 'string') return 's:' + JSON.stringify(v)
+  if (typeof v === 'boolean') return 'b:' + v
+  if (Array.isArray(v)) return '[' + v.map((x) => canonicalKey(x)).join(',') + ']'
+  if (typeof v === 'object') {
+    const obj = v as Record<string, unknown>
+    return (
+      '{' +
+      Object.keys(obj)
+        .sort()
+        .map((k) => JSON.stringify(k) + ':' + canonicalKey(obj[k]))
+        .join(',') +
+      '}'
+    )
+  }
+  return typeof v + ':' + String(v)
+}
+
 /** 面向用户的取值展示：RawNumber 显示数字原文，避免泄漏 {"raw":…} */
 function show(v: unknown): string {
   if (isRawNumber(v)) return v.raw
@@ -222,18 +313,8 @@ export function validateInstance(
   }
 
   function eq(a: unknown, b: unknown): boolean {
-    // RawNumber 与普通值（或另一个 RawNumber）比较：数字按数值、大整数按原文
-    if (isRawNumber(a) || isRawNumber(b)) {
-      const rawA = isRawNumber(a) ? a.raw : null
-      const rawB = isRawNumber(b) ? b.raw : null
-      if (rawA !== null && rawB !== null) return rawA === rawB
-      const raw = (rawA ?? rawB) as string
-      const other = rawA !== null ? b : a
-      if (typeof other === 'number') return Number(raw) === other
-      if (typeof other === 'string') return raw === other
-      return false
-    }
-    return JSON.stringify(a) === JSON.stringify(b)
+    // 键序无关的深比较；RawNumber 语义见 deepEqual
+    return deepEqual(a, b)
   }
 
   function walk(inst: unknown, sch: unknown, pointer: string, spath: string, depth: number) {
@@ -360,7 +441,8 @@ export function validateInstance(
       }
     }
 
-    const num = toComparable(inst)
+    // 数值关键字仅作用于 number / RawNumber 实例：字符串、布尔、数组、对象、null 一律跳过
+    const num = isNumericInstance(inst) ? toComparable(inst) : null
     if (num !== null) {
       const min = toComparable(s.minimum)
       if (min !== null && num < min) {
@@ -394,7 +476,8 @@ export function validateInstance(
         push(pointer, `${spath}/maxItems`, 'maxItems', `至多 ${maxItems} 项，当前 ${inst.length} 项`)
       }
       if (s.uniqueItems === true) {
-        const seen = new Set(inst.map((v) => JSON.stringify(v)))
+        // 键序无关的规范键：{a:1,b:2} 与 {b:2,a:1} 视为重复
+        const seen = new Set(inst.map((v) => canonicalKey(v)))
         if (seen.size !== inst.length) push(pointer, `${spath}/uniqueItems`, 'uniqueItems', '数组元素存在重复')
       }
       const prefix = Array.isArray(s.prefixItems) ? (s.prefixItems as unknown[]) : null

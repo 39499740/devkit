@@ -2,7 +2,7 @@
 import type { ToolMeta } from '~/data/tools'
 import { getTool } from '~/data/tools'
 import { evalJsonPath, jsonPathSamples } from '~/utils/jsonpath'
-import { toPlainJson } from '~/utils/json'
+import { jsonErrorPosition, localizeJsonMessage, toPlainJson } from '~/utils/json'
 import { evalJmesPath, jmesPathSamples } from '~/utils/jmespath'
 import { runComputation } from '~/workflow/workers/run-compute'
 
@@ -83,6 +83,25 @@ function resultSummary(value: unknown): string {
   return `单个值 · ${value === null ? 'null' : typeof value}`
 }
 
+/** JSON 语法错误中文化：给出「第 X 行第 Y 列附近：<中文>」，不回显 V8 英文原文 */
+function localizeJsonParseError(e: unknown, text: string): string {
+  const pos = jsonErrorPosition(e, text)
+  return pos
+    ? `JSON 解析失败：第 ${pos.line} 行第 ${pos.column} 列附近：${pos.message}`
+    : `JSON 解析失败：${localizeJsonMessage(errMessage(e))}`
+}
+
+/**
+ * 求值异常中文化：已有中文错误原样保留（如「必须以 $ 开头」）；
+ * 栈溢出给出明确的深层嵌套提示；其它无 CJK 的英文错误统一映射为中性中文。
+ */
+function localizeQueryError(e: unknown): string {
+  const msg = errMessage(e)
+  if (/[\u4e00-\u9fa5]/.test(msg)) return msg
+  if (/Maximum call stack/i.test(msg)) return '嵌套层级过深，超出计算上限，请减少嵌套层级'
+  return '表达式求值失败：请检查表达式与输入'
+}
+
 async function execute() {
   if (!input.value.trim()) {
     runToken += 1
@@ -98,6 +117,19 @@ async function execute() {
   const dataText = input.value
   const query = expr.value
   const langSnapshot = lang.value
+  // 先本地解析 JSON：语法错误直接给出中文定位，避免 Worker 回传 V8 英文
+  let data: unknown
+  try {
+    data = toPlainJson(parseJson(dataText).value)
+  } catch (e) {
+    if (token !== runToken) return
+    busy.value = false
+    resultText.value = ''
+    matches.value = []
+    warnings.value = []
+    run.markFail(localizeJsonParseError(e, dataText))
+    return
+  }
   busy.value = true
   const t0 = performance.now()
   try {
@@ -107,10 +139,10 @@ async function execute() {
       langSnapshot === 'jsonpath'
         ? await runComputation(
             { fn: 'path', dataText, expr: query },
-            () => evalJsonPath(toPlainJson(parseJson(dataText).value), query),
+            () => evalJsonPath(data, query),
             2000
           )
-        : evalJmesPath(toPlainJson(parseJson(dataText).value), query)
+        : evalJmesPath(data, query)
     if (token !== runToken) return
     matches.value = res.matches
     warnings.value = res.warnings
@@ -126,7 +158,7 @@ async function execute() {
     resultText.value = ''
     matches.value = []
     warnings.value = []
-    run.markFail(errMessage(e))
+    run.markFail(localizeQueryError(e))
   } finally {
     if (token === runToken) busy.value = false
   }

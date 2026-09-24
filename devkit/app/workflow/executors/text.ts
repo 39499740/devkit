@@ -77,6 +77,19 @@ function parseJsonLocalized(text: string, what = 'JSON') {
   }
 }
 
+/**
+ * JSONPath / JMESPath 求值异常中文化：
+ * - 已有中文错误原样保留（不吞掉「必须以 $ 开头」这类明确提示）；
+ * - 栈溢出（深层嵌套）给出「嵌套层级过深」的中文提示；
+ * - 其它无 CJK 的英文错误统一映射为中性中文，不把引擎英文原文抛给用户。
+ */
+function localizeEvalError(e: unknown): Error {
+  const msg = errMessage(e)
+  if (/[\u4e00-\u9fa5]/.test(msg)) return new Error(msg)
+  if (/Maximum call stack/i.test(msg)) return new Error('嵌套层级过深，超出计算上限，请减少嵌套层级')
+  return new Error('表达式求值失败：请检查表达式与输入')
+}
+
 const base64Decode: StepExecutor = (input) => {
   const src = requireText(input, 'Base64 解码')
   const res = base64ToBytes(src.trim())
@@ -217,10 +230,16 @@ const jsonpath: StepExecutor = async (input, config) => {
   const expr = configText(config, 'expr', '$').trim() || '$'
   const { value } = parseJsonLocalized(text)
   // 有 Worker 时把原始 JSON 文本交给 Worker 求值，隔离 =~ 正则的灾难性回溯；无 Worker 时用同步回退
-  const res = await runComputation<{ matches: { value: unknown }[]; warnings: string[] }>(
-    { fn: 'path', dataText: text, expr },
-    () => evalJsonPath(toPlainJson(value), expr)
-  )
+  let res: { matches: { value: unknown }[]; warnings: string[] }
+  try {
+    res = await runComputation<{ matches: { value: unknown }[]; warnings: string[] }>(
+      { fn: 'path', dataText: text, expr },
+      () => evalJsonPath(toPlainJson(value), expr)
+    )
+  } catch (e) {
+    // 深层嵌套会抛 RangeError（Maximum call stack…）；已有中文错误保留，其它英文错误兜底中文
+    throw localizeEvalError(e)
+  }
   if (!res.matches.length) throw new Error('匹配 0 项：检查表达式与字段名（区分大小写）')
   const out = JSON.stringify(
     res.matches.length === 1 ? res.matches[0]!.value : res.matches.map((m) => m.value),
@@ -238,7 +257,13 @@ const jmespath: StepExecutor = (input, config) => {
   const expr = configText(config, 'expr').trim()
   if (!expr) throw new Error('JMESPath 表达式为空：请在步骤参数里填写表达式')
   const { value } = parseJsonLocalized(text)
-  const res = evalJmesPath(toPlainJson(value), expr)
+  let res: { matches: { value: unknown }[]; warnings: string[] }
+  try {
+    res = evalJmesPath(toPlainJson(value), expr)
+  } catch (e) {
+    // 深层嵌套会抛 RangeError（Maximum call stack…）；已有中文错误保留，其它英文错误兜底中文
+    throw localizeEvalError(e)
+  }
   if (!res.matches.length) throw new Error(`匹配 0 项：${res.warnings[0] ?? '检查表达式与字段名'}`)
   const out = JSON.stringify(
     res.matches.length === 1 ? res.matches[0]!.value : res.matches.map((m) => m.value),
