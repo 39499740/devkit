@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
+import { jsonErrorPosition, localizeJsonMessage } from '~/utils/json'
 import { formatXml, minifyXml, xmlToJson, jsonToXml, queryXPath, type XPathMatch } from '~/utils/xml'
 
 defineProps<{ tool: ToolMeta }>()
@@ -129,7 +130,18 @@ function execute() {
     matches.value = []
     warnings.value = []
     highlight.value = ''
-    run.markFail(errMessage(e))
+    // JSON → XML 的输入是 JSON，解析失败时按其它 JSON 工具页的口径给出中文定位，
+    // 不再直接回显 V8 英文原文；其余模式（XML / XPath）沿用 XML 工具自身的中文错误。
+    if (mode.value === 'convert' && direction.value === 'json2xml') {
+      const pos = jsonErrorPosition(e, input.value)
+      run.markFail(
+        pos
+          ? `JSON 解析失败：第 ${pos.line} 行第 ${pos.column} 列附近：${pos.message}`
+          : `JSON 解析失败：${localizeJsonMessage(errMessage(e))}`
+      )
+    } else {
+      run.markFail(errMessage(e))
+    }
   }
 }
 

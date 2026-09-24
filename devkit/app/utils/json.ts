@@ -381,10 +381,14 @@ export function toYamlJsonable(
   return v
 }
 
-/** 把 dump 结果中的占位符回填为数字原文；无占位符时原样返回 */
+/**
+ * 把 dump 结果中的占位符回填为数字原文；无占位符时原样返回。
+ * 占位符编号用 `\d+` 而非固定 6 位：编号 ≥ 1,000,000 时 padStart(6) 不再补齐，
+ * 占位符会多出一位；固定 `\d{6}` 匹配不到就会把占位符原样泄漏到 YAML 里。
+ */
 export function applyYamlRawMap(dumped: string, token: string, rawMap: Map<string, string>): string {
   if (!rawMap.size) return dumped
-  return dumped.replace(new RegExp(escapeReg(token) + '\\d{6}zz', 'g'), (m) => rawMap.get(m) ?? m)
+  return dumped.replace(new RegExp(escapeReg(token) + '\\d+zz', 'g'), (m) => rawMap.get(m) ?? m)
 }
 
 /** 从 JSON.parse 错误中提取行列位置 */

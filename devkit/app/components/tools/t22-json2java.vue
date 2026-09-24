@@ -291,7 +291,9 @@ function analyzeMerged(objs: Record<string, unknown>[], name: string, path: stri
   }
   for (const k of keys) {
     const fp = `${path}[].${k}`
-    const present = objs.filter((o) => k in o).map((o) => o[k])
+    // 必须用自有属性判定：`k in o` 会命中 constructor / toString 等原型成员，
+    // 把本不存在的字段当成存在（还会误取到 Object 构造函数）。
+    const present = objs.filter((o) => Object.prototype.hasOwnProperty.call(o, k)).map((o) => o[k])
     const nonNull = present.filter((v) => v !== null)
     const hasNull = present.some((v) => v === null) || present.length < objs.length
     if (!nonNull.length) {

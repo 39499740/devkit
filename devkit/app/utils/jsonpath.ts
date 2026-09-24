@@ -230,7 +230,8 @@ export function evalFilter(node: FilterNode, current: unknown, root: unknown): b
       const b = evalFilterValue(node.b, current, root)
       if (node.op === '=~') {
         if (typeof a !== 'string' || typeof b !== 'string') return false
-        // 不做静态风险硬门禁：右值正则在 Worker 中执行并带超时保护，静态启发式会误伤合法表达式
+        // 不做静态 ReDoS 硬门禁：启发式会误伤合法正则（如 ^[a-z]+(\.[a-z]+)*$），
+        // 而工作流/工具页的求值均经 Worker + 2s 超时兜底，主线程不会被冻结。
         try {
           return new RegExp(b).test(a)
         } catch {

@@ -55,12 +55,33 @@ export function openTag(el: Element): string {
   return `<${el.tagName}${attrs ? ` ${attrs}` : ''}`
 }
 
-function escapeText(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+/**
+ * XML 1.0 非法控制字符：U+0000–U+0008 / U+000B / U+000C / U+000E–U+001F。
+ * 直接写进文本或属性会让产物无法被 XML 解析器解析（Chromium/Firefox 报 parsererror）。
+ * 这里统一替换为 `&#xFFFD;`（替换字符）；U+0009(Tab) / U+000A(LF) / U+000D(CR) 是合法字符，保持原样。
+ */
+const XML_INVALID_CHAR_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/
+const XML_INVALID_CHAR_G = /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g
+
+const CONTROL_CHAR_WARNING =
+  '检测到 XML 1.0 非法控制字符（U+0000–U+0008 / U+000B / U+000C / U+000E–U+001F），已替换为 &#xFFFD; 以保证输出可解析'
+
+/** 文本转义：先转义 & < >，再替换非法控制字符（控制字符不是 &，不会被二次转义成 &amp;#xFFFD;） */
+export function escapeText(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(XML_INVALID_CHAR_G, '&#xFFFD;')
 }
 
-function escapeAttr(s: string): string {
+export function escapeAttr(s: string): string {
   return escapeText(s).replace(/"/g, '&quot;')
+}
+
+/** 字符串里是否含 XML 1.0 非法控制字符（非全局正则，避免 lastIndex 状态） */
+function hasInvalidXmlChar(s: string): boolean {
+  return XML_INVALID_CHAR_RE.test(s)
 }
 
 /** 元素子节点里有没有元素（决定一段纯空白是不是「元素之间的缩进」） */
@@ -86,14 +107,68 @@ function hasSignificantText(el: Element): boolean {
   })
 }
 
-/** 原文里的 XML 声明与 DOCTYPE（DOM 不保留声明文本，DOCTYPE 内部子集也会丢，这里按原文取回） */
-function extractProlog(text: string): { declaration: string | null; doctype: string | null } {
-  const head = text.slice(0, text.indexOf('<', text.indexOf('<') + 1) + 1)
-  const scope = text.slice(0, Math.max(0, text.length))
-  const decl = /^\s*<\?xml[\s\S]*?\?>/.exec(scope)
-  void head
-  const dt = /<!DOCTYPE[^>[]*(?:\[[\s\S]*?\])?\s*>/i.exec(scope)
-  return { declaration: decl ? decl[0].trim() : null, doctype: dt ? dt[0].trim() : null }
+/**
+ * 原文里的 XML 声明与 DOCTYPE（DOM 不保留声明文本，DOCTYPE 内部子集也会丢，这里按原文取回）。
+ * 只在「文档前导区域」识别：跳过前导空白 / 注释 / 处理指令 / XML 声明，遇到根元素起点即停止。
+ * 因此注释或 CDATA 里的 `<!DOCTYPE …>` 不会被误当成真实声明（旧实现用整篇文本匹配会误报）。
+ */
+export function extractProlog(text: string): { declaration: string | null; doctype: string | null } {
+  let declaration: string | null = null
+  let doctype: string | null = null
+  let i = 0
+  const n = text.length
+  while (i < n) {
+    while (i < n && /\s/.test(text[i]!)) i += 1
+    if (i >= n) break
+    // XML 声明只能出现在最前导；`<?xml-stylesheet?>` 这类处理指令走下面的通用 PI 分支
+    if (declaration === null && /^<\?xml[\s?]/.test(text.slice(i, i + 6))) {
+      const end = text.indexOf('?>', i + 5)
+      if (end === -1) break
+      declaration = text.slice(i, end + 2).trim()
+      i = end + 2
+      continue
+    }
+    if (text.startsWith('<!--', i)) {
+      const end = text.indexOf('-->', i + 4)
+      if (end === -1) break
+      i = end + 3
+      continue
+    }
+    if (text.startsWith('<?', i)) {
+      const end = text.indexOf('?>', i + 2)
+      if (end === -1) break
+      i = end + 2
+      continue
+    }
+    if (/^<!doctype/i.test(text.slice(i, i + 9))) {
+      // 扫描到配对 '>'：跳过引号里的内容与内部子集 [...]（内部子集可含 '>'）
+      let j = i + 9
+      let inSubset = false
+      let quote: string | null = null
+      while (j < n) {
+        const ch = text[j]!
+        if (quote) {
+          if (ch === quote) quote = null
+        } else if (ch === '"' || ch === "'") {
+          quote = ch
+        } else if (ch === '[') {
+          inSubset = true
+        } else if (ch === ']') {
+          inSubset = false
+        } else if (ch === '>' && !inSubset) {
+          j += 1
+          break
+        }
+        j += 1
+      }
+      doctype = text.slice(i, j).trim()
+      i = j
+      continue
+    }
+    // 遇到根元素 / 其它内容：前导区域结束
+    break
+  }
+  return { declaration, doctype }
 }
 
 function serializeExact(node: Node): string {
@@ -216,9 +291,10 @@ export function elementToJson(el: Element): unknown {
   const obj: Record<string, unknown> = {}
   for (const a of Array.from(el.attributes)) setOwnKey(obj, `@${a.name}`, a.value)
   const childEls = Array.from(el.children)
+  // 文本节点与 CDATA 一起按出现顺序拼接（CDATA 是显式数据，即使全空白也不按「缩进」丢弃）；
   // 保留文本节点的原始值再拼接：逐个 trim 会把 <p>Hello <b>w</b>!</p> 的 "Hello " 与 "!" 粘成 "Hello!"
   const text = Array.from(el.childNodes)
-    .filter((n) => n.nodeType === 3 && (n.nodeValue ?? '').trim() !== '')
+    .filter((n) => n.nodeType === 4 || (n.nodeType === 3 && (n.nodeValue ?? '').trim() !== ''))
     .map((n) => n.nodeValue ?? '')
     .join('')
     .trim()
@@ -271,6 +347,18 @@ function pushWarning(warnings: string[], message: string) {
   if (!warnings.includes(message)) warnings.push(message)
 }
 
+/** 转义文本并在含非法控制字符时追加告警（不静默丢弃） */
+function escapeTextChecked(s: string, warnings: string[]): string {
+  if (hasInvalidXmlChar(s)) pushWarning(warnings, CONTROL_CHAR_WARNING)
+  return escapeText(s)
+}
+
+/** 转义属性值并在含非法控制字符时追加告警 */
+function escapeAttrChecked(s: string, warnings: string[]): string {
+  if (hasInvalidXmlChar(s)) pushWarning(warnings, CONTROL_CHAR_WARNING)
+  return escapeAttr(s)
+}
+
 /**
  * 非法属性名（含 `@` 后为空）不能直接写进开标签，否则产出 `<root 1bad="x">` / `<root ="x">`
  * 这类非法 XML（浏览器 parsererror），而调用方却拿到「成功 + 无告警」的结果。
@@ -303,7 +391,7 @@ function writeJson(tag: string, value: unknown, depth: number, out: string[], wa
     return
   }
   if (typeof value !== 'object') {
-    out.push(`${pad}<${name}>${escapeText(String(value))}</${name}>`)
+    out.push(`${pad}<${name}>${escapeTextChecked(String(value), warnings)}</${name}>`)
     return
   }
   const entries = Object.entries(value as Record<string, unknown>)
@@ -318,11 +406,11 @@ function writeJson(tag: string, value: unknown, depth: number, out: string[], wa
     if (k.startsWith('@')) {
       const raw = k.slice(1)
       if (XML_NAME_RE.test(raw)) {
-        attrs.push(`${raw}="${escapeAttr(String(v))}"`)
+        attrs.push(`${raw}="${escapeAttrChecked(String(v), warnings)}"`)
         continue
       }
       const fallback = safeAttrName(raw, usedAttrNames)
-      attrs.push(`${fallback}="${escapeAttr(String(v))}"`)
+      attrs.push(`${fallback}="${escapeAttrChecked(String(v), warnings)}"`)
       if (raw === '') {
         pushWarning(warnings, `JSON 键 "@" 的属性名为空，已改用 ${fallback} 属性承载原值`)
       } else {
@@ -336,12 +424,12 @@ function writeJson(tag: string, value: unknown, depth: number, out: string[], wa
   const textEntry = entries.find(([k]) => k === '#text')
   const attrStr = attrs.length ? ` ${attrs.join(' ')}` : ''
   if (!children.length) {
-    if (textEntry) out.push(`${pad}<${name}${attrStr}>${escapeText(String(textEntry[1]))}</${name}>`)
+    if (textEntry) out.push(`${pad}<${name}${attrStr}>${escapeTextChecked(String(textEntry[1]), warnings)}</${name}>`)
     else out.push(`${pad}<${name}${attrStr}/>`)
     return
   }
   out.push(`${pad}<${name}${attrStr}>`)
-  if (textEntry) out.push(`${pad}  ${escapeText(String(textEntry[1]))}`)
+  if (textEntry) out.push(`${pad}  ${escapeTextChecked(String(textEntry[1]), warnings)}`)
   for (const [k, v] of children) {
     if (!XML_NAME_RE.test(k)) {
       writeJson('item', v, depth + 1, out, warnings)
@@ -361,6 +449,54 @@ export interface XPathMatch {
   /** 源文本中的出现位置，用于高亮（-1 表示未定位到） */
   from: number
   to: number
+}
+
+/** 标量 XPath 结果类型（number / string / boolean） */
+export type XPathScalarType = 'number' | 'string' | 'boolean'
+/** 查询结果类型：节点集或三种标量 */
+export type XPathResultKind = 'nodeset' | XPathScalarType
+
+export interface XPathQueryResult {
+  /** 节点集匹配（标量结果时为空数组），保持既有 { path, value, type, from, to } 结构 */
+  matches: XPathMatch[]
+  warnings: string[]
+  /** 标量结果值（number / string / boolean）；节点集结果为 null */
+  value: number | string | boolean | null
+  /** 结果类型：节点集为 nodeset，其余为 number / string / boolean */
+  type: XPathResultKind
+}
+
+/** 标量结果类型（number / string / boolean）；节点集或未知类型返回 null */
+function scalarKind(result: XPathResult): XPathScalarType | null {
+  if (result.resultType === XPathResult.NUMBER_TYPE) return 'number'
+  if (result.resultType === XPathResult.STRING_TYPE) return 'string'
+  if (result.resultType === XPathResult.BOOLEAN_TYPE) return 'boolean'
+  return null
+}
+
+/** 把 XPath 节点集统一收集成数组，兼容快照 / 迭代器 / 单节点三种返回方式（ANY_TYPE 下多为迭代器） */
+function collectXPathNodes(result: XPathResult): Node[] {
+  const rt = result.resultType
+  const nodes: Node[] = []
+  if (rt === XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE || rt === XPathResult.ORDERED_NODE_SNAPSHOT_TYPE) {
+    for (let i = 0; i < result.snapshotLength; i += 1) {
+      const node = result.snapshotItem(i)
+      if (node) nodes.push(node)
+    }
+    return nodes
+  }
+  if (rt === XPathResult.UNORDERED_NODE_ITERATOR_TYPE || rt === XPathResult.ORDERED_NODE_ITERATOR_TYPE) {
+    let node = result.iterateNext()
+    while (node) {
+      nodes.push(node)
+      node = result.iterateNext()
+    }
+    return nodes
+  }
+  if (rt === XPathResult.ANY_UNORDERED_NODE_TYPE || rt === XPathResult.FIRST_ORDERED_NODE_TYPE) {
+    if (result.singleNodeValue) nodes.push(result.singleNodeValue)
+  }
+  return nodes
 }
 
 function nodePath(node: Node): string {
@@ -539,12 +675,12 @@ function locate(
   return at === -1 ? { from: -1, to: -1 } : { from: at, to: at + text.length }
 }
 
-/** XPath 查询：支持命名空间前缀映射；查不到或表达式非法时抛出可读错误 */
+/** XPath 查询：支持命名空间前缀映射；节点集返回 matches，标量（number/string/boolean）返回 value/type；表达式非法时抛出可读错误 */
 export function queryXPath(
   text: string,
   expression: string,
   namespaces: { prefix: string; uri: string }[] = []
-): { matches: XPathMatch[]; warnings: string[] } {
+): XPathQueryResult {
   const { doc, warnings } = parse(text)
   const expr = expression.trim()
   if (!expr) throw new Error('请输入 XPath 表达式')
@@ -557,22 +693,32 @@ export function queryXPath(
   }
   let result: XPathResult
   try {
-    result = doc.evaluate(expr, doc, resolver as never, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null)
+    // ANY_TYPE：让 count()/string()/boolean() 等数值/字符串/布尔结果按真实类型返回，
+    // 而不是被当成节点集（旧实现固定 ORDERED_NODE_SNAPSHOT_TYPE，标量结果 snapshotLength 为 0 → 误报「表达式无效」）
+    result = doc.evaluate(expr, doc, resolver as never, XPathResult.ANY_TYPE, null)
   } catch {
     const shown = expr.length > 60 ? `${expr.slice(0, 60)}…` : expr
     throw new Error(
       `XPath 表达式无效：请检查路径语法、括号与引号是否配对（表达式：${shown}）`
     )
   }
-  if (!result.snapshotLength) {
+
+  // 标量结果：直接返回 value / type，matches 为空数组
+  const kind = scalarKind(result)
+  if (kind) {
+    const value =
+      kind === 'number' ? result.numberValue : kind === 'string' ? result.stringValue : result.booleanValue
+    return { matches: [], warnings, value, type: kind }
+  }
+
+  const nodes = collectXPathNodes(result)
+  if (!nodes.length) {
     warnings.push('没有匹配到节点，检查路径大小写与层级')
   }
   const spans = buildElementSpans(doc, text)
   const matches: XPathMatch[] = []
   let cursor = 0
-  for (let i = 0; i < result.snapshotLength; i += 1) {
-    const node = result.snapshotItem(i)
-    if (!node) continue
+  for (const node of nodes) {
     const type: XPathMatch['type'] =
       node.nodeType === 2 ? 'attribute' : node.nodeType === 3 ? 'text' : 'element'
     const pos = locate(text, node, cursor, spans)
@@ -586,7 +732,7 @@ export function queryXPath(
       to: pos.to
     })
   }
-  return { matches, warnings }
+  return { matches, warnings, value: null, type: 'nodeset' }
 }
 
 /** 表达式结果类型速览（XPath 1.0 说明用） */

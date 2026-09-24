@@ -279,7 +279,7 @@ function checkFormat(value: string, format: string): boolean | null {
 export function validateInstance(
   instance: unknown,
   schema: unknown,
-  opts: { strict: boolean; maxErrors?: number } = { strict: true }
+  opts: { strict: boolean; maxErrors?: number; maxSteps?: number } = { strict: true }
 ): ValidateResult {
   const errors: SchemaError[] = []
   const warnings: string[] = []
@@ -287,6 +287,14 @@ export function validateInstance(
   let checked = 0
   /** 深度上限告警只提示一次，避免深层结构刷屏 */
   let depthWarned = false
+  /**
+   * 总访问步数上限：每进入一个节点/子 schema 计一步。
+   * 组合关键字（allOf/anyOf/oneOf/not/if/contains）会独立递归，嵌套后步数可指数增长；
+   * 超过上限即中止剩余校验，避免无 Worker 回退时冻结主线程。默认 200_000，可配置。
+   */
+  const maxSteps = opts.maxSteps ?? 200_000
+  let steps = 0
+  let budgetExceeded = false
   /** 当前收集器：组合关键字在隔离收集器里试算，避免失败分支的错误污染最终结果 */
   let sink: SchemaError[] = errors
 
@@ -352,6 +360,13 @@ export function validateInstance(
   }
 
   function walk(inst: unknown, sch: unknown, pointer: string, spath: string, depth: number) {
+    // 已超预算：直接返回，让当前调用栈尽快回卷，避免指数级继续展开
+    if (budgetExceeded) return
+    steps += 1
+    if (steps > maxSteps) {
+      budgetExceeded = true
+      return
+    }
     if (depth > 64) {
       if (!depthWarned) {
         depthWarned = true
@@ -675,6 +690,10 @@ export function validateInstance(
   }
 
   walk(instance, schema, '', '', 0)
+  // 预算告警在收尾时追加：避免被 isolate 分支回滚 warnings 时误删（超限发生在隔离分支内的情况）
+  if (budgetExceeded) {
+    warnings.push(`校验规模超出上限（${maxSteps} 步），已中止；结果可能不完整`)
+  }
   return { valid: errors.length === 0, errors, warnings, checked }
 }
 
