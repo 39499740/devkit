@@ -58,9 +58,11 @@ function matchOf(r: DigestRow): boolean | null {
 /** 真实计算（浏览器本地）：统一走共享实现 ~/utils/crypto/digest（MD5 用 spark-md5，SHA 用 WebCrypto） */
 async function execute() {
   if (busy.value) return
+  // 捕获「发起时」签名：完成时回传给 markOk/markFail，避免旧输入结果覆盖 stale（P2-3）
+  const sigAtStart = run.currentSignature()
   if (!selectedAlgos.value.length) {
     results.value = []
-    run.markFail('请至少选择一种算法（MD5 / SHA-256 / SHA-512）')
+    run.markFail('请至少选择一种算法（MD5 / SHA-256 / SHA-512）', sigAtStart)
     return
   }
   let bytes: Uint8Array
@@ -74,7 +76,7 @@ async function execute() {
       const r = hexToBytes(text.value)
       if (r.error) {
         results.value = []
-        run.markFail(`输入 Hex 非法：${r.error}（输入类型当前为 Hex，可切换为「UTF-8 文本」）`)
+        run.markFail(`输入 Hex 非法：${r.error}（输入类型当前为 Hex，可切换为「UTF-8 文本」）`, sigAtStart)
         return
       }
       bytes = r.bytes
@@ -103,10 +105,11 @@ async function execute() {
     run.markOk(
       expectedNorm.value
         ? `摘要计算成功；期望值对照：${matched}/${out.length} 一致（各行右侧显示对照结果）`
-        : `摘要计算成功${mode.value === 'file' ? `（${formatBytes(bytes.length)} 文件）` : ''}`
+        : `摘要计算成功${mode.value === 'file' ? `（${formatBytes(bytes.length)} 文件）` : ''}`,
+      sigAtStart
     )
   } catch (e) {
-    run.markFail(`摘要计算失败：${errMessage(e)}`)
+    run.markFail(`摘要计算失败：${errMessage(e)}`, sigAtStart)
   } finally {
     busy.value = false
   }
@@ -115,8 +118,14 @@ async function execute() {
 async function onFiles(fs: File[]) {
   const f = fs[0]
   if (!f) return
+  // 运行中忽略新文件：避免「文件 A 的字节按文件 B 的签名标记」的竞态（P2-3）
+  if (busy.value) {
+    toast.warning('正在读取或计算文件，请等待当前任务完成后再选择新文件')
+    return
+  }
   file.value = f
   fileBytes.value = null
+  const sigAtStart = run.currentSignature()
   busy.value = true
   busyMsg.value = `读取文件「${f.name}」（${formatBytes(f.size)}）…`
   try {
@@ -126,7 +135,7 @@ async function onFiles(fs: File[]) {
     await execute()
   } catch (e) {
     busy.value = false
-    run.markFail(`读取文件失败：${errMessage(e)}`)
+    run.markFail(`读取文件失败：${errMessage(e)}`, sigAtStart)
   }
 }
 

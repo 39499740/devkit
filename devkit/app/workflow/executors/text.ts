@@ -444,6 +444,12 @@ const xmlStep: StepExecutor = (input, config) => {
     const expr = configText(config, 'expr').trim()
     if (!expr) throw new Error('XPath 表达式为空：请在步骤参数里填写表达式')
     const res = queryXPath(text, expr, parseNamespaces(configText(config, 'namespaces')))
+    // 标量结果（count()/string()/boolean()）：XPath 求值成功但没有节点集，直接输出 value，
+    // 并把类型信息写进 note；不能按「没有匹配到节点」判失败，否则会中断本可成功的流程。
+    if (res.type !== 'nodeset') {
+      const value = String(res.value)
+      return { payload: textPayload(value), note: `XPath 结果：${res.type} = ${value}${warnNote(res.warnings)}` }
+    }
     if (!res.matches.length) throw new Error(`XPath 没有匹配到节点${warnNote(res.warnings)}`)
     const out = JSON.stringify(res.matches.map((m) => ({ path: m.path, value: m.value, type: m.type })), null, 2)
     return { payload: textPayload(out, 'json'), note: `匹配 ${res.matches.length} 个节点${warnNote(res.warnings)}` }

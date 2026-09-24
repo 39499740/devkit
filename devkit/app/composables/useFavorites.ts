@@ -58,7 +58,12 @@ export function useFavorites() {
 
   function persist() {
     if (import.meta.server) return
-    localStorage.setItem(FAV_KEY, JSON.stringify({ v: 2, items: entries.value }))
+    // 隐私模式 / 存储配额满时 setItem 会抛异常；写入失败不应中断收藏交互。
+    try {
+      localStorage.setItem(FAV_KEY, JSON.stringify({ v: 2, items: entries.value }))
+    } catch {
+      /* 忽略写入失败：当前会话内收藏仍生效，仅不持久化 */
+    }
   }
 
   function isFav(id: string) {

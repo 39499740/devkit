@@ -102,16 +102,18 @@ function randomIv() {
 /** 真实计算：统一走共享实现 ~/utils/crypto/aesgcm（WebCrypto AES-GCM），仅在点击回调中执行 */
 async function execute() {
   if (busy.value) return
+  // 捕获「发起时」签名：完成时回传给 markOk/markFail，避免旧输入结果覆盖 stale（P2-3）
+  const sigAtStart = run.currentSignature()
   if (keyErr.value) {
     encResult.value = null
     decResult.value = null
-    run.markFail(keyErr.value)
+    run.markFail(keyErr.value, sigAtStart)
     return
   }
   if (ivErr.value) {
     encResult.value = null
     decResult.value = null
-    run.markFail(ivErr.value)
+    run.markFail(ivErr.value, sigAtStart)
     return
   }
   if (!key.value.trim() || !input.value.trim()) {
@@ -138,20 +140,21 @@ async function execute() {
       }
       decResult.value = null
       run.markOk(
-        `AES-GCM 加密成功（AES-${keyBits.value}，认证标签 ${tagLen.value} 位，AAD ${aadBytes.length} 字节）；结果 = 密文||认证标签 拼接`
+        `AES-GCM 加密成功（AES-${keyBits.value}，认证标签 ${tagLen.value} 位，AAD ${aadBytes.length} 字节）；结果 = 密文||认证标签 拼接`,
+        sigAtStart
       )
     } else {
       const r = ctDecoded.value
       if (r.error) {
         encResult.value = null
         decResult.value = null
-        run.markFail(`密文 ${decInEnc.value === 'hex' ? 'Hex' : 'Base64'} 非法：${r.error}（输入编码当前为 ${decInEnc.value === 'hex' ? 'Hex' : 'Base64'}）`)
+        run.markFail(`密文 ${decInEnc.value === 'hex' ? 'Hex' : 'Base64'} 非法：${r.error}（输入编码当前为 ${decInEnc.value === 'hex' ? 'Hex' : 'Base64'}）`, sigAtStart)
         return
       }
       if (r.bytes.length < tagBytes.value) {
         encResult.value = null
         decResult.value = null
-        run.markFail(`密文（含认证标签）共 ${r.bytes.length} 字节，不足认证标签长度（${tagBytes.value} 字节）：请确认输入的是「密文||认证标签」拼接格式`)
+        run.markFail(`密文（含认证标签）共 ${r.bytes.length} 字节，不足认证标签长度（${tagBytes.value} 字节）：请确认输入的是「密文||认证标签」拼接格式`, sigAtStart)
         return
       }
       try {
@@ -165,23 +168,24 @@ async function execute() {
         run.markOk(
           t.error
             ? `解密成功（${out.length} 字节），但结果不是有效 UTF-8 文本，已按 Hex 显示；可切换编码查看`
-            : `AES-GCM 解密成功（${out.length} 字节，认证通过）`
+            : `AES-GCM 解密成功（${out.length} 字节，认证通过）`,
+          sigAtStart
         )
       } catch (e) {
         // 与参数格式错误区分：认证失败专指 GCM 标签校验不通过
         encResult.value = null
         decResult.value = null
         if (isAesGcmAuthFailure(e)) {
-          run.markFail('认证失败：密钥错误、密文被修改或 AAD 不一致（IV 与认证标签长度也须与加密时相同）')
+          run.markFail('认证失败：密钥错误、密文被修改或 AAD 不一致（IV 与认证标签长度也须与加密时相同）', sigAtStart)
         } else {
-          run.markFail(`解密失败：${errMessage(e)}`)
+          run.markFail(`解密失败：${errMessage(e)}`, sigAtStart)
         }
       }
     }
   } catch (e) {
     encResult.value = null
     decResult.value = null
-    run.markFail(`执行失败：${errMessage(e)}`)
+    run.markFail(`执行失败：${errMessage(e)}`, sigAtStart)
   } finally {
     busy.value = false
   }

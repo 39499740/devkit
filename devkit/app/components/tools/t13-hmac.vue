@@ -50,15 +50,17 @@ const matchState = computed<'match' | 'mismatch' | null>(() => {
 /** 真实计算：统一走共享实现 ~/utils/crypto/hmac（WebCrypto importKey + sign），仅在点击回调中执行 */
 async function execute() {
   if (busy.value) return
+  // 捕获「发起时」签名：完成时回传给 markOk/markFail，避免旧输入结果覆盖 stale（P2-3）
+  const sigAtStart = run.currentSignature()
   if (keyErr.value) {
     result.value = null
-    run.markFail(keyErr.value)
+    run.markFail(keyErr.value, sigAtStart)
     return
   }
   const keyBytes = keyEnc.value === 'hex' ? hexToBytes(key.value).bytes : textToBytes(key.value)
   if (keyBytes.length === 0) {
     result.value = null
-    run.markFail('密钥为空：请填写密钥（HMAC 密钥至少需要 1 字节）')
+    run.markFail('密钥为空：请填写密钥（HMAC 密钥至少需要 1 字节）', sigAtStart)
     return
   }
   busy.value = true
@@ -67,10 +69,10 @@ async function execute() {
     result.value = { hex: bytesToHex(d), b64: bytesToBase64(d) }
     const cmp =
       matchState.value === 'match' ? '；期望值对照：一致' : matchState.value === 'mismatch' ? '；期望值对照：不一致（见下方红色标识）' : ''
-    run.markOk(`HMAC 计算成功（${algo.value}，密钥 ${keyBytes.length} 字节）${cmp}`)
+    run.markOk(`HMAC 计算成功（${algo.value}，密钥 ${keyBytes.length} 字节）${cmp}`, sigAtStart)
   } catch (e) {
     result.value = null
-    run.markFail(`HMAC 计算失败：${errMessage(e)}`)
+    run.markFail(`HMAC 计算失败：${errMessage(e)}`, sigAtStart)
   } finally {
     busy.value = false
   }

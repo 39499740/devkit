@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ToolMeta } from '~/data/tools'
 import { jsonErrorPosition, localizeJsonMessage } from '~/utils/json'
-import { formatXml, minifyXml, xmlToJson, jsonToXml, queryXPath, type XPathMatch } from '~/utils/xml'
+import { formatXml, minifyXml, xmlToJson, jsonToXml, queryXPath, type XPathMatch, type XPathScalarType } from '~/utils/xml'
 
 defineProps<{ tool: ToolMeta }>()
 
@@ -25,6 +25,8 @@ const nsEnabled = ref(false)
 const nsPrefix = ref('ns')
 const nsUri = ref('urn:books')
 const matches = ref<XPathMatch[]>([])
+/** 标量 XPath 结果（count()/string()/boolean()）；节点集与未查询时为 null */
+const scalarResult = ref<{ type: XPathScalarType; value: number | string | boolean | null } | null>(null)
 const highlight = ref('')
 
 const SAMPLE = `<?xml version="1.0" encoding="UTF-8"?>
@@ -81,6 +83,7 @@ function execute() {
     run.markIdle()
     output.value = ''
     matches.value = []
+    scalarResult.value = null
     warnings.value = []
     highlight.value = ''
     return
@@ -92,16 +95,25 @@ function execute() {
       matches.value = res.matches
       warnings.value = res.warnings
       highlight.value = input.value
-      output.value = JSON.stringify(
-        res.matches.map((m) => m.value),
-        null,
-        2
-      )
+      // 标量结果（count()/string()/boolean()）：没有节点集，直接展示 value 并标注类型；
+      // 旧实现只读 matches → 输出 [] 却 markOk，属于静默错误结果。
+      if (res.type !== 'nodeset') {
+        scalarResult.value = { type: res.type, value: res.value }
+        output.value = String(res.value)
+      } else {
+        scalarResult.value = null
+        output.value = JSON.stringify(
+          res.matches.map((m) => m.value),
+          null,
+          2
+        )
+      }
       elapsed.value = Math.round(performance.now() - t0)
       run.markOk(res.warnings.join(' · '))
       return
     }
     matches.value = []
+    scalarResult.value = null
     if (mode.value === 'format') {
       const res = formatXml(input.value, Number(indent.value))
       output.value = res.xml
@@ -128,6 +140,7 @@ function execute() {
   } catch (e) {
     output.value = ''
     matches.value = []
+    scalarResult.value = null
     warnings.value = []
     highlight.value = ''
     // JSON → XML 的输入是 JSON，解析失败时按其它 JSON 工具页的口径给出中文定位，
@@ -199,9 +212,18 @@ const sourceLines = computed(() => {
 
 const hitCount = computed(() => matches.value.filter((m) => m.from >= 0).length)
 
-/** 结果内容类型：XPath 结果与 XML→JSON 输出是 JSON，其余（格式化 / 压缩 / JSON→XML）是文本 */
+/** 结果内容类型：XPath 节点集与 XML→JSON 输出是 JSON；XPath 标量（裸 number/string/boolean）与其余是文本 */
 const resultKind = computed<'json' | 'text'>(() =>
-  mode.value === 'xpath' || (mode.value === 'convert' && direction.value === 'xml2json') ? 'json' : 'text'
+  (mode.value === 'xpath' && !scalarResult.value) || (mode.value === 'convert' && direction.value === 'xml2json')
+    ? 'json'
+    : 'text'
+)
+
+/** 导出文件名 / MIME：节点集是 JSON，标量是纯文本（string() 结果不是合法 JSON） */
+const xpathExport = computed(() =>
+  scalarResult.value
+    ? { name: 'xpath-result.txt', type: 'text/plain' }
+    : { name: 'xpath-result.json', type: 'application/json' }
 )
 
 const inputMeta = computed(() => {
@@ -339,15 +361,21 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
           <div v-else class="t43__xpath">
             <div class="t43__panelhead">
               <span class="t43__panel-title">XPath 查询</span>
-              <span v-if="run.status.value === 'ok'" class="t43__badge" :class="matches.length ? 't43__badge--ok' : ''">
-                <DkIcon name="circle-check" :size="12" />{{ matches.length }} 个匹配
+              <span
+                v-if="run.status.value === 'ok'"
+                class="t43__badge"
+                :class="scalarResult || matches.length ? 't43__badge--ok' : ''"
+              >
+                <DkIcon name="circle-check" :size="12" />
+                <template v-if="scalarResult">标量 {{ scalarResult.type }}</template>
+                <template v-else>{{ matches.length }} 个匹配</template>
               </span>
               <span class="grow"></span>
               <DkButton
                 size="sm"
                 variant="ghost"
                 :disabled="!output || run.status.value !== 'ok'"
-                @click="downloadText('xpath-result.json', output, 'application/json')"
+                @click="downloadText(xpathExport.name, output, xpathExport.type)"
               >
                 <DkIcon name="download" :size="12" />导出结果
               </DkButton>
@@ -383,36 +411,48 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
             </div>
 
             <div class="t43__listhead">
-              <span>匹配节点</span>
-              <span class="tertiary">节点路径</span>
+              <span>{{ scalarResult ? '标量结果' : '匹配节点' }}</span>
+              <span class="tertiary">{{ scalarResult ? scalarResult.type : '节点路径' }}</span>
             </div>
             <div class="t43__list">
-              <p v-if="!matches.length" class="t43__empty">还没有匹配结果，输入表达式后点击「查询」。</p>
-              <div v-for="(m, i) in matches" :key="`${m.path}-${i}`" class="t43__item">
-                <span class="t43__idx mono">{{ i + 1 }}</span>
+              <div v-if="scalarResult" class="t43__item">
+                <span class="t43__idx mono">=</span>
                 <div class="t43__item-body">
-                  <span class="t43__item-path mono">{{ m.path }}</span>
-                  <span class="t43__item-value">{{ m.value || '（空节点）' }}</span>
+                  <span class="t43__item-path mono">{{ scalarResult.type }}</span>
+                  <span class="t43__item-value">{{ String(scalarResult.value) }}</span>
                 </div>
-                <span class="t43__badge t43__badge--plain">{{ m.type }}</span>
+                <span class="t43__badge t43__badge--plain">{{ scalarResult.type }}</span>
               </div>
+              <template v-else>
+                <p v-if="!matches.length" class="t43__empty">还没有匹配结果，输入表达式后点击「查询」。</p>
+                <div v-for="(m, i) in matches" :key="`${m.path}-${i}`" class="t43__item">
+                  <span class="t43__idx mono">{{ i + 1 }}</span>
+                  <div class="t43__item-body">
+                    <span class="t43__item-path mono">{{ m.path }}</span>
+                    <span class="t43__item-value">{{ m.value || '（空节点）' }}</span>
+                  </div>
+                  <span class="t43__badge t43__badge--plain">{{ m.type }}</span>
+                </div>
+              </template>
             </div>
 
-            <div class="t43__listhead">
-              <span>匹配定位</span>
-              <span class="tertiary">高亮 {{ hitCount }} 处匹配</span>
-            </div>
-            <div class="t43__locate mono">
-              <div v-for="l in sourceLines" :key="l.n" class="t43__line">
-                <span class="t43__ln">{{ l.n }}</span>
-                <span class="t43__code">
-                  <template v-for="(p, pi) in l.parts" :key="pi">
-                    <mark v-if="p.hit" class="t43__hit">{{ p.text }}</mark>
-                    <template v-else>{{ p.text }}</template>
-                  </template>
-                </span>
+            <template v-if="!scalarResult">
+              <div class="t43__listhead">
+                <span>匹配定位</span>
+                <span class="tertiary">高亮 {{ hitCount }} 处匹配</span>
               </div>
-            </div>
+              <div class="t43__locate mono">
+                <div v-for="l in sourceLines" :key="l.n" class="t43__line">
+                  <span class="t43__ln">{{ l.n }}</span>
+                  <span class="t43__code">
+                    <template v-for="(p, pi) in l.parts" :key="pi">
+                      <mark v-if="p.hit" class="t43__hit">{{ p.text }}</mark>
+                      <template v-else>{{ p.text }}</template>
+                    </template>
+                  </span>
+                </div>
+              </div>
+            </template>
           </div>
         </template>
       </SplitPanes>

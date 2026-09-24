@@ -47,6 +47,38 @@ function countNodes(el: Element): number {
   return n
 }
 
+/**
+ * XML 元素嵌套深度上限。DOMParser 能解析极深文档，但 formatXml / minifyXml / xmlToJson 的
+ * 递归序列化与遍历会随层数线性加深调用栈，约 4000 层即抛原生英文
+ * `RangeError: Maximum call stack size exceeded`。这里在进入递归前做迭代预检，
+ * 超过上限直接抛中文错误，避免爆栈，也不把英文原文回显给用户。
+ */
+export const MAX_XML_DEPTH = 2000
+
+/** 元素节点总数上限：节点过多时提前中止，避免长时间占用主线程 */
+export const MAX_XML_NODES = 200000
+
+/**
+ * 解析结果的深度 / 节点数预检。用显式栈迭代，自身不会爆栈；
+ * 超过上限时抛中文错误。供 formatXml / minifyXml / xmlToJson / elementToJson
+ * 在递归前调用。「元素深度」以根元素为第 1 层，单元素树深度为 1。
+ */
+export function assertXmlDepthWithinLimit(root: Element): void {
+  const stack: Array<{ el: Element; depth: number }> = [{ el: root, depth: 1 }]
+  let nodes = 0
+  while (stack.length) {
+    const { el, depth } = stack.pop()!
+    nodes += 1
+    if (depth > MAX_XML_DEPTH) {
+      throw new Error(`XML 嵌套层级过深（超过 ${MAX_XML_DEPTH} 层），已中止处理，请减少嵌套层级`)
+    }
+    if (nodes > MAX_XML_NODES) {
+      throw new Error(`XML 元素节点过多（超过 ${MAX_XML_NODES} 个），已中止处理，请减少节点数量`)
+    }
+    for (const child of Array.from(el.children)) stack.push({ el: child, depth: depth + 1 })
+  }
+}
+
 /** 元素自身的开标签（含属性），供高亮定位复用 */
 export function openTag(el: Element): string {
   const attrs = Array.from(el.attributes)
@@ -212,6 +244,7 @@ function writeNode(node: Node, depth: number, indent: string, out: string[], war
 /** 格式化：只重排“纯元素内容”，混合内容原样保留；声明 / DOCTYPE / 根节点外的注释与处理指令都保留 */
 export function formatXml(text: string, indentSize = 2): XmlResult {
   const { doc, warnings } = parse(text)
+  assertXmlDepthWithinLimit(doc.documentElement)
   const prolog = extractProlog(text)
   const out: string[] = []
   if (prolog.declaration) out.push(prolog.declaration)
@@ -227,6 +260,7 @@ export function formatXml(text: string, indentSize = 2): XmlResult {
 /** 压缩：只在“纯元素内容”里移除元素之间的空白节点；声明与 DOCTYPE 保留 */
 export function minifyXml(text: string): XmlResult {
   const { doc, warnings } = parse(text)
+  assertXmlDepthWithinLimit(doc.documentElement)
   const prolog = extractProlog(text)
   const clone = doc.documentElement.cloneNode(true) as Element
   const walk = (el: Element) => {
@@ -256,7 +290,8 @@ export function minifyXml(text: string): XmlResult {
  */
 export function xmlToJson(text: string): { value: unknown; warnings: string[] } {
   const { doc, warnings } = parse(text)
-  return { value: elementToJson(doc.documentElement), warnings }
+  assertXmlDepthWithinLimit(doc.documentElement)
+  return { value: elementToJsonNode(doc.documentElement), warnings }
 }
 
 /**
@@ -286,8 +321,15 @@ export function assignChildValue(obj: Record<string, unknown>, key: string, valu
 /**
  * 元素 → JSON。导出以便在无 DOMParser 的 Node 环境里用等价的假 DOM 节点做单元验证
  * （只依赖 tagName / attributes / children / childNodes 四个成员）。
+ * 进入递归前先做深度预检：极深树（约 4000 层）会让递归遍历爆栈，这里提前抛中文错误。
  */
 export function elementToJson(el: Element): unknown {
+  assertXmlDepthWithinLimit(el)
+  return elementToJsonNode(el)
+}
+
+/** elementToJson 的递归主体：仅由已通过预检的根节点进入，内部递归不再重复预检（避免 O(n²)） */
+function elementToJsonNode(el: Element): unknown {
   const obj: Record<string, unknown> = {}
   for (const a of Array.from(el.attributes)) setOwnKey(obj, `@${a.name}`, a.value)
   const childEls = Array.from(el.children)
@@ -304,7 +346,7 @@ export function elementToJson(el: Element): unknown {
     return obj
   }
   for (const child of childEls) {
-    assignChildValue(obj, child.tagName, elementToJson(child))
+    assignChildValue(obj, child.tagName, elementToJsonNode(child))
   }
   if (text) setOwnKey(obj, '#text', text)
   return obj
@@ -320,11 +362,15 @@ export function jsonToXml(value: unknown, rootName = 'root'): XmlResult {
   const warnings: string[] = []
   const out: string[] = []
   if (Array.isArray(value)) {
+    if (!XML_NAME_RE.test(rootName)) {
+      pushWarning(warnings, `元素名“${rootName}”不是合法的 XML 名称，已改用 root 作为根标签`)
+    }
     const wrapper = XML_NAME_RE.test(rootName) ? rootName : 'root'
     warnings.push(`顶层是数组，已用 <${wrapper}> 包裹，每个元素生成一个 <item>`)
     if (!value.length) {
       out.push(`<${wrapper}/>`)
     } else {
+      if (value.some((v) => Array.isArray(v))) pushWarning(warnings, nestedArrayWarning('item'))
       out.push(`<${wrapper}>`)
       for (const v of value) writeJson('item', v, 1, out, warnings)
       out.push(`</${wrapper}>`)
@@ -345,6 +391,15 @@ const ATTR_FALLBACK = 'attr'
 /** 仅在文案尚未出现时追加，避免同一非法名在多处出现时刷屏 */
 function pushWarning(warnings: string[], message: string) {
   if (!warnings.includes(message)) warnings.push(message)
+}
+
+/**
+ * 嵌套数组告警文案：JSON 数组在 XML 里只能表达为「同名重复标签」，
+ * 一旦数组元素本身还是数组，内层会被平铺成同名重复标签、原始层级丢失，
+ * 这里明确告警，不再静默拍平。
+ */
+function nestedArrayWarning(tag: string): string {
+  return `检测到嵌套数组：数组元素本身还是数组，已把内层元素平铺为重复的 <${tag}> 标签，原始数组层级无法表达`
 }
 
 /** 转义文本并在含非法控制字符时追加告警（不静默丢弃） */
@@ -378,6 +433,10 @@ function safeAttrName(raw: string, used: Set<string>): string {
 function writeJson(tag: string, value: unknown, depth: number, out: string[], warnings: string[]) {
   const pad = '  '.repeat(depth)
   const name = XML_NAME_RE.test(tag) ? tag : 'item'
+  // 非法元素名同样不能静默回退：与属性名告警（safeAttrName 分支）保持一致的提示口径
+  if (name !== tag) {
+    pushWarning(warnings, `元素名“${tag}”不是合法的 XML 名称，已改用 item 标签承载该节点`)
+  }
   if (value === null || value === undefined) {
     out.push(`${pad}<${name}/>`)
     return
@@ -387,6 +446,7 @@ function writeJson(tag: string, value: unknown, depth: number, out: string[], wa
       out.push(`${pad}<${name}/>`)
       return
     }
+    if (value.some((v) => Array.isArray(v))) pushWarning(warnings, nestedArrayWarning(name))
     for (const v of value) writeJson(name, v, depth, out, warnings)
     return
   }
@@ -431,10 +491,7 @@ function writeJson(tag: string, value: unknown, depth: number, out: string[], wa
   out.push(`${pad}<${name}${attrStr}>`)
   if (textEntry) out.push(`${pad}  ${escapeTextChecked(String(textEntry[1]), warnings)}`)
   for (const [k, v] of children) {
-    if (!XML_NAME_RE.test(k)) {
-      writeJson('item', v, depth + 1, out, warnings)
-      continue
-    }
+    // 非法元素名交给 writeJson 统一回退 item 并追加中文告警（原本这里静默回退）
     writeJson(k, v, depth + 1, out, warnings)
   }
   out.push(`${pad}</${name}>`)

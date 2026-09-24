@@ -34,7 +34,12 @@ export function useRecent() {
 
   function persist() {
     if (import.meta.server) return
-    localStorage.setItem(RECENT_KEY, JSON.stringify(entries.value))
+    // 隐私模式 / 存储配额满时 setItem 会抛异常；写入失败不应中断最近使用记录交互。
+    try {
+      localStorage.setItem(RECENT_KEY, JSON.stringify(entries.value))
+    } catch {
+      /* 忽略写入失败：当前会话内最近使用仍生效，仅不持久化 */
+    }
   }
 
   function record(id: string) {
