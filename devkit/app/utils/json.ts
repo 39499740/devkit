@@ -136,60 +136,127 @@ export function parseJson(text: string): JsonParseResult {
   return { value, duplicateKeys }
 }
 
+/**
+ * 序列化任务：要么是一个待展开的值（含缩进深度），要么是一段直接写入的文本。
+ * 显式栈迭代序列化（而非递归），使 stringifyJson / minifyJson 可承受与 parseJson 相同
+ * （JSON_MAX_NESTING_DEPTH = 2500）的嵌套深度，不再抛 RangeError 被误报成「JSON 语法错误」。
+ */
+type JsonWriteTask = { value: unknown; depth: number } | { text: string }
+
+/** 标量（含 RawNumber / null / undefined 等）的序列化文本；容器返回 null 交给调用方展开 */
+function scalarJsonText(v: unknown): string | null {
+  if (v instanceof RawNumber) return v.raw
+  if (v === null) return 'null'
+  switch (typeof v) {
+    case 'string':
+      return JSON.stringify(v)
+    case 'number':
+      return Number.isFinite(v) ? String(v) : 'null'
+    case 'boolean':
+      return String(v)
+    case 'object':
+      return null // 数组 / 对象容器
+    default:
+      return 'null' // undefined / function / symbol / bigint
+  }
+}
+
 /** 序列化（保留 RawNumber 原文；普通 number 按原文输出） */
 export function stringifyJson(value: unknown, indent: number | '\t'): string {
   const pad = (depth: number) => (typeof indent === 'number' ? ' '.repeat(indent * depth) : indent.repeat(depth))
-  const padClose = (depth: number) => (typeof indent === 'number' ? ' '.repeat(indent * depth) : indent.repeat(depth))
-  const walk = (v: unknown, depth: number): string => {
-    if (v instanceof RawNumber) return v.raw
-    if (v === null) return 'null'
-    switch (typeof v) {
-      case 'string':
-        return JSON.stringify(v)
-      case 'number':
-        return Number.isFinite(v) ? String(v) : 'null'
-      case 'boolean':
-        return String(v)
-      case 'object': {
-        if (Array.isArray(v)) {
-          if (v.length === 0) return '[]'
-          const items = v.map((x) => pad(depth + 1) + walk(x, depth + 1))
-          return '[\n' + items.join(',\n') + '\n' + padClose(depth) + ']'
-        }
-        const keys = Object.keys(v as Record<string, unknown>)
-        if (keys.length === 0) return '{}'
-        const items = keys.map((k) => `${pad(depth + 1)}${JSON.stringify(k)}: ${walk((v as Record<string, unknown>)[k], depth + 1)}`)
-        return '{\n' + items.join(',\n') + '\n' + padClose(depth) + '}'
-      }
-      default:
-        return 'null'
+  const out: string[] = []
+  const stack: JsonWriteTask[] = [{ value, depth: 0 }]
+  while (stack.length) {
+    const task = stack.pop()!
+    if ('text' in task) {
+      out.push(task.text)
+      continue
     }
+    const v = task.value
+    const depth = task.depth
+    const scalar = scalarJsonText(v)
+    if (scalar !== null) {
+      out.push(scalar)
+      continue
+    }
+    if (Array.isArray(v)) {
+      if (v.length === 0) {
+        out.push('[]')
+        continue
+      }
+      stack.push({ text: ']' })
+      stack.push({ text: pad(depth) })
+      stack.push({ text: '\n' })
+      for (let i = v.length - 1; i >= 0; i--) {
+        stack.push({ value: v[i], depth: depth + 1 })
+        stack.push({ text: pad(depth + 1) })
+        if (i > 0) stack.push({ text: ',\n' })
+      }
+      stack.push({ text: '\n' })
+      stack.push({ text: '[' })
+      continue
+    }
+    const rec = v as Record<string, unknown>
+    const keys = Object.keys(rec)
+    if (keys.length === 0) {
+      out.push('{}')
+      continue
+    }
+    stack.push({ text: '}' })
+    stack.push({ text: pad(depth) })
+    stack.push({ text: '\n' })
+    for (let i = keys.length - 1; i >= 0; i--) {
+      const k = keys[i]!
+      stack.push({ value: rec[k], depth: depth + 1 })
+      stack.push({ text: ': ' })
+      stack.push({ text: JSON.stringify(k) })
+      stack.push({ text: pad(depth + 1) })
+      if (i > 0) stack.push({ text: ',\n' })
+    }
+    stack.push({ text: '\n' })
+    stack.push({ text: '{' })
   }
-  return walk(value, 0)
+  return out.join('')
 }
 
-/** 压缩序列化 */
+/** 压缩序列化（同样使用显式栈，深嵌套不溢出） */
 export function minifyJson(value: unknown): string {
-  const walk = (v: unknown): string => {
-    if (v instanceof RawNumber) return v.raw
-    if (v === null) return 'null'
-    switch (typeof v) {
-      case 'string':
-        return JSON.stringify(v)
-      case 'number':
-        return Number.isFinite(v) ? String(v) : 'null'
-      case 'boolean':
-        return String(v)
-      case 'object': {
-        if (Array.isArray(v)) return '[' + v.map(walk).join(',') + ']'
-        const keys = Object.keys(v as Record<string, unknown>)
-        return '{' + keys.map((k) => `${JSON.stringify(k)}:${walk((v as Record<string, unknown>)[k])}`).join(',') + '}'
-      }
-      default:
-        return 'null'
+  const out: string[] = []
+  const stack: JsonWriteTask[] = [{ value, depth: 0 }]
+  while (stack.length) {
+    const task = stack.pop()!
+    if ('text' in task) {
+      out.push(task.text)
+      continue
     }
+    const v = task.value
+    const scalar = scalarJsonText(v)
+    if (scalar !== null) {
+      out.push(scalar)
+      continue
+    }
+    if (Array.isArray(v)) {
+      stack.push({ text: ']' })
+      for (let i = v.length - 1; i >= 0; i--) {
+        stack.push({ value: v[i], depth: 0 })
+        if (i > 0) stack.push({ text: ',' })
+      }
+      stack.push({ text: '[' })
+      continue
+    }
+    const rec = v as Record<string, unknown>
+    const keys = Object.keys(rec)
+    stack.push({ text: '}' })
+    for (let i = keys.length - 1; i >= 0; i--) {
+      const k = keys[i]!
+      stack.push({ value: rec[k], depth: 0 })
+      stack.push({ text: ':' })
+      stack.push({ text: JSON.stringify(k) })
+      if (i > 0) stack.push({ text: ',' })
+    }
+    stack.push({ text: '{' })
   }
-  return walk(value)
+  return out.join('')
 }
 
 /** 反转义 JSON 字符串原文（含两端引号）；无法解析时退回去掉引号的内容 */

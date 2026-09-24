@@ -75,7 +75,9 @@ export function assertXmlDepthWithinLimit(root: Element): void {
     if (nodes > MAX_XML_NODES) {
       throw new Error(`XML 元素节点过多（超过 ${MAX_XML_NODES} 个），已中止处理，请减少节点数量`)
     }
-    for (const child of Array.from(el.children)) stack.push({ el: child, depth: depth + 1 })
+    // `?? []`：真实 DOM 一定有 children；无 DOMParser 的 Node 测试替身可能缺省该成员，
+    // 这里容忍缺省，避免深度预检在测试环境抛 TypeError（语义不变，仍按 0 子节点计）。
+    for (const child of Array.from(el.children ?? [])) stack.push({ el: child, depth: depth + 1 })
   }
 }
 
@@ -556,17 +558,70 @@ function collectXPathNodes(result: XPathResult): Node[] {
   return nodes
 }
 
-function nodePath(node: Node): string {
+/** 同名兄弟中的 1-based 序号与该组总数（供 nodePath 输出 `tag[idx]` 或裸 `tag`） */
+export interface SameNamePosition {
+  index: number
+  total: number
+}
+
+/**
+ * 为根节点下的所有元素一次性预建「同名兄弟位置」索引：
+ * key = 元素本身，value = 它在「同一父节点、同名 tag」分组里的 1-based 序号与组大小。
+ *
+ * 修复 P1-1：旧 nodePath 对每个匹配节点都 `Array.from(parent.children).filter(同名)`，
+ * `//a` 在 n 个同名兄弟下退化成 O(n²)。预建索引后，每个节点的路径计算是 O(1) 查表，
+ * 整次查询回到 O(n)。这里只依赖 tagName / children 两个成员，Node 侧可用假 DOM 等价单测。
+ */
+export function buildSameNameIndex(root: Node): Map<Node, SameNamePosition> {
+  const index = new Map<Node, SameNamePosition>()
+  const stack: Node[] = [root]
+  while (stack.length) {
+    const parent = stack.pop()!
+    const children = Array.from((parent as Element).children ?? [])
+    if (children.length) {
+      const groups = new Map<string, Element[]>()
+      for (const child of children) {
+        if (child.nodeType !== 1) continue
+        const group = groups.get(child.tagName)
+        if (group) group.push(child)
+        else groups.set(child.tagName, [child])
+      }
+      for (const group of groups.values()) {
+        for (let i = 0; i < group.length; i += 1) index.set(group[i]!, { index: i + 1, total: group.length })
+      }
+      for (const child of children) {
+        if (child.nodeType === 1) stack.push(child)
+      }
+    }
+  }
+  return index
+}
+
+/**
+ * 元素的同名兄弟路径段：命中预建索引时 O(1)；索引用不上（未传入 / 非文档内节点）时退回
+ * 旧的 O(同名兄弟数) 扫描。两者输出完全一致（`/r/a[1]`、唯一同名不带序号）。
+ */
+function sameNameSegment(el: Element, index: Map<Node, SameNamePosition> | undefined): string {
+  const pos = index?.get(el)
+  if (pos) return pos.total > 1 ? `${el.tagName}[${pos.index}]` : el.tagName
+  const siblings = el.parentNode
+    ? Array.from(el.parentNode.children).filter((c) => c.tagName === el.tagName)
+    : [el]
+  const idx = siblings.indexOf(el) + 1
+  return siblings.length > 1 ? `${el.tagName}[${idx}]` : el.tagName
+}
+
+/**
+ * 节点 → 规范化路径（如 `/catalog/book[1]/title`）。
+ * 传入 buildSameNameIndex 的结果可把每层同名序号查询降为 O(1)；不传则退回朴素扫描。
+ */
+export function nodePath(node: Node, index?: Map<Node, SameNamePosition>): string {
   const parts: string[] = []
   let cur: Node | null = node
   while (cur && cur.nodeType !== 9) {
     if (cur.nodeType === 1) {
       const el = cur as Element
-      const siblings = el.parentNode
-        ? Array.from(el.parentNode.children).filter((c) => c.tagName === el.tagName)
-        : [el]
-      const idx = siblings.indexOf(el) + 1
-      parts.unshift(siblings.length > 1 ? `${el.tagName}[${idx}]` : el.tagName)
+      parts.unshift(sameNameSegment(el, index))
     } else if (cur.nodeType === 2) {
       parts.push(`@${(cur as Attr).name}`)
     } else if (cur.nodeType === 3) {
@@ -732,6 +787,26 @@ function locate(
   return at === -1 ? { from: -1, to: -1 } : { from: at, to: at + text.length }
 }
 
+/**
+ * XPath 1.0 预定义的 `xml` 命名空间 URI。规范要求该前缀始终绑定到此 URI、无需调用方声明；
+ * 旧 resolver 对 `xml` 返回 null，导致标准 `//*[@xml:lang]` 被 evaluate 拒绝后误报「表达式无效」。
+ */
+const XML_NAMESPACE_URI = 'http://www.w3.org/XML/1998/namespace'
+
+/**
+ * 提取表达式中实际使用的前缀：
+ * - 先剔除字符串字面量（'…' / "…"），避免把 `contains(@href,'http://…')` 里的 URL 误判成前缀；
+ * - 只保留 `name:` 且其后不是 `:` 的形式，排除 `child::` / `namespace::` 这类轴名。
+ */
+function xpathUsedPrefixes(expr: string): string[] {
+  const stripped = expr.replace(/'[^']*'|"[^"]*"/g, ' ')
+  const re = /([A-Za-z_][\w.-]*):(?!:)/g
+  const found = new Set<string>()
+  let m: RegExpExecArray | null
+  while ((m = re.exec(stripped))) found.add(m[1]!)
+  return [...found]
+}
+
 /** XPath 查询：支持命名空间前缀映射；节点集返回 matches，标量（number/string/boolean）返回 value/type；表达式非法时抛出可读错误 */
 export function queryXPath(
   text: string,
@@ -739,25 +814,34 @@ export function queryXPath(
   namespaces: { prefix: string; uri: string }[] = []
 ): XPathQueryResult {
   const { doc, warnings } = parse(text)
+  // 与 formatXml / minifyXml / xmlToJson 一致：进入节点遍历前先做深度 / 节点数预检，
+  // 超大文档在中文错误里快速中止，而不是在后续扫描里长时间冻结主线程。
+  assertXmlDepthWithinLimit(doc.documentElement)
   const expr = expression.trim()
   if (!expr) throw new Error('请输入 XPath 表达式')
-  const resolver = (prefix: string) => namespaces.find((n) => n.prefix === prefix)?.uri ?? null
-  const usedPrefixes = [...new Set(expr.match(/[A-Za-z_][\w.-]*:/g) ?? [])].map((p) => p.slice(0, -1))
-  for (const p of usedPrefixes) {
-    if (!(resolver(p) ?? (p === 'xml' ? 'http://www.w3.org/XML/1998/namespace' : null))) {
-      warnings.push(`表达式用到了未声明的前缀 ${p}:，请在上方的命名空间字段里补充映射`)
-    }
-  }
+  const resolver = (prefix: string) =>
+    prefix === 'xml' ? XML_NAMESPACE_URI : namespaces.find((n) => n.prefix === prefix)?.uri ?? null
+  // evaluate 前先算出未声明前缀：旧实现只把告警丢进 warnings，但真实引擎会先抛异常，
+  // 告警永远到不了用户手里，最终只看到笼统的「表达式无效」。这里改成抛出含前缀名的中文错误。
+  const undeclaredPrefixes = xpathUsedPrefixes(expr).filter((p) => !resolver(p))
   let result: XPathResult
   try {
     // ANY_TYPE：让 count()/string()/boolean() 等数值/字符串/布尔结果按真实类型返回，
     // 而不是被当成节点集（旧实现固定 ORDERED_NODE_SNAPSHOT_TYPE，标量结果 snapshotLength 为 0 → 误报「表达式无效」）
     result = doc.evaluate(expr, doc, resolver as never, XPathResult.ANY_TYPE, null)
   } catch {
+    // 未声明前缀是 evaluate 抛异常的主因之一；优先给出含前缀名的中文错误，不再落到笼统文案。
+    if (undeclaredPrefixes.length) {
+      throw new Error(`XPath 使用了未声明的前缀：${undeclaredPrefixes[0]}:，请在命名空间字段里补充映射`)
+    }
     const shown = expr.length > 60 ? `${expr.slice(0, 60)}…` : expr
     throw new Error(
       `XPath 表达式无效：请检查路径语法、括号与引号是否配对（表达式：${shown}）`
     )
+  }
+  // 求值引擎未因未声明前缀报错时（如无 DOMParser 的测试替身），保持既有中文告警，不静默。
+  for (const p of undeclaredPrefixes) {
+    warnings.push(`表达式用到了未声明的前缀 ${p}:，请在上方的命名空间字段里补充映射`)
   }
 
   // 标量结果：直接返回 value / type，matches 为空数组
@@ -773,6 +857,8 @@ export function queryXPath(
     warnings.push('没有匹配到节点，检查路径大小写与层级')
   }
   const spans = buildElementSpans(doc, text)
+  // 一次性预建同名兄弟索引：nodePath 对每个节点 O(1) 查序号，避免同名兄弟多时退化成 O(n²)
+  const sameNameIndex = nodes.length ? buildSameNameIndex(doc.documentElement) : undefined
   const matches: XPathMatch[] = []
   let cursor = 0
   for (const node of nodes) {
@@ -782,7 +868,7 @@ export function queryXPath(
     // 游标必须推到本次匹配的结尾，否则后续匹配会重复定位到第一条
     if (pos.to >= 0) cursor = pos.to
     matches.push({
-      path: nodePath(node),
+      path: nodePath(node, sameNameIndex),
       value: (node.nodeValue ?? node.textContent ?? '').trim(),
       type,
       from: pos.from,
