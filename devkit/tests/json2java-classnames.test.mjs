@@ -7,13 +7,19 @@
  * 两种产物都无法编译。现在类名在文件级去重（冲突追加序号），
  * 且字段类型 / getter / setter 与嵌套引用都使用去重后的类名。
  * 同时回归正常输入输出不变（{"a":1} → Order）。
+ *
+ * 2026-09-26 起嵌套类一律生成 static（与 t22 工具页一致）：
+ * 非静态内部类 javac 可编译，但 Jackson 等按无参构造反射实例化的库无法直接使用。
  */
 import { createStep, runStep } from '../app/utils/workflow.ts'
 import { check, eq } from './helpers.mjs'
 
 const JAVA_BUILTIN = new Set(['long', 'double', 'int', 'boolean', 'String', 'Object', 'List'])
 
-const classesOf = (code) => [...code.matchAll(/public\s+class\s+([A-Za-z_$][\w$]*)/g)].map((m) => m[1])
+const classesOf = (code) => [...code.matchAll(/public\s+(?:static\s+)?class\s+([A-Za-z_$][\w$]*)/g)].map((m) => m[1])
+/** 嵌套类声明是否带 static（顶层类不允许 static，必须不带） */
+const isStaticClass = (code, name) => new RegExp(`public\\s+static\\s+class\\s+${name}\\s*\\{`).test(code)
+const isPlainClass = (code, name) => new RegExp(`public\\s+class\\s+${name}\\s*\\{`).test(code)
 const fieldTypesOf = (code) =>
   [...code.matchAll(/private\s+([^;]+?)\s+[A-Za-z_$][\w$]*;/g)].map((m) => m[1].trim())
 /** 字段类型里引用到的自定义类名（剔除 Java 内置类型） */
@@ -105,12 +111,41 @@ async function buildCases() {
   const nested = await gen('{"user":{"name":"x","age":30},"tags":["a","b"]}')
   cases.push(
     check('正常嵌套：类名与字段不变', () =>
-      nested.output.includes('public class User') &&
+      nested.output.includes('public static class User') &&
       nested.output.includes('private User user;') &&
       nested.output.includes('private List<String> tags;')
     )
   )
   cases.push(eq('正常嵌套：只有 Order/User 两个类', classesOf(nested.output).sort(), ['Order', 'User']))
+
+  /* ── 7. 嵌套类一律 static、顶层类不带 static（Jackson 等反射库可用）── */
+  const staticCls = await gen('{"order":{"amount":{"cents":1},"items":[{"sku":"x"}]}}', { className: 'Order' })
+  cases.push(
+    check('嵌套类带 static：对象与数组元素生成的内部类都是静态嵌套类', () =>
+      isStaticClass(staticCls.output, 'Amount') && isStaticClass(staticCls.output, 'Items')
+    )
+  )
+  cases.push(check('顶层类不带 static：Java 不允许顶层 static 类', () => isPlainClass(staticCls.output, 'Order')))
+  cases.push(check('嵌套类声明不再出现非 static 版本', () => !/public\s+class\s+(?:Amount|Items)\s*\{/.test(staticCls.output)))
+
+  const booleanCls = await gen('{"paid":true,"enabled":false,"name":"x"}')
+  cases.push(check('boolean 字段使用 JavaBean is getter，setter 保持 set', () =>
+    booleanCls.status === 'ok' && booleanCls.output.includes('boolean isPaid()') &&
+    booleanCls.output.includes('boolean isEnabled()') && booleanCls.output.includes('void setPaid(boolean paid)') &&
+    booleanCls.output.includes('String getName()') && !booleanCls.output.includes('getPaid()')
+  ))
+
+  const scalar = await gen('"SO-PLAIN-STRING"')
+  const array = await gen('[{"id":1}]')
+  cases.push(check('标量与数组不能生成空壳类并显示成功', () =>
+    scalar.status === 'fail' && array.status === 'fail' &&
+    scalar.output === '' && array.output === '' &&
+    scalar.note.includes('顶层对象') && array.note.includes('顶层对象')
+  ))
+  const emptyObject = await gen('{}')
+  cases.push(check('合法空对象仍可生成空类', () =>
+    emptyObject.status === 'ok' && emptyObject.output.includes('public class Order')
+  ))
 
   return cases
 }

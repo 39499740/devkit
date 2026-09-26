@@ -111,6 +111,13 @@ async function buildCases() {
   cases.push(check('jsonErrorPosition 命中位置', () => !!pos && pos.line === 1 && pos.column >= 1))
   cases.push(check('jsonErrorPosition.message 为中文', () => !!pos && /[\u4e00-\u9fa5]/.test(pos.message)))
   cases.push(check('jsonErrorPosition.message 不含 V8 英文', () => !!pos && !/at position|Unexpected|Expected|SyntaxError/.test(pos.message)))
+  const unfinished = '{"app":{"name":"inventory-api"'
+  const eof = jsonErrorPosition(new Error(`Expected ',' or '}' after property value in JSON at position ${unfinished.length}`), unfinished)
+  cases.push(check('文件末尾检测到缺失右括号时提示向前检查', () =>
+    !!eof && eof.line === 1 && eof.message.includes('错误可能在此位置之前') && eof.message.includes('未闭合')
+  ))
+  const middle = jsonErrorPosition(new Error("Expected ':' after property name in JSON at position 6"), '{"app" 1}')
+  cases.push(check('中间位置的语法错误不添加末尾提示', () => !!middle && !middle.message.includes('错误可能在此位置之前')))
   cases.push(check('localizeJsonMessage 未知错误回退中文', () => /[\u4e00-\u9fa5]/.test(localizeJsonMessage('some unknown internal error')) && !/unknown/.test(localizeJsonMessage('some unknown internal error'))))
   cases.push(
     check('localizeJsonMessage 覆盖无位置信息的 V8 文案', () => {

@@ -64,13 +64,26 @@ function wrapNumbers(text: string, prefix: string): string {
   return out
 }
 
-function makeUnwrap(prefix: string) {
-  return (_key: string, value: unknown): unknown => {
-    if (typeof value === 'string' && value.startsWith(prefix) && value.endsWith('@@')) {
-      return new RawNumber(value.slice(prefix.length, -2))
+/** JSON.parse 的 reviver 会递归访问所有层级，Node 25 在 2500 层已栈溢出；改为显式栈还原数字。 */
+function unwrapNumbers(value: unknown, prefix: string): unknown {
+  const unwrap = (v: unknown): unknown =>
+    typeof v === 'string' && v.startsWith(prefix) && v.endsWith('@@')
+      ? new RawNumber(v.slice(prefix.length, -2))
+      : v
+  const root = unwrap(value)
+  const stack: unknown[] = [root]
+  while (stack.length) {
+    const current = stack.pop()
+    if (current === null || typeof current !== 'object' || current instanceof RawNumber) continue
+    const record = current as Record<string, unknown>
+    for (const [key, child] of Object.entries(current)) {
+      const next = unwrap(child)
+      // 对已有的自有属性赋值；JSON.parse 保留的 "__proto__" 键不会触发原型 setter。
+      record[key] = next
+      if (next !== null && typeof next === 'object' && !(next instanceof RawNumber)) stack.push(next)
     }
-    return value
   }
+  return root
 }
 
 /**
@@ -129,10 +142,7 @@ export function parseJson(text: string): JsonParseResult {
   JSON.parse(src)
   const duplicateKeys = detectDuplicateKeys(src)
   const prefix = makeRawPrefix()
-  const value = JSON.parse(
-    wrapNumbers(src, prefix),
-    makeUnwrap(prefix) as (this: unknown, k: string, v: unknown) => unknown
-  )
+  const value = unwrapNumbers(JSON.parse(wrapNumbers(src, prefix)), prefix)
   return { value, duplicateKeys }
 }
 
@@ -282,6 +292,11 @@ function unescapeJsonString(raw: string): string {
  */
 export const JSON_MAX_NESTING_DEPTH = 2500
 
+/** js-yaml 的递归转换在更深处会随运行时栈大小波动；转换统一采用可稳定往返的上限。 */
+export const JSON_YAML_MAX_NESTING_DEPTH = 1000
+// 当前 js-yaml loader 支持 maxDepth，但 @types/js-yaml 尚未声明；用展开传入避免多处类型断言。
+const YAML_LOAD_DEPTH = { maxDepth: JSON_YAML_MAX_NESTING_DEPTH + 1 }
+
 /** 嵌套过深时抛出的中文错误（parseJson / 调用方据此给出「嵌套层级过深」提示） */
 function nestingTooDeepError(): Error {
   return new Error(`JSON 嵌套层级过深（超过 ${JSON_MAX_NESTING_DEPTH} 层），已拒绝处理，请减少嵌套层级后重试`)
@@ -410,6 +425,20 @@ export function joinKey(path: string, k: string): string {
   return SIMPLE_KEY.test(k) ? `${path}.${k}` : `${path}[${JSON.stringify(k)}]`
 }
 
+/** JSON→YAML 前统一校验深度，避免转换到一半才因不同运行时的调用栈上限失败。 */
+export function assertJsonYamlDepth(value: unknown): void {
+  const stack: { value: unknown; depth: number }[] = [{ value, depth: 0 }]
+  while (stack.length) {
+    const { value: current, depth } = stack.pop()!
+    if (current === null || typeof current !== 'object' || current instanceof RawNumber) continue
+    const nextDepth = depth + 1
+    if (nextDepth > JSON_YAML_MAX_NESTING_DEPTH) {
+      throw new Error(`JSON → YAML 最多支持 ${JSON_YAML_MAX_NESTING_DEPTH} 层嵌套；请减少嵌套后重试`)
+    }
+    for (const child of Object.values(current)) stack.push({ value: child, depth: nextDepth })
+  }
+}
+
 /**
  * 把 parseJson 的结果（含 RawNumber）转成可交给 js-yaml 的普通值；
  * 超出安全范围的大数用占位符替代（dump 后由 applyYamlRawMap 替换回原文，保证 YAML 文本不丢精度）。
@@ -468,7 +497,10 @@ export function jsonErrorPosition(e: unknown, text: string): { line: number; col
     const before = text.slice(0, pos)
     const line = before.split('\n').length
     const column = pos - before.lastIndexOf('\n')
-    return { line, column, message: detail }
+    const message = pos === text.length && /Expected|Unexpected end|Unterminated/.test(msg)
+      ? `${detail}；错误可能在此位置之前，请向前检查未闭合的括号或引号`
+      : detail
+    return { line, column, message }
   }
   const lm = /line (\d+) column (\d+)/.exec(msg)
   if (lm) return { line: parseInt(lm[1]!, 10), column: parseInt(lm[2]!, 10), message: detail }
@@ -931,7 +963,7 @@ export function loadYamlPreservingNumbers(text: string): { value: unknown; notes
   })
   let value: unknown
   try {
-    value = yaml.load(text, { schema })
+    value = yaml.load(text, { schema, ...YAML_LOAD_DEPTH })
   } catch (e) {
     throw new Error(`YAML 解析失败：${localizeYamlMessage(e)}。请按提示修正缩进或语法后重试`)
   }
@@ -945,7 +977,7 @@ export function loadYamlPreservingNumbers(text: string): { value: unknown; notes
   try {
     const marks = makeComplexKeyMarks()
     const probeValue = withComplexKeyMarks(marks, () =>
-      yaml.load(text, { schema: NON_STRING_KEY_PROBE_SCHEMA, listener: attachProbeLine })
+      yaml.load(text, { schema: NON_STRING_KEY_PROBE_SCHEMA, listener: attachProbeLine, ...YAML_LOAD_DEPTH })
     )
     findNonStringKey(probeValue, '$', new WeakSet(), keyIssues, marks)
   } catch {

@@ -190,7 +190,10 @@ async function runAll() {
       ms: res.ms
     })
     if (res.status === 'ok') toast.success(`全部 ${res.results.length} 步运行完成，耗时 ${res.ms} ms`)
-    else toast.warning(`已中断：${res.results.find((r) => r.status === 'fail')?.note ?? '步骤失败'}`)
+    else {
+      const prefix = res.results.length < steps.value.length ? '已中断' : '已运行完毕但有步骤失败'
+      toast.warning(`${prefix}：${res.results.find((r) => r.status === 'fail')?.note ?? '步骤失败'}`)
+    }
     if (clearAfterRun.value) input.value = ''
   } finally {
     // 执行器抛异常时也要复位，否则按钮会一直转
@@ -446,13 +449,28 @@ const currentMissingSecrets = computed(() =>
 /** 确认记录可能是旧文案版本或压根没有，两种情况都要求重新确认 */
 const currentConsentOk = computed(() => isCurrentConsent(currentStep.value?.consent))
 
-/** 流程输出：每一步都有真实结果且最后一步成功时，才提供可用输出 */
+/**
+ * 流程输出：每一步都有真实结果且全部成功时，才提供可用输出。
+ * 只看「最后一步成功」不够——失败继续模式下，失败后的步骤拿到的是回退输入，
+ * 最后一步的「成功」只是把未处理的内容原样传出，当作产物下载会存下未转换的原始输入。
+ */
 const finalOutput = computed(() => {
   const n = steps.value.length
   if (!n || results.value.filter((r) => !!r).length !== n) return { text: '', ok: false as const }
   const last = results.value[n - 1]
-  if (last?.status === 'ok') return { text: last.output, ok: true as const }
+  if (last?.status === 'ok' && !results.value.some((r) => r?.status === 'fail')) {
+    return { text: last.output, ok: true as const }
+  }
   return { text: '', ok: false as const }
+})
+
+/** 流程输出面板的说明：有失败步骤时明确说出「为什么不能下载」，而不是只说暂无输出 */
+const outputHint = computed(() => {
+  if (finalOutput.value.ok) return '最后一步已成功，可以直接复制或下载完整结果。'
+  if (failCount.value) {
+    return `有 ${failCount.value} 个步骤失败：失败之后的步骤拿到的是回退输入（最近一次成功步骤的输出或流程输入），不是转换结果。为避免把未经处理的内容当成产物存盘，复制与下载已停用；修复失败步骤后重新运行即可。`
+  }
+  return '所有步骤都成功后才会有输出。'
 })
 
 const doneCount = computed(() => results.value.filter((r) => r.status === 'ok').length)
@@ -762,7 +780,7 @@ function downloadOutput() {
             <span class="wfe__node-info">
               <span class="wfe__node-name">流程输出</span>
               <span class="wfe__node-sub">
-                {{ results.length === steps.length && results[steps.length - 1]?.status === 'ok' ? `可用 · ${sizeText(results[steps.length - 1]!.output)}` : '暂无输出' }}
+                {{ finalOutput.ok ? `可用 · ${sizeText(finalOutput.text)}` : '暂无输出' }}
               </span>
             </span>
           </button>
@@ -875,7 +893,7 @@ function downloadOutput() {
         </div>
         <div v-else-if="selection.kind === 'output'" class="wfe__cfg">
           <p class="wfe__hint">
-            这是「流程输出」。{{ finalOutput.ok ? '最后一步已成功，可以直接复制或下载完整结果。' : '所有步骤都成功后才会有输出。' }}
+            这是「流程输出」。{{ outputHint }}
           </p>
           <div class="wfe__out">
             <span class="wfe__badge wfe__badge--soft">{{ finalOutput.ok ? sizeText(finalOutput.text) : '暂无输出' }}</span>
@@ -1111,6 +1129,9 @@ function downloadOutput() {
   height: calc(60vh - 40px);
   min-height: 460px;
   overflow: hidden;
+}
+.wfe__cur {
+  overflow-y: auto;
 }
 .wfe__card-head {
   display: flex;

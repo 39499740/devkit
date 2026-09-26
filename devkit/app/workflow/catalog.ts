@@ -119,7 +119,8 @@ export const stepLibrary: StepDef[] = [
           { value: '4', label: '4 空格' },
           { value: '0', label: '不缩进（单行）' }
         ]
-      }
+      },
+      { key: 'yamlCompatibility', label: '为后续 YAML 转换提前校验深度', control: 'switch', default: false, help: '开启后最多接受 1000 层嵌套；普通 JSON 格式化仍可处理最多 2500 层' }
     ]
   },
   {
@@ -348,7 +349,8 @@ export const stepLibrary: StepDef[] = [
         help: AUTO_INPUT_HELP
       },
       { key: 'outputEncoding', label: '输出编码', control: 'select', default: 'hex', options: outputEncodingOptions },
-      { key: 'expected', label: '期望 HMAC（可选）', control: 'text', placeholder: '与结果按 Hex 对照' },
+      { key: 'expected', label: '期望 HMAC（校验模式下必填）', control: 'text', placeholder: '与结果按 Hex 对照' },
+      { key: 'verifyExpected', label: '校验模式：期望值必填且必须一致', control: 'switch', default: false },
       { key: 'key', label: '密钥', control: 'secret', required: true, sensitive: true, help: '保存在本机浏览器 localStorage，未确认风险前不会保存' }
     ]
   },

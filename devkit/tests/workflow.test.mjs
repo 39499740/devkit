@@ -115,6 +115,40 @@ export const run = async () => {
   ok('Schema 校验失败时中断', schemaFail.status === 'fail' && schemaFail.results.length === 3 && schemaFail.results[2].status === 'fail')
   const schemaContinue = await runWorkflow(defaults[2], encodeURIComponent('{"code":"x"}'), { stopOnError: false })
   ok('失败时中断关闭则继续跑完', schemaContinue.status === 'fail' && schemaContinue.results.length === 3)
+  // 回归：关闭中断后，失败步骤之后的「成功」只是回退输入的回显——必须如实标注，
+  // 否则「下载标记」显示成功，用户会把未转换的原始输入当成 config.yaml 存盘
+  const cfgConvert = defaults[1]
+  const cfgBad = await runWorkflow(cfgConvert, '{"app": {"name": "inventory-api"', { stopOnError: false })
+  ok(
+    '失败继续：整体状态如实为失败且第 1/2 步失败',
+    cfgBad.status === 'fail' && cfgBad.results[0].status === 'fail' && cfgBad.results[1].status === 'fail',
+    cfgBad.results.map((r) => `${r.index}:${r.status}`).join(',')
+  )
+  ok(
+    '失败继续：回退输入的下载步骤 note 标注未经过失败步骤处理',
+    cfgBad.results[2].status === 'ok' && cfgBad.results[2].note.includes('第 1、2 步失败') && cfgBad.results[2].note.includes('回退为流程输入'),
+    cfgBad.results[2].note
+  )
+  ok('失败继续：回退输入的下载步骤日志带同样告警', cfgBad.results[2].logs.some((l) => l.includes('回退为流程输入')))
+  const cfgGood = await runWorkflow(cfgConvert, '{"app":{"name":"x"}}', { stopOnError: false })
+  ok(
+    '全部成功：成功路径的 note 不带回退告警',
+    cfgGood.status === 'ok' && !cfgGood.results.some((r) => r.note.includes('回退')),
+    cfgGood.results.map((r) => r.note).join(' | ')
+  )
+  const yamlDepth = 1000
+  const deepConfig = '{"a":'.repeat(yamlDepth) + '12345678901234567890' + '}'.repeat(yamlDepth)
+  const deepYaml = await runStep(createStep('json-yaml', { direction: 'json2yaml' }), deepConfig, 0)
+  ok('YAML 深度上限内可转换且大整数不丢精度', deepYaml.status === 'ok' && deepYaml.output.includes('12345678901234567890'), deepYaml.note)
+  const deepBack = deepYaml.status === 'ok'
+    ? await runStep(createStep('json-yaml', { direction: 'yaml2json' }), deepYaml.output, 0)
+    : null
+  ok('YAML 深度上限内可往返读取', deepBack?.status === 'ok' && deepBack.output.includes('12345678901234567890'), deepBack?.note)
+  const tooDeepConfig = '{"a":'.repeat(yamlDepth + 1) + '1' + '}'.repeat(yamlDepth + 1)
+  const deepFlow = await runWorkflow(cfgConvert, tooDeepConfig, { stopOnError: true })
+  ok('配置迁移超出 YAML 能力边界时第一步即明确失败', deepFlow.status === 'fail' && deepFlow.results.length === 1 && deepFlow.results[0].note.includes('最多支持 1000 层'), deepFlow.results.map((r) => r.note).join(' | '))
+  const deepDirect = await runStep(createStep('json-yaml', { direction: 'json2yaml' }), tooDeepConfig, 0)
+  ok('单独 JSON→YAML 步骤超限时给出确定的中文错误', deepDirect.status === 'fail' && deepDirect.note.includes('最多支持 1000 层'), deepDirect.note)
   const badJson = await runStep(createStep('json-format'), '{oops', 0)
   ok('非法输入给出可读错误', badJson.status === 'fail' && badJson.note.length > 0)
   const yamlRes = await runStep(createStep('json-yaml', { direction: 'json2yaml' }), '{"a":1}', 0)
@@ -262,9 +296,9 @@ export const run = async () => {
   ok('XML 步骤在无 DOM 环境下给出明确边界提示', xmlNode.status === 'fail' && xmlNode.note.includes('DOMParser'), xmlNode.note)
 
   // ── 预设流程 ──
-  eqj('预设 6 条', workflowPresets.length, 6)
+  eqj('预设 7 条', workflowPresets.length, 7)
   const secretPresets = workflowPresets.filter((p) => presetSecretTypes(p).length)
-  eqj('含密钥的预设 4 条', secretPresets.map((p) => p.key).sort(), ['aes-response', 'request-sign', 'sm-cipher', 'sm2-verify'])
+  eqj('含密钥的预设 5 条', secretPresets.map((p) => p.key).sort(), ['aes-response', 'hmac-verify', 'request-sign', 'sm-cipher', 'sm2-verify'])
   await rejects('缺风险确认时不允许构建含密钥预设', () => buildWorkflowFromPreset(findPreset('aes-response')), /必须先确认风险/)
   const consent = makeConsent(1700000000000)
   const aesPreset = buildWorkflowFromPreset(findPreset('aes-response'), { consent })
@@ -318,6 +352,30 @@ export const run = async () => {
       signRun.finalOutput === bytesToBase64(textToBytes(h(expectedMac))),
     signRun.results.map((r) => r.note).join(' | ')
   )
+
+  await rejects('HMAC 校验预设缺风险确认时不能构建', () => buildWorkflowFromPreset(findPreset('hmac-verify')), /必须先确认风险/)
+  const verifyPreset = buildWorkflowFromPreset(findPreset('hmac-verify'), { consent })
+  ok('HMAC 校验预设要求期望值一致', verifyPreset.steps[0].config.verifyExpected === true)
+  const verifyMissing = await runWorkflow(verifyPreset, '{"b":2,"a":1}', {
+    stopOnError: true,
+    secretOf: () => ({ key: 'Jefe' })
+  })
+  ok('HMAC 校验预设缺期望值明确失败',
+    verifyMissing.status === 'fail' && verifyMissing.results[0].note.includes('期望 HMAC') && verifyMissing.finalOutput === '{"b":2,"a":1}')
+  verifyPreset.steps[0].config.expected = h(expectedMac)
+  const verifyMatch = await runWorkflow(verifyPreset, '{"b":2,"a":1}', {
+    stopOnError: true,
+    secretOf: () => ({ key: 'Jefe' })
+  })
+  ok('HMAC 校验预设命中期望值才成功',
+    verifyMatch.status === 'ok' && verifyMatch.results[0].note.includes('校验通过') && verifyMatch.finalOutput === h(expectedMac))
+  verifyPreset.steps[0].config.expected = '00'.repeat(32)
+  const verifyMismatch = await runWorkflow(verifyPreset, '{"b":2,"a":1}', {
+    stopOnError: true,
+    secretOf: () => ({ key: 'Jefe' })
+  })
+  ok('HMAC 校验预设不一致时流程失败且无可用产物',
+    verifyMismatch.status === 'fail' && verifyMismatch.results[0].note.includes('校验不通过') && verifyMismatch.results[0].output === '')
 
   const csvPreset = buildWorkflowFromPreset(findPreset('csv-clean'))
   const csvRun = await runWorkflow(csvPreset, 'name,age\nAlice,30\nBob,25', { stopOnError: true })

@@ -158,6 +158,17 @@ export const run = async () => {
     steps: [{ id: 's1', type: 'hmac', config: {}, consent: { accepted: true, acceptedAt: 1, noticeVersion: CONSENT_NOTICE_VERSION - 1 } }]
   })
   ok('旧版本的确认记录不迁移', oldConsent.steps[0].consent === undefined)
+  const oldConfigFlow = {
+    id: 'wf-config-convert', name: '配置格式互转', steps: [
+      { id: 's1', type: 'json-format', config: { indent: '2' } },
+      { id: 's2', type: 'json-yaml', config: { direction: 'json2yaml' } },
+      { id: 's3', type: 'download', config: { filename: 'config.yaml' } }
+    ]
+  }
+  eqj('旧版已保存的配置迁移流程自动补 YAML 深度预检', sanitizeWorkflow(oldConfigFlow).steps[0].config.yamlCompatibility, true)
+  const optedOut = structuredClone(oldConfigFlow)
+  optedOut.steps[0].config.yamlCompatibility = false
+  eqj('用户明确关闭 YAML 预检时保留选择', sanitizeWorkflow(optedOut).steps[0].config.yamlCompatibility, false)
   eqj('非对象的工作流被拒绝', sanitizeWorkflow('nope'), null)
 
   // ── 与浏览器存储的边界一致 ──

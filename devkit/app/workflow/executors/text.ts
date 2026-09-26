@@ -6,7 +6,7 @@ import yaml from 'js-yaml'
 import { base64ToBytes, bytesToBase64, textToBytes } from '../../utils/bytes'
 import { csvToJson, jsonToCsv } from '../../utils/csv'
 import { errMessage } from '../../utils/errors'
-import { applyYamlRawMap, detectDuplicateKeys, hasUnsafeRawNumber, jsonErrorPosition, loadYamlPreservingNumbers, localizeJsonMessage, minifyJson, parseJson, RawNumber, stringifyJson, toPlainJson, toYamlJsonable } from '../../utils/json'
+import { applyYamlRawMap, assertJsonYamlDepth, detectDuplicateKeys, hasUnsafeRawNumber, jsonErrorPosition, loadYamlPreservingNumbers, localizeJsonMessage, minifyJson, parseJson, RawNumber, stringifyJson, toPlainJson, toYamlJsonable } from '../../utils/json'
 import { evalJmesPath } from '../../utils/jmespath'
 import { evalJsonPath } from '../../utils/jsonpath'
 import { inferSchema, validateInstance, type Draft, type ValidateResult } from '../../utils/jsonschema'
@@ -214,6 +214,8 @@ const jsonFormat: StepExecutor = (input, config) => {
   const text = requireText(input, 'JSON 格式化')
   const indent = Math.max(0, Math.min(8, configNumber(config, 'indent', 2)))
   const { value, duplicateKeys } = parseJsonLocalized(text)
+  // 默认「配置格式互转」在第一步就验证后续 YAML 的能力边界，避免先显示格式化成功再失败。
+  if (configBool(config, 'yamlCompatibility')) assertJsonYamlDepth(value)
   // 缩进 0 = 真正单行（minifyJson）；stringifyJson 在缩进 0 时仍会插换行
   const out = indent === 0 ? minifyJson(value) : stringifyJson(value, indent)
   return { payload: textPayload(out, 'json'), note: `格式化完成，${lineSize(out)}${duplicateNote(duplicateKeys)}` }
@@ -299,6 +301,7 @@ const jsonYaml: StepExecutor = (input, config) => {
     }
   }
   const { value, duplicateKeys } = parseJsonLocalized(text)
+  assertJsonYamlDepth(value)
   const token = `dkyamlraw${Math.random().toString(36).slice(2, 10)}`
   const counter = { n: 0 }
   const rawMap = new Map<string, string>()
@@ -556,7 +559,10 @@ function pascal(key: string): string {
   return sanitizeJavaIdent(n.charAt(0).toUpperCase() + n.slice(1), 'Item')
 }
 
-/** 紧凑版 POJO 生成：嵌套对象生成静态内部类，数组按首个非空元素推断元素类型 */
+/**
+ * 紧凑版 POJO 生成：嵌套对象生成静态内部类（与 t22 工具页一致——非静态内部类
+ * javac 可编译，但 Jackson 等按无参构造反射实例化的库无法直接使用），数组按首个非空元素推断元素类型。
+ */
 function javaFromJson(value: unknown, className: string, warnings: string[] = []): string {
   let needsList = false
   // 文件级类名表：预置外层类名，内部类与外层或彼此同名时追加序号（AB → AB2），
@@ -573,7 +579,7 @@ function javaFromJson(value: unknown, className: string, warnings: string[] = []
     return name
   }
 
-  function classOf(obj: Record<string, unknown>, name: string, path: string): string {
+  function classOf(obj: Record<string, unknown>, name: string, path: string, nested: boolean): string {
     const fields: string[] = []
     const methods: string[] = []
     const inners: string[] = []
@@ -593,14 +599,14 @@ function javaFromJson(value: unknown, className: string, warnings: string[] = []
       if (v && typeof v === 'object' && !Array.isArray(v) && !(v instanceof RawNumber)) {
         const inner = uniqueClassName(pascal(key))
         type = inner
-        inners.push(classOf(v as Record<string, unknown>, inner, fp))
+        inners.push(classOf(v as Record<string, unknown>, inner, fp, true))
       } else if (Array.isArray(v)) {
         needsList = true
         const first = v.find((x) => x !== null && x !== undefined)
         if (first && typeof first === 'object' && !Array.isArray(first) && !(first instanceof RawNumber)) {
           const inner = uniqueClassName(pascal(key))
           type = `List<${inner}>`
-          inners.push(classOf(first as Record<string, unknown>, inner, `${fp}[]`))
+          inners.push(classOf(first as Record<string, unknown>, inner, `${fp}[]`, true))
         } else {
           type = `List<${first === undefined ? 'Object' : javaTypeOf(first, warnings, `${fp}[]`)}>`
         }
@@ -609,7 +615,7 @@ function javaFromJson(value: unknown, className: string, warnings: string[] = []
       }
       fields.push(`    private ${type} ${prop};`)
       methods.push(
-        `    public ${type} get${accessor}() {`,
+        `    public ${type} ${type === 'boolean' ? 'is' : 'get'}${accessor}() {`,
         `        return this.${prop};`,
         '    }',
         '',
@@ -621,13 +627,15 @@ function javaFromJson(value: unknown, className: string, warnings: string[] = []
     const body = [...fields, ...(fields.length ? [''] : []), ...methods]
     const innerText = inners.map((code) => code.split('\n').map((l) => (l ? `    ${l}` : l)).join('\n'))
     const all = [...body, ...(innerText.length ? ['', ...innerText] : [])]
-    return [`public class ${name} {`, ...all, '}'].join('\n')
+    // 只有顶层类不带 static（Java 不允许顶层 static 类）；嵌套类一律 static，
+    // 否则是内部类，Jackson 等反射库无法用无参构造实例化
+    return [`public ${nested ? 'static ' : ''}class ${name} {`, ...all, '}'].join('\n')
   }
 
   if (!value || typeof value !== 'object' || Array.isArray(value) || value instanceof RawNumber) {
-    return `public class ${className} {\n    // 顶层不是对象，无法生成字段；请先用 JSONPath 提取出对象\n}`
+    throw new Error('JSON 转 Java 需要顶层对象；当前结果是标量或数组，请先用 JSONPath 提取出对象')
   }
-  const code = classOf(value as Record<string, unknown>, className, '$')
+  const code = classOf(value as Record<string, unknown>, className, '$', false)
   return needsList ? `import java.util.List;\n\n${code}` : code
 }
 

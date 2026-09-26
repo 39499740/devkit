@@ -85,6 +85,17 @@ export function sanitizeWorkflow(raw: unknown, stats?: SanitizeStats): Workflow 
   if (!Array.isArray(r.steps)) return null
   const seen = new Set<string>()
   const steps = r.steps.map((s) => sanitizeStep(s, seen, stats)).filter((s): s is WorkflowStep => !!s)
+  // 旧版本保存在浏览器里的默认配置迁移流程没有此参数：只给仍保持原步骤链的旧流程补上预检。
+  // 新版本若用户明确关掉开关，则保留其选择。
+  if (
+    r.id === 'wf-config-convert' &&
+    steps[0]?.type === 'json-format' &&
+    steps[1]?.type === 'json-yaml' &&
+    steps[1].config.direction === 'json2yaml' &&
+    !Object.prototype.hasOwnProperty.call((r.steps[0] as { config?: Record<string, unknown> } | undefined)?.config ?? {}, 'yamlCompatibility')
+  ) {
+    steps[0].config.yamlCompatibility = true
+  }
   const name = typeof r.name === 'string' && r.name.trim() ? r.name.trim() : '未命名流程'
   return {
     id: typeof r.id === 'string' && r.id ? r.id : uid('wf'),

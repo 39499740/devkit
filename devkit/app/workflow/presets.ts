@@ -81,6 +81,15 @@ export const workflowPresets: WorkflowPreset[] = [
     ]
   },
   {
+    key: 'hmac-verify',
+    name: 'HMAC 签名校验',
+    desc: '原文 → HMAC-SHA256 校验期望值；缺少期望值或不一致时明确失败',
+    secretHint: '需要 HMAC 密钥；在 HMAC 步骤参数中填写期望 HMAC（Hex）',
+    steps: [
+      { type: 'hmac', config: { algo: 'SHA-256', keyEncoding: 'utf8', inputEncoding: 'utf8', outputEncoding: 'hex', verifyExpected: true } }
+    ]
+  },
+  {
     key: 'sm2-verify',
     name: 'SM2 签名验证',
     desc: 'URL 解码 → SM2 验签 → 下载结果',
@@ -169,7 +178,7 @@ export function defaultWorkflows(): Workflow[] {
       name: '配置格式互转',
       desc: '把 JSON 配置格式化后转成 YAML',
       steps: [
-        build('wf-config-convert', 0, 'json-format', { indent: '2' }),
+        build('wf-config-convert', 0, 'json-format', { indent: '2', yamlCompatibility: true }),
         build('wf-config-convert', 1, 'json-yaml', { direction: 'json2yaml' }),
         build('wf-config-convert', 2, 'download', { filename: 'config.yaml' })
       ]

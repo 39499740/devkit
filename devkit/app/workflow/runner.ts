@@ -139,6 +139,8 @@ export async function runWorkflow(
   // 「最近一个成功步骤的输出」，没有任何成功步骤时回退到流程输入。
   // 页面单步运行的 inputOf() 必须与这里保持一致，否则两者会算出不同结果。
   let cur = asPayload(input)
+  // cur 产自哪一步：-1 表示流程输入。用于识别「跳过了失败步骤」的回退输入
+  let curFrom = -1
   let status: 'ok' | 'fail' = 'ok'
   const start = Math.max(0, opts.onlyFrom ?? 0)
   for (let i = start; i < workflow.steps.length; i += 1) {
@@ -146,7 +148,19 @@ export async function runWorkflow(
     const r = await runStep(step, cur, i, { secrets: opts.secretOf?.(step) })
     results.push(r)
     if (r.status === 'ok') {
+      // 失败继续时，本步拿到的不是紧邻上一步的输出，而是回退输入：如实写进 note 与日志。
+      // 否则「下载结果」这类原样回显的步骤会显示成功，用户会误把未处理的原始内容当成产物。
+      if (i > 0 && curFrom !== i - 1) {
+        const src = curFrom < 0 ? '流程输入' : `第 ${curFrom + 1} 步的输出`
+        const failedAfter = results.filter((x) => x.status === 'fail' && x.index > curFrom).map((x) => x.index + 1)
+        if (failedAfter.length) {
+          const warn = `第 ${failedAfter.join('、')} 步失败，本步输入回退为${src}，内容未经过失败步骤处理`
+          r.note = `${r.note}；注意：${warn}`
+          r.logs.push(`注意：${warn}`)
+        }
+      }
       cur = r.payload
+      curFrom = i
       continue
     }
     status = 'fail'

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import yaml from 'js-yaml'
 import type { ToolMeta } from '~/data/tools'
-import { applyYamlRawMap, jsonErrorPosition, loadYamlPreservingNumbers, localizeJsonMessage, parseJson, stringifyJson, toYamlJsonable } from '~/utils/json'
+import { applyYamlRawMap, assertJsonYamlDepth, jsonErrorPosition, loadYamlPreservingNumbers, localizeJsonMessage, parseJson, stringifyJson, toYamlJsonable } from '~/utils/json'
 
 defineProps<{ tool: ToolMeta }>()
 const toast = useToast()
@@ -64,6 +64,7 @@ function runJson2Yaml(): string {
     run.markFail(`JSON 解析失败：${detail}`)
     throw new Error('__fail__')
   }
+  assertJsonYamlDepth(value)
   const token = `dkyamlraw${Math.random().toString(36).slice(2, 10)}`
   const counter = { n: 0 }
   const rawMap = new Map<string, string>()
@@ -116,7 +117,7 @@ function execute() {
     output.value = dir.value === 'json2yaml' ? runJson2Yaml() : runYaml2Json()
   } catch (e) {
     if (errMessage(e) !== '__fail__') {
-      // 理论上不会到这里：保留兜底并给出方向
+      // 包括超出 JSON→YAML 深度上限等转换错误，直接显示明确原因。
       output.value = ''
       errInput.value = errMessage(e)
       run.markFail(`转换失败：${errInput.value}`)
@@ -252,6 +253,7 @@ function applyIncoming(text: string) {
         <li>YAML 解析使用 <span class="mono">JSON_SCHEMA</span>：只识别 null / 布尔 / 数字 / 字符串，<span class="mono">2024-01-01</span> 等日期保持字符串；<span class="mono">007</span> 等不是 JSON 数字字面量的标量按原文保留为字符串，超出 JS 安全范围的整数 / 小数按原文输出，均不再静默改写（加引号可确保任意标量保持字符串）。</li>
         <li>无法无损映射的情况会直接报错而非静默转换：非字符串键（如 <span class="mono">80:</span>）、YAML 标签（如 <span class="mono">!!timestamp</span>）、<span class="mono">.inf / .nan</span>、重复键。</li>
         <li>JSON → YAML 使用 <span class="mono">js-yaml dump</span>（<span class="mono">lineWidth: -1</span> 不折行）；超出 JS 安全范围的数字按原文输出以保留精度。</li>
+        <li>JSON → YAML 最多支持 1000 层嵌套；超出时会在转换前明确报错，普通 JSON 格式化仍支持最多 2500 层。</li>
         <li>复制 / 下载请使用结果编辑器右上角按钮，内容不含行号。</li>
       </ul>
     </DkCollapse>

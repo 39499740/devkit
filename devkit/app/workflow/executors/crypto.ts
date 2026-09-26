@@ -27,7 +27,7 @@ import {
 import { computeSm3 } from '../../utils/crypto/sm3'
 import { sm4Decrypt, sm4Encrypt, type Sm4Mode, type Sm4Padding } from '../../utils/crypto/sm4'
 import { errMessage } from '../../utils/errors'
-import { configText } from '../catalog'
+import { configBool, configText } from '../catalog'
 import { bytesPayload, payloadBytes, textPayload } from '../types'
 import type { StepConfig, StepExecutor } from '../types'
 
@@ -79,9 +79,16 @@ const hmac: StepExecutor = async (input, config, secrets) => {
   const bytes = payloadBytes(input, inputEncoding(config))
   const mac = await computeHmac(algo, keyBytes, bytes)
   const enc = outputEncoding(config)
+  const expected = configText(config, 'expected').trim()
+  if (configBool(config, 'verifyExpected')) {
+    if (!expected) throw new Error('HMAC 校验需要填写期望 HMAC（Hex）；未填写时不能判定签名是否通过')
+    if (!hexEquals(bytesToHex(mac), expected)) {
+      throw new Error('HMAC 校验不通过：计算值与期望 HMAC 不一致，请核对报文原文、密钥与编码')
+    }
+  }
   return {
     payload: textPayload(encodeOutput(mac, enc)),
-    note: `HMAC-${algo} 计算完成（密钥 ${keyBytes.length} 字节，输入 ${bytes.length} 字节，输出 ${labelOf(enc)}）${expectedNote(bytesToHex(mac), configText(config, 'expected'))}`
+    note: `HMAC-${algo} ${configBool(config, 'verifyExpected') ? '校验通过' : '计算完成'}（密钥 ${keyBytes.length} 字节，输入 ${bytes.length} 字节，输出 ${labelOf(enc)}）${expectedNote(bytesToHex(mac), expected)}`
   }
 }
 
