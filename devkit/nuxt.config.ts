@@ -57,7 +57,11 @@ export default defineNuxtConfig({
         '/sitemap.txt',
         '/workflows/wf-order-snapshot',
         '/workflows/wf-config-convert',
-        '/workflows/wf-response-check'
+        '/workflows/wf-response-check',
+        // 场景页：固定路由的静态解释页（app/pages/scenarios/），预渲染后可直接打开与收录
+        '/scenarios/api-response',
+        '/scenarios/config-migration',
+        '/scenarios/crypto-debug'
       ]
     }
   },

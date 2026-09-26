@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { categories, toolsOfCategory, getToolById, toolCount, searchTools } from '~/data/tools'
+import { scenarios, scenarioPath } from '~/data/scenarios'
 import { stepDef } from '~/utils/workflow'
 import { SITE_DESC, SITE_URL } from '~/utils/site'
 
@@ -242,6 +243,43 @@ function fmtTime(iso: string) {
     </section>
 
     <template v-else>
+      <!-- 按任务解决：新用户的主入口，排在工具目录之前；卡片数据来自 app/data/scenarios.ts -->
+      <section class="home__scenarios">
+        <div class="home__sec-head">
+          <h2 class="home__sec-title">你现在要解决什么</h2>
+          <!-- 「新」徽标随发版轮换：本次发版新增「场景入口」，随下次发版摘除 -->
+          <span class="home__flow-new" title="本次新增">新</span>
+          <span class="home__sec-meta">带着具体问题进入，比先找工具更快</span>
+        </div>
+        <div class="home__scngrid">
+          <NuxtLink
+            v-for="s in scenarios"
+            :key="s.slug"
+            :to="scenarioPath(s)"
+            class="home__scncard"
+          >
+            <span class="home__scncard-head">
+              <span class="home__scncard-icon"><DkIcon :name="s.icon" :size="14" /></span>
+              <span class="home__scncard-name">{{ s.name }}</span>
+              <span class="home__scncard-steps">{{ s.steps }}</span>
+            </span>
+            <p class="home__scncard-problem">{{ s.problem }}</p>
+            <span class="home__scncard-fact">
+              <span class="home__scncard-fact-k">输入</span>
+              <span class="home__scncard-fact-v">{{ s.input }}</span>
+            </span>
+            <span class="home__scncard-fact">
+              <span class="home__scncard-fact-k">结果</span>
+              <span class="home__scncard-fact-v">{{ s.output }}</span>
+            </span>
+            <span class="home__scncard-cta">
+              开始处理
+              <DkIcon name="arrow-right" :size="13" />
+            </span>
+          </NuxtLink>
+        </div>
+      </section>
+
       <!-- 核心差异：多工具串联，数据仍然只留在浏览器 -->
       <section class="home__flow">
         <div class="home__flow-main">
@@ -553,6 +591,91 @@ function fmtTime(iso: string) {
 }
 .home__empty {
   padding: 24px 0;
+}
+/* 你现在要解决什么：按任务进入的主入口，排在处理流程与工具目录之前 */
+.home__scenarios {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.home__scngrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+}
+.home__scncard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.home__scncard:hover {
+  border-color: var(--accent-ring);
+  box-shadow: var(--shadow-2);
+  text-decoration: none;
+}
+.home__scncard-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.home__scncard-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.home__scncard-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.home__scncard-steps {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.home__scncard-problem {
+  font-size: 12.5px;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+.home__scncard-fact {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.home__scncard-fact-k {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+.home__scncard-fact-v {
+  min-width: 0;
+  color: var(--text-secondary);
+}
+.home__scncard-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: 4px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--accent);
 }
 /* 处理流程：首页给出明确入口，与普通在线工具箱区分开 */
 .home__flow {
